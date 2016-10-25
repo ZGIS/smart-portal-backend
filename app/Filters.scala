@@ -26,6 +26,9 @@ import filters.ExampleFilter
 
 import play.api.http.DefaultHttpFilters
 import play.filters.cors.CORSFilter
+import play.filters.csrf.CSRFFilter
+import play.filters.headers.SecurityHeadersFilter
+
 
 /**
  * This class configures filters that run on every request. This
@@ -46,13 +49,16 @@ import play.filters.cors.CORSFilter
 class Filters @Inject() (
   env: Environment,
   exampleFilter: ExampleFilter,
-  corsFilter: CORSFilter) extends HttpFilters {
+  corsFilter: CORSFilter,
+  csrfFilter: CSRFFilter,
+  securityHeadersFilter: SecurityHeadersFilter) extends HttpFilters {
 
   override val filters = {
     // Use the example filter if we're running development mode. If
     // we're running in production or test mode then don't use any
     // filters at all.
-    if (env.mode == Mode.Dev) Seq(exampleFilter) else Seq(corsFilter)
+    if (env.mode == Mode.Dev) Seq(exampleFilter, csrfFilter, securityHeadersFilter)
+    else Seq(corsFilter, csrfFilter, securityHeadersFilter)
   }
 
 }

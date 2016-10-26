@@ -34,14 +34,18 @@ lazy val root = (project in file(".")).enablePlugins(PlayScala, SiteScaladocPlug
 scalaVersion := "2.11.8"
 
 val googleVersion = "1.22.0"
-
+val postgresDriver = "9.4.1211.jre7"
 val akkaVersion = "2.4.11"
 
 libraryDependencies ++= Seq(
   jdbc,
+  evolutions,
   cache,
   ws,
   filters,
+  "com.typesafe.play" %% "anorm" % "2.5.2",
+  "org.postgresql" % "postgresql" % postgresDriver,
+
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,
   "com.google.http-client" % "google-http-client" % googleVersion,
@@ -75,7 +79,8 @@ scalacOptions in ThisBuild ++= Seq(
   "-Ywarn-infer-any", // Warn when a type argument is inferred to be `Any`
   "-Ywarn-nullary-override", //  Warn when non-nullary `def f()' overrides nullary `def f'.
   "-Ywarn-nullary-unit", // Warn when nullary methods return Unit
-  "-language:reflectiveCalls"
+  "-language:reflectiveCalls",
+  "-language:postfixOps" // too lazy?
 )
 
 fork in run := true

@@ -19,17 +19,18 @@
 
 package models
 
-import java.time._
-import java.time.format._
+import java.time.ZonedDateTime
+import java.util.Date
+import javax.inject.Inject
 
+import models.UserDAO
 import utils.{ClassnameLogger, PasswordHashing}
 
 
-case class User(
-                  email: String,
-                  username: String,
-                  firstname: String,
-                  lastname: String,
-                  password: String,
-                  laststatustoken: String,
-                  laststatuschange: LocalDate) extends ClassnameLogger
+case class User(email: String,
+                username: String,
+                firstname: String,
+                lastname: String,
+                password: String,
+                laststatustoken: String,
+                laststatuschange: ZonedDateTime )

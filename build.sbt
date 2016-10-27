@@ -150,6 +150,9 @@ dockerBaseImage in Docker := "java:8-jre"
 
 dockerBaseImage := "java:8-jre"
 
+sources in (Compile, doc) := Seq.empty
+
+publishArtifact in (Compile, packageDoc) := false
 
 javaOptions in Universal ++= Seq(
   // others will be added as app parameters

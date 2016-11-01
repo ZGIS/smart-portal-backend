@@ -4,6 +4,11 @@ FROM openjdk:8-jre
 # that's me!
 MAINTAINER Alex K, allixender@googlemail.com
 
+LABEL app="smart-portal-backend"
+LABEL version="1.0-SNAPSHOT"
+LABEL repo="https://github.com/ZGIS/smart-portal-backend"
+LABEL build_number=TRAVIS_BUILD_NUMBER
+
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends \
 	ca-certificates curl wget pwgen unzip openssl \
@@ -20,12 +25,14 @@ EXPOSE 9000
 # -Dapplication.base_url=http://test.smart-project.info/
 # -Dfilepath.data=/data
 
-# We also need envs for
+# We need envs for
+# ${?APPLICATION_SECRET}
 # ${?PG_DBNAME}
 # ${?PG_USER}
 # ${?PG_PASSWORD}
 # ${?EMAIL_USERNAME}
 # ${?EMAIL_PASSWORD}
+# ${?APP_TIMEZONE}
 
 CMD [ "/smart-portal-backend-1.0-SNAPSHOT/bin/smart-portal-backend", \
     "-Dconfig.resource=application.conf", \

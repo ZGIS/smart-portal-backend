@@ -1,0 +1,2949 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          services/EmailService.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package services
+</span>21 <span style=''>
+</span>22 <span style=''>import java.util.Properties
+</span>23 <span style=''>import javax.inject.{Inject, Singleton}
+</span>24 <span style=''>import javax.mail._
+</span>25 <span style=''>import javax.mail.internet._
+</span>26 <span style=''>
+</span>27 <span style=''>import play.api.Configuration
+</span>28 <span style=''>import utils.ClassnameLogger
+</span>29 <span style=''>
+</span>30 <span style=''>/**
+</span>31 <span style=''>  * Email Service sends emails out to the wide wide world
+</span>32 <span style=''>  *
+</span>33 <span style=''>  * @param configuration
+</span>34 <span style=''>  */
+</span>35 <span style=''>@Singleton
+</span>36 <span style=''>class EmailService @Inject()(configuration: Configuration) extends ClassnameLogger {
+</span>37 <span style=''>
+</span>38 <span style=''>  lazy private val emailUsername: String = </span><span style='background: #F0ADAD'>configuration.getString("email.username").getOrElse("user")</span><span style=''>
+</span>39 <span style=''>  lazy private val emailPassword: String = </span><span style='background: #F0ADAD'>configuration.getString("email.password").getOrElse("pass")</span><span style=''>
+</span>40 <span style=''>  lazy private val emailFrom: String = </span><span style='background: #F0ADAD'>configuration.getString("email.from").getOrElse("portal@smart-project.info")</span><span style=''>
+</span>41 <span style=''>  lazy private val emailServAddress: String = </span><span style='background: #F0ADAD'>configuration.getString("email.serv.address").getOrElse("mail.smart-project.info")</span><span style=''>
+</span>42 <span style=''>  lazy private val emailServPort: String = </span><span style='background: #F0ADAD'>configuration.getString("email.serv.port").getOrElse("587")</span><span style=''>
+</span>43 <span style=''>
+</span>44 <span style=''>  var mailServerProperties: Properties = </span><span style='background: #AEF1AE'>System.getProperties()</span><span style=''>
+</span>45 <span style=''>  var getMailSession: javax.mail.Session = _
+</span>46 <span style=''>
+</span>47 <span style=''>  /**
+</span>48 <span style=''>    * send a Registration Email with a pre-generated unique link to confirm your account
+</span>49 <span style=''>    *
+</span>50 <span style=''>    * @param emailTo
+</span>51 <span style=''>    * @param subject
+</span>52 <span style=''>    * @param usernameTo
+</span>53 <span style=''>    * @param linkId
+</span>54 <span style=''>    * @return
+</span>55 <span style=''>    */
+</span>56 <span style=''>  def sendRegistrationEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean = {
+</span>57 <span style=''>
+</span>58 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.host", emailServAddress)</span><span style=''>
+</span>59 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.port", emailServPort)</span><span style=''>
+</span>60 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.auth", "true")</span><span style=''>
+</span>61 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.starttls.enable", "true")</span><span style=''>
+</span>62 <span style=''>
+</span>63 <span style=''>    </span><span style='background: #F0ADAD'>getMailSession = Session.getDefaultInstance(mailServerProperties, null)</span><span style=''>
+</span>64 <span style=''>
+</span>65 <span style=''>    val emailText =
+</span>66 <span style=''>      </span><span style='background: #F0ADAD'>"""Hello %s,
+</span>67 <span style=''></span><span style='background: #F0ADAD'>        |thank you for registering on the GW HUB.
+</span>68 <span style=''></span><span style='background: #F0ADAD'>        |Please click on the following link to confirm your registration:
+</span>69 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>70 <span style=''></span><span style='background: #F0ADAD'>        |http://dev.smart-project.info/api/v1/users/register/%s
+</span>71 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>72 <span style=''></span><span style='background: #F0ADAD'>        |If you have any question please email us to %s.
+</span>73 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>74 <span style=''></span><span style='background: #F0ADAD'>        |Your GW HUB Team
+</span>75 <span style=''></span><span style='background: #F0ADAD'>      """.format(usernameTo, linkId, emailFrom).stripMargin</span><span style=''>
+</span>76 <span style=''>
+</span>77 <span style=''>    try {
+</span>78 <span style=''>      // Create a default MimeMessage object.
+</span>79 <span style=''>      </span><span style='background: #F0ADAD'>val message = new MimeMessage(getMailSession)
+</span>80 <span style=''></span><span style='background: #F0ADAD'>      // Set From: header field of the header.
+</span>81 <span style=''></span><span style='background: #F0ADAD'>      message.setFrom(new InternetAddress(emailFrom))
+</span>82 <span style=''></span><span style='background: #F0ADAD'>      // Set To: header field of the header.
+</span>83 <span style=''></span><span style='background: #F0ADAD'>      message.addRecipient(Message.RecipientType.TO, new InternetAddress(emailTo))
+</span>84 <span style=''></span><span style='background: #F0ADAD'>      // Set Subject: header field. eg "Please confirm your GW HUB account"
+</span>85 <span style=''></span><span style='background: #F0ADAD'>      message.setSubject(subject)
+</span>86 <span style=''></span><span style='background: #F0ADAD'>
+</span>87 <span style=''></span><span style='background: #F0ADAD'>      message.setText(emailText)
+</span>88 <span style=''></span><span style='background: #F0ADAD'>      logger.debug(emailText)
+</span>89 <span style=''></span><span style='background: #F0ADAD'>
+</span>90 <span style=''></span><span style='background: #F0ADAD'>      // Send message
+</span>91 <span style=''></span><span style='background: #F0ADAD'>      val transport: Transport = getMailSession.getTransport("smtp")
+</span>92 <span style=''></span><span style='background: #F0ADAD'>      transport.connect(emailServAddress, emailUsername, emailPassword)
+</span>93 <span style=''></span><span style='background: #F0ADAD'>      transport.sendMessage(message, message.getAllRecipients)
+</span>94 <span style=''></span><span style='background: #F0ADAD'>      transport.close()
+</span>95 <span style=''></span><span style='background: #F0ADAD'>      true</span><span style=''>
+</span>96 <span style=''>    } catch {
+</span>97 <span style=''>      case mex: MessagingException => {
+</span>98 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Messaging exception: " + mex.getLocalizedMessage)</span><span style=''>
+</span>99 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>100 <span style=''>      }
+</span>101 <span style=''>      case e: Exception => {
+</span>102 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Other email problem: " + e.getLocalizedMessage)</span><span style=''>
+</span>103 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>104 <span style=''>      }
+</span>105 <span style=''>    }
+</span>106 <span style=''>  }
+</span>107 <span style=''>
+</span>108 <span style=''>  /**
+</span>109 <span style=''>    * sends a Confirmation Email, Your account is now active
+</span>110 <span style=''>    *
+</span>111 <span style=''>    * @param emailTo
+</span>112 <span style=''>    * @param subject
+</span>113 <span style=''>    * @param usernameTo
+</span>114 <span style=''>    * @return
+</span>115 <span style=''>    */
+</span>116 <span style=''>  def sendConfirmationEmail(emailTo: String, subject: String, usernameTo: String): Boolean = {
+</span>117 <span style=''>
+</span>118 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.host", emailServAddress)</span><span style=''>
+</span>119 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.port", emailServPort)</span><span style=''>
+</span>120 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.auth", "true")</span><span style=''>
+</span>121 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.starttls.enable", "true")</span><span style=''>
+</span>122 <span style=''>
+</span>123 <span style=''>    </span><span style='background: #F0ADAD'>getMailSession = Session.getDefaultInstance(mailServerProperties, null)</span><span style=''>
+</span>124 <span style=''>
+</span>125 <span style=''>    val emailText =
+</span>126 <span style=''>      </span><span style='background: #F0ADAD'>"""Hello %s,
+</span>127 <span style=''></span><span style='background: #F0ADAD'>        |thank you for registering on the GW HUB, your account is now active.
+</span>128 <span style=''></span><span style='background: #F0ADAD'>        |Please click on the following link to confirm your registration:
+</span>129 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>130 <span style=''></span><span style='background: #F0ADAD'>        |If you have any question please email us to %s.
+</span>131 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>132 <span style=''></span><span style='background: #F0ADAD'>        |Your GW HUB Team
+</span>133 <span style=''></span><span style='background: #F0ADAD'>      """.format(usernameTo, emailFrom).stripMargin</span><span style=''>
+</span>134 <span style=''>
+</span>135 <span style=''>    try {
+</span>136 <span style=''>      // Create a default MimeMessage object.
+</span>137 <span style=''>      </span><span style='background: #F0ADAD'>val message = new MimeMessage(getMailSession)
+</span>138 <span style=''></span><span style='background: #F0ADAD'>      // Set From: header field of the header.
+</span>139 <span style=''></span><span style='background: #F0ADAD'>      message.setFrom(new InternetAddress(emailFrom))
+</span>140 <span style=''></span><span style='background: #F0ADAD'>      // Set To: header field of the header.
+</span>141 <span style=''></span><span style='background: #F0ADAD'>      message.addRecipient(Message.RecipientType.TO, new InternetAddress(emailTo))
+</span>142 <span style=''></span><span style='background: #F0ADAD'>      // Set Subject: header field. eg "Please confirm your GW HUB account"
+</span>143 <span style=''></span><span style='background: #F0ADAD'>      message.setSubject(subject)
+</span>144 <span style=''></span><span style='background: #F0ADAD'>
+</span>145 <span style=''></span><span style='background: #F0ADAD'>      message.setText(emailText)
+</span>146 <span style=''></span><span style='background: #F0ADAD'>      logger.debug(emailText)
+</span>147 <span style=''></span><span style='background: #F0ADAD'>
+</span>148 <span style=''></span><span style='background: #F0ADAD'>      // Send message
+</span>149 <span style=''></span><span style='background: #F0ADAD'>      val transport: Transport = getMailSession.getTransport("smtp")
+</span>150 <span style=''></span><span style='background: #F0ADAD'>      transport.connect(emailServAddress, emailUsername, emailPassword)
+</span>151 <span style=''></span><span style='background: #F0ADAD'>      transport.sendMessage(message, message.getAllRecipients)
+</span>152 <span style=''></span><span style='background: #F0ADAD'>      transport.close()
+</span>153 <span style=''></span><span style='background: #F0ADAD'>      true</span><span style=''>
+</span>154 <span style=''>    } catch {
+</span>155 <span style=''>      case mex: MessagingException => {
+</span>156 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Messaging exception: " + mex.getLocalizedMessage)</span><span style=''>
+</span>157 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>158 <span style=''>      }
+</span>159 <span style=''>      case e: Exception => {
+</span>160 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Other email problem: " + e.getLocalizedMessage)</span><span style=''>
+</span>161 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>162 <span style=''>      }
+</span>163 <span style=''>    }
+</span>164 <span style=''>  }
+</span>165 <span style=''>
+</span>166 <span style=''>  /**
+</span>167 <span style=''>    * send and Info Email to many recipients, with the message body provided
+</span>168 <span style=''>    *
+</span>169 <span style=''>    * @param emailTo
+</span>170 <span style=''>    * @param subject
+</span>171 <span style=''>    * @param usernameTo
+</span>172 <span style=''>    * @param mainMessageText
+</span>173 <span style=''>    */
+</span>174 <span style=''>  def sendInfoEmail(emailTo: List[String], subject: String, usernameTo: String, mainMessageText: String): Boolean = {
+</span>175 <span style=''>
+</span>176 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.host", emailServAddress)</span><span style=''>
+</span>177 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.port", emailServPort)</span><span style=''>
+</span>178 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.auth", "true")</span><span style=''>
+</span>179 <span style=''>    </span><span style='background: #F0ADAD'>mailServerProperties.put("mail.smtp.starttls.enable", "true")</span><span style=''>
+</span>180 <span style=''>
+</span>181 <span style=''>    </span><span style='background: #F0ADAD'>getMailSession = Session.getDefaultInstance(mailServerProperties, null)</span><span style=''>
+</span>182 <span style=''>
+</span>183 <span style=''>    val emailText =
+</span>184 <span style=''>      </span><span style='background: #F0ADAD'>"""Hello %s,
+</span>185 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>186 <span style=''></span><span style='background: #F0ADAD'>        |%s
+</span>187 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>188 <span style=''></span><span style='background: #F0ADAD'>        |If you have any question please email us to %s.
+</span>189 <span style=''></span><span style='background: #F0ADAD'>        |
+</span>190 <span style=''></span><span style='background: #F0ADAD'>        |Your GW HUB Team
+</span>191 <span style=''></span><span style='background: #F0ADAD'>      """.format(usernameTo, mainMessageText, emailFrom).stripMargin</span><span style=''>
+</span>192 <span style=''>
+</span>193 <span style=''>    try {
+</span>194 <span style=''>      // Create a default MimeMessage object.
+</span>195 <span style=''>      </span><span style='background: #F0ADAD'>val message = new MimeMessage(getMailSession)
+</span>196 <span style=''></span><span style='background: #F0ADAD'>      // Set From: header field of the header.
+</span>197 <span style=''></span><span style='background: #F0ADAD'>      message.setFrom(new InternetAddress(emailFrom))
+</span>198 <span style=''></span><span style='background: #F0ADAD'>      // Set To: header field of the header.
+</span>199 <span style=''></span><span style='background: #F0ADAD'>
+</span>200 <span style=''></span><span style='background: #F0ADAD'>      message.addRecipients(Message.RecipientType.TO, emailTo.mkString(", "))
+</span>201 <span style=''></span><span style='background: #F0ADAD'>
+</span>202 <span style=''></span><span style='background: #F0ADAD'>      // Set Subject: header field. eg "Please confirm your GW HUB account"
+</span>203 <span style=''></span><span style='background: #F0ADAD'>      message.setSubject(subject)
+</span>204 <span style=''></span><span style='background: #F0ADAD'>
+</span>205 <span style=''></span><span style='background: #F0ADAD'>      message.setText(emailText)
+</span>206 <span style=''></span><span style='background: #F0ADAD'>      logger.debug(emailText)
+</span>207 <span style=''></span><span style='background: #F0ADAD'>
+</span>208 <span style=''></span><span style='background: #F0ADAD'>      // Send message
+</span>209 <span style=''></span><span style='background: #F0ADAD'>      val transport: Transport = getMailSession.getTransport("smtp")
+</span>210 <span style=''></span><span style='background: #F0ADAD'>      transport.connect(emailServAddress, emailUsername, emailPassword)
+</span>211 <span style=''></span><span style='background: #F0ADAD'>      transport.sendMessage(message, message.getAllRecipients)
+</span>212 <span style=''></span><span style='background: #F0ADAD'>      transport.close()
+</span>213 <span style=''></span><span style='background: #F0ADAD'>      true</span><span style=''>
+</span>214 <span style=''>    } catch {
+</span>215 <span style=''>      case mex: MessagingException => {
+</span>216 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Messaging exception: " + mex.getLocalizedMessage)</span><span style=''>
+</span>217 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>218 <span style=''>      }
+</span>219 <span style=''>      case e: Exception => {
+</span>220 <span style=''>        </span><span style='background: #F0ADAD'>logger.error("Other email problem: " + e.getLocalizedMessage)</span><span style=''>
+</span>221 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>222 <span style=''>      }
+</span>223 <span style=''>    }
+</span>224 <span style=''>  }
+</span>225 <span style=''>
+</span>226 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          38
+        </td>
+        <td>
+          822
+        </td>
+        <td>
+          1311
+          -
+          1370
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.configuration.getString(&quot;email.username&quot;, EmailService.this.configuration.getString$default$2).getOrElse[String](&quot;user&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          823
+        </td>
+        <td>
+          1414
+          -
+          1473
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.configuration.getString(&quot;email.password&quot;, EmailService.this.configuration.getString$default$2).getOrElse[String](&quot;pass&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          824
+        </td>
+        <td>
+          1513
+          -
+          1589
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.configuration.getString(&quot;email.from&quot;, EmailService.this.configuration.getString$default$2).getOrElse[String](&quot;portal@smart-project.info&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          825
+        </td>
+        <td>
+          1636
+          -
+          1718
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.configuration.getString(&quot;email.serv.address&quot;, EmailService.this.configuration.getString$default$2).getOrElse[String](&quot;mail.smart-project.info&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          826
+        </td>
+        <td>
+          1762
+          -
+          1821
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.configuration.getString(&quot;email.serv.port&quot;, EmailService.this.configuration.getString$default$2).getOrElse[String](&quot;587&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          827
+        </td>
+        <td>
+          1864
+          -
+          1886
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.System.getProperties
+        </td>
+        <td style="background: #AEF1AE">
+          java.this.lang.System.getProperties()
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          828
+        </td>
+        <td>
+          2282
+          -
+          2298
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.host&quot;
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          829
+        </td>
+        <td>
+          2257
+          -
+          2317
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.host&quot;, EmailService.this.emailServAddress)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          831
+        </td>
+        <td>
+          2322
+          -
+          2379
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.port&quot;, EmailService.this.emailServPort)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          830
+        </td>
+        <td>
+          2347
+          -
+          2363
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.port&quot;
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          832
+        </td>
+        <td>
+          2384
+          -
+          2434
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.auth&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          833
+        </td>
+        <td>
+          2439
+          -
+          2500
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.starttls.enable&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          63
+        </td>
+        <td>
+          837
+        </td>
+        <td>
+          2506
+          -
+          2577
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.EmailService.getMailSession_=
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession_=(javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null))
+        </td>
+      </tr><tr>
+        <td>
+          63
+        </td>
+        <td>
+          836
+        </td>
+        <td>
+          2523
+          -
+          2577
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getDefaultInstance
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null)
+        </td>
+      </tr><tr>
+        <td>
+          63
+        </td>
+        <td>
+          835
+        </td>
+        <td>
+          2572
+          -
+          2576
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          63
+        </td>
+        <td>
+          834
+        </td>
+        <td>
+          2550
+          -
+          2570
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.mailServerProperties
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          838
+        </td>
+        <td>
+          2605
+          -
+          2928
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Hello %s,\n        |thank you for registering on the GW HUB.\n        |Please click on the following link to confirm your registration:\n        |\n        |http://dev.smart-project.info/api/v1/users/register/%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          839
+        </td>
+        <td>
+          2605
+          -
+          2966
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.format
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(&quot;Hello %s,\n        |thank you for registering on the GW HUB.\n        |Please click on the following link to confirm your registration:\n        |\n        |http://dev.smart-project.info/api/v1/users/register/%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, linkId, EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          840
+        </td>
+        <td>
+          2605
+          -
+          2978
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(scala.this.Predef.augmentString(&quot;Hello %s,\n        |thank you for registering on the GW HUB.\n        |Please click on the following link to confirm your registration:\n        |\n        |http://dev.smart-project.info/api/v1/users/register/%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, linkId, EmailService.this.emailFrom)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          857
+        </td>
+        <td>
+          3042
+          -
+          3752
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val message: javax.mail.internet.MimeMessage = new javax.mail.internet.MimeMessage(EmailService.this.getMailSession);
+  message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom));
+  message.addRecipient(javax.mail.Message.RecipientType.TO, new javax.mail.internet.InternetAddress(emailTo));
+  message.setSubject(subject);
+  message.setText(emailText);
+  EmailService.this.logger.debug(emailText);
+  val transport: javax.mail.Transport = EmailService.this.getMailSession.getTransport(&quot;smtp&quot;);
+  transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword);
+  transport.sendMessage(message, message.getAllRecipients());
+  transport.close();
+  true
+}
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          842
+        </td>
+        <td>
+          3056
+          -
+          3087
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.MimeMessage(EmailService.this.getMailSession)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          841
+        </td>
+        <td>
+          3072
+          -
+          3086
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.getMailSession
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          844
+        </td>
+        <td>
+          3141
+          -
+          3188
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setFrom
+        </td>
+        <td style="background: #F0ADAD">
+          message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom))
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          843
+        </td>
+        <td>
+          3157
+          -
+          3187
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.InternetAddress.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.InternetAddress(EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          846
+        </td>
+        <td>
+          3287
+          -
+          3315
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.InternetAddress.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.InternetAddress(emailTo)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          845
+        </td>
+        <td>
+          3261
+          -
+          3285
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          javax.mail.Message.RecipientType.TO
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Message.RecipientType.TO
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          847
+        </td>
+        <td>
+          3240
+          -
+          3316
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Message.addRecipient
+        </td>
+        <td style="background: #F0ADAD">
+          message.addRecipient(javax.mail.Message.RecipientType.TO, new javax.mail.internet.InternetAddress(emailTo))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          848
+        </td>
+        <td>
+          3399
+          -
+          3426
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setSubject
+        </td>
+        <td style="background: #F0ADAD">
+          message.setSubject(subject)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          849
+        </td>
+        <td>
+          3434
+          -
+          3460
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setText
+        </td>
+        <td style="background: #F0ADAD">
+          message.setText(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          850
+        </td>
+        <td>
+          3467
+          -
+          3490
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.debug(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          851
+        </td>
+        <td>
+          3547
+          -
+          3582
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getTransport
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession.getTransport(&quot;smtp&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          852
+        </td>
+        <td>
+          3589
+          -
+          3654
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.connect
+        </td>
+        <td style="background: #F0ADAD">
+          transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          854
+        </td>
+        <td>
+          3661
+          -
+          3717
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Transport.sendMessage
+        </td>
+        <td style="background: #F0ADAD">
+          transport.sendMessage(message, message.getAllRecipients())
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          853
+        </td>
+        <td>
+          3692
+          -
+          3716
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.getAllRecipients
+        </td>
+        <td style="background: #F0ADAD">
+          message.getAllRecipients()
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          855
+        </td>
+        <td>
+          3724
+          -
+          3741
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.close
+        </td>
+        <td style="background: #F0ADAD">
+          transport.close()
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          856
+        </td>
+        <td>
+          3748
+          -
+          3752
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          860
+        </td>
+        <td>
+          3828
+          -
+          3877
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;.+(mex.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          859
+        </td>
+        <td>
+          3854
+          -
+          3877
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          mex.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          858
+        </td>
+        <td>
+          3828
+          -
+          3851
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          861
+        </td>
+        <td>
+          3815
+          -
+          3878
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Messaging exception: &quot;.+(mex.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          862
+        </td>
+        <td>
+          3887
+          -
+          3892
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          864
+        </td>
+        <td>
+          3977
+          -
+          3998
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          863
+        </td>
+        <td>
+          3951
+          -
+          3974
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          866
+        </td>
+        <td>
+          3938
+          -
+          3999
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Other email problem: &quot;.+(e.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          865
+        </td>
+        <td>
+          3951
+          -
+          3998
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;.+(e.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          867
+        </td>
+        <td>
+          4008
+          -
+          4013
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          869
+        </td>
+        <td>
+          4293
+          -
+          4353
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.host&quot;, EmailService.this.emailServAddress)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          868
+        </td>
+        <td>
+          4318
+          -
+          4334
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.host&quot;
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          871
+        </td>
+        <td>
+          4358
+          -
+          4415
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.port&quot;, EmailService.this.emailServPort)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          870
+        </td>
+        <td>
+          4383
+          -
+          4399
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.port&quot;
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          872
+        </td>
+        <td>
+          4420
+          -
+          4470
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.auth&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          873
+        </td>
+        <td>
+          4475
+          -
+          4536
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.starttls.enable&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          875
+        </td>
+        <td>
+          4608
+          -
+          4612
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          877
+        </td>
+        <td>
+          4542
+          -
+          4613
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.EmailService.getMailSession_=
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession_=(javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null))
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          874
+        </td>
+        <td>
+          4586
+          -
+          4606
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.mailServerProperties
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          876
+        </td>
+        <td>
+          4559
+          -
+          4613
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getDefaultInstance
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null)
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          878
+        </td>
+        <td>
+          4641
+          -
+          4918
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Hello %s,\n        |thank you for registering on the GW HUB, your account is now active.\n        |Please click on the following link to confirm your registration:\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          880
+        </td>
+        <td>
+          4641
+          -
+          4960
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(scala.this.Predef.augmentString(&quot;Hello %s,\n        |thank you for registering on the GW HUB, your account is now active.\n        |Please click on the following link to confirm your registration:\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, EmailService.this.emailFrom)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          879
+        </td>
+        <td>
+          4641
+          -
+          4948
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.format
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(&quot;Hello %s,\n        |thank you for registering on the GW HUB, your account is now active.\n        |Please click on the following link to confirm your registration:\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          897
+        </td>
+        <td>
+          5024
+          -
+          5734
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val message: javax.mail.internet.MimeMessage = new javax.mail.internet.MimeMessage(EmailService.this.getMailSession);
+  message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom));
+  message.addRecipient(javax.mail.Message.RecipientType.TO, new javax.mail.internet.InternetAddress(emailTo));
+  message.setSubject(subject);
+  message.setText(emailText);
+  EmailService.this.logger.debug(emailText);
+  val transport: javax.mail.Transport = EmailService.this.getMailSession.getTransport(&quot;smtp&quot;);
+  transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword);
+  transport.sendMessage(message, message.getAllRecipients());
+  transport.close();
+  true
+}
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          882
+        </td>
+        <td>
+          5038
+          -
+          5069
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.MimeMessage(EmailService.this.getMailSession)
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          881
+        </td>
+        <td>
+          5054
+          -
+          5068
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.getMailSession
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          884
+        </td>
+        <td>
+          5123
+          -
+          5170
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setFrom
+        </td>
+        <td style="background: #F0ADAD">
+          message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          883
+        </td>
+        <td>
+          5139
+          -
+          5169
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.InternetAddress.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.InternetAddress(EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          887
+        </td>
+        <td>
+          5222
+          -
+          5298
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Message.addRecipient
+        </td>
+        <td style="background: #F0ADAD">
+          message.addRecipient(javax.mail.Message.RecipientType.TO, new javax.mail.internet.InternetAddress(emailTo))
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          886
+        </td>
+        <td>
+          5269
+          -
+          5297
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.InternetAddress.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.InternetAddress(emailTo)
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          885
+        </td>
+        <td>
+          5243
+          -
+          5267
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          javax.mail.Message.RecipientType.TO
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Message.RecipientType.TO
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          888
+        </td>
+        <td>
+          5381
+          -
+          5408
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setSubject
+        </td>
+        <td style="background: #F0ADAD">
+          message.setSubject(subject)
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          889
+        </td>
+        <td>
+          5416
+          -
+          5442
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setText
+        </td>
+        <td style="background: #F0ADAD">
+          message.setText(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          890
+        </td>
+        <td>
+          5449
+          -
+          5472
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.debug(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          891
+        </td>
+        <td>
+          5529
+          -
+          5564
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getTransport
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession.getTransport(&quot;smtp&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          892
+        </td>
+        <td>
+          5571
+          -
+          5636
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.connect
+        </td>
+        <td style="background: #F0ADAD">
+          transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword)
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          893
+        </td>
+        <td>
+          5674
+          -
+          5698
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.getAllRecipients
+        </td>
+        <td style="background: #F0ADAD">
+          message.getAllRecipients()
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          894
+        </td>
+        <td>
+          5643
+          -
+          5699
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Transport.sendMessage
+        </td>
+        <td style="background: #F0ADAD">
+          transport.sendMessage(message, message.getAllRecipients())
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          895
+        </td>
+        <td>
+          5706
+          -
+          5723
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.close
+        </td>
+        <td style="background: #F0ADAD">
+          transport.close()
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          896
+        </td>
+        <td>
+          5730
+          -
+          5734
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          899
+        </td>
+        <td>
+          5836
+          -
+          5859
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          mex.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          898
+        </td>
+        <td>
+          5810
+          -
+          5833
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          901
+        </td>
+        <td>
+          5797
+          -
+          5860
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Messaging exception: &quot;.+(mex.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          900
+        </td>
+        <td>
+          5810
+          -
+          5859
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;.+(mex.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          902
+        </td>
+        <td>
+          5869
+          -
+          5874
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          905
+        </td>
+        <td>
+          5933
+          -
+          5980
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;.+(e.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          904
+        </td>
+        <td>
+          5959
+          -
+          5980
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          903
+        </td>
+        <td>
+          5933
+          -
+          5956
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          906
+        </td>
+        <td>
+          5920
+          -
+          5981
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Other email problem: &quot;.+(e.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          907
+        </td>
+        <td>
+          5990
+          -
+          5995
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          908
+        </td>
+        <td>
+          6354
+          -
+          6370
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.host&quot;
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          909
+        </td>
+        <td>
+          6329
+          -
+          6389
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.host&quot;, EmailService.this.emailServAddress)
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          911
+        </td>
+        <td>
+          6394
+          -
+          6451
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.port&quot;, EmailService.this.emailServPort)
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          910
+        </td>
+        <td>
+          6419
+          -
+          6435
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;mail.smtp.port&quot;
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          912
+        </td>
+        <td>
+          6456
+          -
+          6506
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.auth&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          913
+        </td>
+        <td>
+          6511
+          -
+          6572
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.Hashtable.put
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties.put(&quot;mail.smtp.starttls.enable&quot;, &quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          917
+        </td>
+        <td>
+          6578
+          -
+          6649
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.EmailService.getMailSession_=
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession_=(javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null))
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          914
+        </td>
+        <td>
+          6622
+          -
+          6642
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.mailServerProperties
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.mailServerProperties
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          916
+        </td>
+        <td>
+          6595
+          -
+          6649
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getDefaultInstance
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Session.getDefaultInstance(EmailService.this.mailServerProperties, null)
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          915
+        </td>
+        <td>
+          6644
+          -
+          6648
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          918
+        </td>
+        <td>
+          6677
+          -
+          6824
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Hello %s,\n        |\n        |%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          920
+        </td>
+        <td>
+          6677
+          -
+          6883
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(scala.this.Predef.augmentString(&quot;Hello %s,\n        |\n        |%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, mainMessageText, EmailService.this.emailFrom)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          919
+        </td>
+        <td>
+          6677
+          -
+          6871
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.format
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(&quot;Hello %s,\n        |\n        |%s\n        |\n        |If you have any question please email us to %s.\n        |\n        |Your GW HUB Team\n      &quot;).format(usernameTo, mainMessageText, EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          937
+        </td>
+        <td>
+          6947
+          -
+          7654
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val message: javax.mail.internet.MimeMessage = new javax.mail.internet.MimeMessage(EmailService.this.getMailSession);
+  message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom));
+  message.addRecipients(javax.mail.Message.RecipientType.TO, emailTo.mkString(&quot;, &quot;));
+  message.setSubject(subject);
+  message.setText(emailText);
+  EmailService.this.logger.debug(emailText);
+  val transport: javax.mail.Transport = EmailService.this.getMailSession.getTransport(&quot;smtp&quot;);
+  transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword);
+  transport.sendMessage(message, message.getAllRecipients());
+  transport.close();
+  true
+}
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          922
+        </td>
+        <td>
+          6961
+          -
+          6992
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.MimeMessage(EmailService.this.getMailSession)
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          921
+        </td>
+        <td>
+          6977
+          -
+          6991
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.EmailService.getMailSession
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession
+        </td>
+      </tr><tr>
+        <td>
+          197
+        </td>
+        <td>
+          923
+        </td>
+        <td>
+          7062
+          -
+          7092
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.InternetAddress.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new javax.mail.internet.InternetAddress(EmailService.this.emailFrom)
+        </td>
+      </tr><tr>
+        <td>
+          197
+        </td>
+        <td>
+          924
+        </td>
+        <td>
+          7046
+          -
+          7093
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setFrom
+        </td>
+        <td style="background: #F0ADAD">
+          message.setFrom(new javax.mail.internet.InternetAddress(EmailService.this.emailFrom))
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          926
+        </td>
+        <td>
+          7194
+          -
+          7216
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          emailTo.mkString(&quot;, &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          925
+        </td>
+        <td>
+          7168
+          -
+          7192
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          javax.mail.Message.RecipientType.TO
+        </td>
+        <td style="background: #F0ADAD">
+          javax.mail.Message.RecipientType.TO
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          927
+        </td>
+        <td>
+          7146
+          -
+          7217
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.addRecipients
+        </td>
+        <td style="background: #F0ADAD">
+          message.addRecipients(javax.mail.Message.RecipientType.TO, emailTo.mkString(&quot;, &quot;))
+        </td>
+      </tr><tr>
+        <td>
+          203
+        </td>
+        <td>
+          928
+        </td>
+        <td>
+          7301
+          -
+          7328
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setSubject
+        </td>
+        <td style="background: #F0ADAD">
+          message.setSubject(subject)
+        </td>
+      </tr><tr>
+        <td>
+          205
+        </td>
+        <td>
+          929
+        </td>
+        <td>
+          7336
+          -
+          7362
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.setText
+        </td>
+        <td style="background: #F0ADAD">
+          message.setText(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          930
+        </td>
+        <td>
+          7369
+          -
+          7392
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.debug(emailText)
+        </td>
+      </tr><tr>
+        <td>
+          209
+        </td>
+        <td>
+          931
+        </td>
+        <td>
+          7449
+          -
+          7484
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Session.getTransport
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.getMailSession.getTransport(&quot;smtp&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          210
+        </td>
+        <td>
+          932
+        </td>
+        <td>
+          7491
+          -
+          7556
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.connect
+        </td>
+        <td style="background: #F0ADAD">
+          transport.connect(EmailService.this.emailServAddress, EmailService.this.emailUsername, EmailService.this.emailPassword)
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          934
+        </td>
+        <td>
+          7563
+          -
+          7619
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Transport.sendMessage
+        </td>
+        <td style="background: #F0ADAD">
+          transport.sendMessage(message, message.getAllRecipients())
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          933
+        </td>
+        <td>
+          7594
+          -
+          7618
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.internet.MimeMessage.getAllRecipients
+        </td>
+        <td style="background: #F0ADAD">
+          message.getAllRecipients()
+        </td>
+      </tr><tr>
+        <td>
+          212
+        </td>
+        <td>
+          935
+        </td>
+        <td>
+          7626
+          -
+          7643
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          javax.mail.Service.close
+        </td>
+        <td style="background: #F0ADAD">
+          transport.close()
+        </td>
+      </tr><tr>
+        <td>
+          213
+        </td>
+        <td>
+          936
+        </td>
+        <td>
+          7650
+          -
+          7654
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          941
+        </td>
+        <td>
+          7717
+          -
+          7780
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Messaging exception: &quot;.+(mex.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          938
+        </td>
+        <td>
+          7730
+          -
+          7753
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          940
+        </td>
+        <td>
+          7730
+          -
+          7779
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Messaging exception: &quot;.+(mex.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          939
+        </td>
+        <td>
+          7756
+          -
+          7779
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          mex.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          217
+        </td>
+        <td>
+          942
+        </td>
+        <td>
+          7789
+          -
+          7794
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          944
+        </td>
+        <td>
+          7879
+          -
+          7900
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getLocalizedMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getLocalizedMessage()
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          946
+        </td>
+        <td>
+          7840
+          -
+          7901
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          EmailService.this.logger.error(&quot;Other email problem: &quot;.+(e.getLocalizedMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          943
+        </td>
+        <td>
+          7853
+          -
+          7876
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          945
+        </td>
+        <td>
+          7853
+          -
+          7900
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Other email problem: &quot;.+(e.getLocalizedMessage())
+        </td>
+      </tr><tr>
+        <td>
+          221
+        </td>
+        <td>
+          947
+        </td>
+        <td>
+          7910
+          -
+          7915
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

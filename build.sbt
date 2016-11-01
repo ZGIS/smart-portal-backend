@@ -43,6 +43,9 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
+  "javax.mail" % "mail" % "1.4.7",
+  "javax.mail" % "javax.mail-api" % "1.5.6",
+
   "com.typesafe.play" %% "anorm" % "2.5.2",
   "org.postgresql" % "postgresql" % postgresDriver,
 

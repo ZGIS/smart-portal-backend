@@ -20,17 +20,56 @@
 package models
 
 import java.time.ZonedDateTime
-import java.util.Date
-import javax.inject.Inject
 
-import models.UserDAO
-import utils.{ClassnameLogger, PasswordHashing}
+import controllers.ProfileJs
+import utils.ClassnameLogger
 
-
+/**
+  * the user case class, however the UserDAO implements all database
+  * functions as it needed Dependency Injection and could not just be
+  * the companion object here
+  *
+  * @param email
+  * @param username
+  * @param firstname
+  * @param lastname
+  * @param password
+  * @param laststatustoken
+  * @param laststatuschange
+  */
 case class User(email: String,
                 username: String,
                 firstname: String,
                 lastname: String,
                 password: String,
                 laststatustoken: String,
-                laststatuschange: ZonedDateTime )
+                laststatuschange: ZonedDateTime ) extends ClassnameLogger {
+
+  /**
+    * toString, should be more explicit with date handling
+    *
+    * @return
+    */
+  override def toString: String = {
+    f"""User(
+        |$email,
+        |${username},
+        |${firstname},
+        |${lastname},
+        |***,
+        |${laststatustoken},
+        |${laststatuschange}
+     """.stripMargin.replaceAll("\n", " ")
+  }
+
+  /**
+    * asProfileJs should never need to return the password?!
+    *
+    * @return
+    */
+  def asProfileJs() : ProfileJs = {
+ProfileJs(email, username, firstname, lastname, Some("***"))
+  }
+
+                }
+

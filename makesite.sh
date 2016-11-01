@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 
-activator clean coverage test coverageReport copyCoverage scapegoat check makeSite ghpagesPushSite
+./bin/activator clean coverage test coverageReport copyCoverage scapegoat check makeSite ghpagesPushSite
+

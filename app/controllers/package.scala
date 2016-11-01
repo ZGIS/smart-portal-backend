@@ -19,13 +19,11 @@
 
 import java.time.ZonedDateTime
 
-import play.api.libs.json._
+import models.User
+import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json.Writes._
-import play.api.libs.functional.syntax._
-import java.util.UUID
-
-import models.User
+import play.api.libs.json._
 
 package object controllers {
 
@@ -46,5 +44,19 @@ package object controllers {
       (JsPath \ "password").write[String] and
       (JsPath \ "laststatustoken").write[String] and
       (JsPath \ "laststatuschange").write[ZonedDateTime])(unlift(User.unapply))
+
+  implicit val profileJsReads: Reads[ProfileJs] = (
+    (JsPath \ "email").read[String](email) and
+      (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "firstname").read[String] and
+      (JsPath \ "lastname").read[String] and
+      (JsPath \ "password").readNullable[String](minLength[String](8)))(ProfileJs.apply _)
+
+  implicit val profileJsWrites: Writes[ProfileJs] = (
+    (JsPath \ "email").write[String] and
+      (JsPath \ "username").write[String] and
+      (JsPath \ "firstname").write[String] and
+      (JsPath \ "lastname").write[String] and
+      (JsPath \ "password").writeNullable[String])(unlift(ProfileJs.unapply))
 
 }

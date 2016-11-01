@@ -48,6 +48,11 @@ trait Security { self: Controller =>
     * - present in the cookie header of the request,
     * - either in the header or in the query string,
     * - matches a token already stored in the play cache
+    *
+    * @param p
+    * @param f
+    * @tparam A
+    * @return
     */
   def HasToken[A](p: BodyParser[A] = parse.anyContent)(
     f: String => String => Request[A] => Result): Action[A] =

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+ * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
  * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
  * Ministry of Business, Innovation and Employment (MBIE)
@@ -8,7 +8,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,31 +20,20 @@
 package models
 
 import java.time.ZonedDateTime
-
-import anorm.JavaTimeColumn
-import anorm.JavaTimeToStatement
-import anorm.JavaTimeParameterMetaData
-import javax.inject.{Inject, Singleton}
+import javax.inject.Inject
 
 import anorm.SqlParser._
 import anorm._
 import play.api.db._
-import utils.ClassnameLogger
+import utils.{ClassnameLogger, PasswordHashing}
 
-class UserDAO  @Inject()(db: Database) extends ClassnameLogger {
-
-  def getUsers : List[User] = {
-
-    // access "default" database
-    db.withConnection { implicit connection =>
-      // do whatever you need with the connection
-    }
-
-    List()
-
-  }
-
-  // -- Parsers
+/**
+  * UserDAO
+  *
+  * @param db
+  * @param passwordHashing
+  */
+class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
 
   /**
     * Parse a User from a ResultSet
@@ -63,12 +52,15 @@ class UserDAO  @Inject()(db: Database) extends ClassnameLogger {
     }
   }
 
+  /**
+    *
+    */
   val macroUserParser: RowParser[User] = Macro.namedParser[User]
-
-  // -- Queries
 
   /**
     * Retrieve a User from username.
+    *
+    * @param username
     */
   def findByUsername(username: String): Option[User] = {
     db.withConnection { implicit connection =>
@@ -89,34 +81,35 @@ class UserDAO  @Inject()(db: Database) extends ClassnameLogger {
 
   /**
     * Authenticate a User.
+    *
+    * @param username
+    * @param password
     */
   def authenticate(username: String, password: String): Option[User] = {
+
     db.withConnection { implicit connection =>
       SQL(
         """
          select * from users where
-         username = {username} and password = {password}
+         username = {username}
         """
       ).on(
-        'username -> username,
-        'password -> password
+        'username -> username
       ).as(userParser.singleOpt)
+    }.filter { user =>
+      passwordHashing.validatePassword(password, user.password)
     }
+
   }
 
-  def demo = {
-    db.withConnection { implicit connection =>
-      val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
-        "a" -> "1",
-        "b" -> "2",
-        "c" -> 3)
-
-      SQL("SELECT * FROM test WHERE (a={a} AND b={b}) OR c={c}").
-        on(nps: _*) // Fail - no conversion (String,Any) => NamedParameter}
-    }
-  }
-
-  def createNps(user: User): User = {
+  /**
+    * Create a User with a NamedParameterSet (supposedly more typesafe?)
+    *
+    * new java.time. API only partially implemented in Anorm Type mapping
+    *
+    * @param user
+    */
+  def createWithNps(user: User): Option[User] = {
 
     db.withConnection { implicit connection =>
       val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
@@ -128,25 +121,32 @@ class UserDAO  @Inject()(db: Database) extends ClassnameLogger {
         "password" -> user.password,
         "laststatuschange" -> user.laststatuschange)
 
-      SQL(
+      val rowCount = SQL(
         """
           insert into users values (
             {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
           )
         """).on(nps: _*).executeUpdate()
 
-      user
+      rowCount match {
+        case 1 => Some(user)
+        case _ => None
+      }
+
 
     }
   }
 
   /**
     * Create a User.
+    *
+    * @param user
+    * @return
     */
-  def create(user: User): User = {
+  def create(user: User): Option[User] = {
 
     db.withConnection { implicit connection =>
-      SQL(
+      val rowCount = SQL(
         """
           insert into users values (
             {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
@@ -161,12 +161,139 @@ class UserDAO  @Inject()(db: Database) extends ClassnameLogger {
         'laststatuschange -> user.laststatuschange
       ).executeUpdate()
 
-      user
+      rowCount match {
+        case 1 => Some(user)
+        case _ => None
+      }
     }
   }
 
-  /*
-  Update single parts of user
-   */
+  /**
+    * Update single parts of user without touch password
+    *
+    * @param user
+    * @return
+    */
+  def updateNoPass(user: User) : Option[User] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        """
+          update users set
+            email = {email},
+            firstname = {firstname},
+            lastname = {lastname},
+            laststatuschange = {laststatuschange} where username = {username}
+        """).on(
+        'email -> user.email,
+        'firstname -> user.firstname,
+        'lastname -> user.lastname,
+        'laststatuschange -> user.laststatuschange,
+        'username -> user.username
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(user)
+        case _ => None
+      }
+    }
+
+  }
+
+  /**
+    * Update password parts of user without other parts
+    * @param user
+    * @return
+    */
+  def updatePassword(user: User) : Option[User] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        """
+          update users set
+            password = {password},
+            laststatustoken = {laststatustoken},
+            laststatuschange = {laststatuschange} where username = {username}
+        """).on(
+        'password -> user.password,
+        'laststatustoken -> user.laststatustoken,
+        'laststatuschange -> user.laststatuschange,
+        'username -> user.username
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(user)
+        case _ => None
+      }
+    }
+
+  }
+
+  // more utility functions
+
+  /**
+    * find User By Email
+    *
+    * @param email
+    * @return
+    */
+  def findUserByEmail(email: String) : Option[User] = {
+    db.withConnection { implicit connection =>
+      SQL("select * from users where email = {email}").on(
+        'email -> email
+      ).as(userParser.singleOpt)
+    }
+  }
+
+  /**
+    * delete a User
+    *
+    * @param username
+    * @return
+    */
+  def deleteUser(username: String) : Boolean = {
+    val rowCount = db.withConnection { implicit connection =>
+      SQL("delete from users where username = {username}").on(
+        'username -> username
+      ).executeUpdate()
+    }
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
+  /**
+    * find Users By their status token
+    *
+    * @param regStatus
+    * @return
+    */
+  def findUsersByToken(regStatus: String) : Seq[User] = {
+    db.withConnection { implicit connection =>
+      SQL("select * from users where laststatustoken like '{regStatus}:%'").on(
+        'laststatustoken -> regStatus
+      ).as(userParser *)
+    }
+  }
+
+  /**
+    * find Users By their status token "REGISTERED"
+    *
+    * @return
+    */
+  def findRegisteredOnlyUsers : Seq[User] = {
+    findUsersByToken("REGISTERED")
+  }
+
+  /**
+    * find Users By their status token "ACTIVE"
+    *
+    * @return
+    */
+  def findActiveUsers : Seq[User] = {
+    findUsersByToken("ACTIVE")
+  }
 
 }

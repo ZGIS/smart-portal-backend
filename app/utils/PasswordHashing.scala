@@ -23,10 +23,9 @@ package utils
 import java.security.{MessageDigest, SecureRandom}
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
-import models.User
-import play.api.Configuration
-import java.time.LocalDate
 import javax.inject.{Inject, Singleton}
+
+import play.api.Configuration
 
 @Singleton
 class PasswordHashing @Inject()(configuration: Configuration) extends ClassnameLogger {

@@ -12,6 +12,6 @@ cp portal-backend.k8s.yaml target/universal
 
 ls -lh target/universal
 
-cd target/universal && test -f ${APPNAME}-${APPVERSION}.tgz && tar -cvzf ${APPNAME}-${APPVERSION}-docker.tgz ${APPNAME}-${TRAVIS_BUILD_NUMBER}.tgz Dockerfile
+cd target/universal && test -f ${APPNAME}-${APPVERSION}.tgz && tar -cvzf ${APPNAME}-${TRAVIS_BUILD_NUMBER}-docker.tgz ${APPNAME}-${APPVERSION}.tgz Dockerfile
 
 ls -lh

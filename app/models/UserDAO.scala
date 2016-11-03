@@ -20,7 +20,7 @@
 package models
 
 import java.time.ZonedDateTime
-import javax.inject.Inject
+import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser._
 import anorm._
@@ -33,6 +33,7 @@ import utils.{ClassnameLogger, PasswordHashing}
   * @param db
   * @param passwordHashing
   */
+@Singleton
 class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
 
   /**
@@ -183,11 +184,13 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
             email = {email},
             firstname = {firstname},
             lastname = {lastname},
+            laststatustoken = {laststatustoken},
             laststatuschange = {laststatuschange} where username = {username}
         """).on(
         'email -> user.email,
         'firstname -> user.firstname,
         'lastname -> user.lastname,
+        'laststatustoken -> user.laststatustoken,
         'laststatuschange -> user.laststatuschange,
         'username -> user.username
       ).executeUpdate()
@@ -267,15 +270,23 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   /**
     * find Users By their status token
     *
-    * @param regStatus
+    * @param token
     * @return
     */
-  def findUsersByToken(regStatus: String) : Seq[User] = {
+  def findUsersByToken(token: String) : Seq[User] = {
     db.withConnection { implicit connection =>
-      SQL("select * from users where laststatustoken like '{regStatus}:%'").on(
-        'laststatustoken -> regStatus
-      ).as(userParser *)
+      SQL(s"""select * from users where laststatustoken like '${token}'""").as(userParser *)
     }
+  }
+
+  /**
+    * find Users By their status token "REGISTERED" and their uniqu registration link id
+    *
+    * @param regLink
+    * @return
+    */
+  def findRegisteredUsersByRegLink(regLink: String) : Seq[User] = {
+    findUsersByToken(s"REGISTERED:$regLink")
   }
 
   /**
@@ -284,7 +295,7 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     * @return
     */
   def findRegisteredOnlyUsers : Seq[User] = {
-    findUsersByToken("REGISTERED")
+    findUsersByToken("REGISTERED%")
   }
 
   /**
@@ -293,7 +304,7 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     * @return
     */
   def findActiveUsers : Seq[User] = {
-    findUsersByToken("ACTIVE")
+    findUsersByToken("ACTIVE%")
   }
 
 }

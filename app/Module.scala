@@ -20,7 +20,9 @@
 import com.google.inject.AbstractModule
 import java.time.Clock
 
-import services.{ApplicationTimer, AtomicCounter, Counter}
+import models.UserDAO
+import services.{ApplicationTimer, AtomicCounter, Counter, EmailService}
+import utils.PasswordHashing
 
 /**
  * This class is a Guice module that tells Guice how to bind several
@@ -42,6 +44,10 @@ class Module extends AbstractModule {
     bind(classOf[ApplicationTimer]).asEagerSingleton()
     // Set AtomicCounter as the implementation for Counter.
     bind(classOf[Counter]).to(classOf[AtomicCounter])
+
+    bind(classOf[PasswordHashing]).asEagerSingleton()
+    bind(classOf[EmailService]).asEagerSingleton()
+    bind(classOf[UserDAO]).asEagerSingleton()
   }
 
 }

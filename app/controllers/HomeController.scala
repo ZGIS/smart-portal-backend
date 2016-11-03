@@ -21,17 +21,13 @@ package controllers
 
 import javax.inject._
 
-import models.UserDAO
-import play.api._
-import play.api.libs.json.JsPath
-import play.api.libs.json._
-import play.api.libs.json.Reads._
-import play.api.libs.json.Writes._
-import play.api.libs.functional.syntax._
-import play.api.mvc._
-import utils.{ClassnameLogger, PasswordHashing}
+import models.{LoginCredentials, UserDAO}
 import play.api.Configuration
 import play.api.cache._
+import play.api.libs.json.Writes._
+import play.api.libs.json._
+import play.api.mvc._
+import utils.{ClassnameLogger, PasswordHashing}
 
 
 /**
@@ -42,7 +38,10 @@ import play.api.cache._
   * @param passwordHashing
   */
 @Singleton
-class HomeController @Inject() (config: Configuration, cacheApi: CacheApi, passwordHashing: PasswordHashing, userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
+class HomeController @Inject() (config: Configuration,
+                                cacheApi: CacheApi,
+                                override val passwordHashing: PasswordHashing,
+                                userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
@@ -80,21 +79,6 @@ class HomeController @Inject() (config: Configuration, cacheApi: CacheApi, passw
     Ok(views.html.index("Your new application is ready."))
   }
 
-
-  /**
-    *  Used for obtaining the email and password from the HTTP login request
-    *  from github.com/mariussoutier/play-angular-require-seed
-    */
-  case class LoginCredentials(username: String, password: String)
-
-  /**
-    *  JSON reader for [[LoginCredentials]].
-    *  github.com/mariussoutier/play-angular-require-seed
-    */
-  implicit val LoginCredentialsFromJson = (
-      (JsPath \ "username").read[String](minLength[String](3)) and
-      (JsPath \ "password").read[String](minLength[String](6)))((username, password) => LoginCredentials(username, password))
-
   /**
     * login with JSON (from Angular / form)
     * {"username":"akmoch","password":"testpass123"}
@@ -117,10 +101,10 @@ class HomeController @Inject() (config: Configuration, cacheApi: CacheApi, passw
           BadRequest(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
         } { user =>
           val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-          logger.info(s"Logging in username from $uaIdentifier")
-          val token = passwordHashing.createSessionCookie("username", uaIdentifier)
+          // logger.debug(s"Logging in username from $uaIdentifier")
+          val token = passwordHashing.createSessionCookie(user.username, uaIdentifier)
           cache.set(token, user.username)
-          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> "username"))
+          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username))
             .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
         }
       })

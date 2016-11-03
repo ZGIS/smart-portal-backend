@@ -35,6 +35,7 @@ trait Security { self: Controller =>
 
   val cache: CacheApi
   val configuration: Configuration
+  val passwordHashing: PasswordHashing
 
   val AuthTokenCookieKey = "XSRF-TOKEN"
   val AuthTokenHeader = "X-XSRF-TOKEN"
@@ -61,19 +62,21 @@ trait Security { self: Controller =>
     request.cookies.get(AuthTokenCookieKey).fold {
       Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie"))
     } { xsrfTokenCookie =>
-      // Logger.debug(s"cookie ${xsrfTokenCookie.value}")
+      Logger.trace(s"cookie ${xsrfTokenCookie.value}")
       val maybeToken = request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey))
 
       maybeToken flatMap { token =>
         // ua needed to differentiate between different devices/sessions
         val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-
+        Logger.trace(s"token: $token")
+        Logger.trace(s"ua: $uaIdentifier")
         // cache token -> maps to a String username
         cache.get[String](token) map { username =>
-          lazy val passwordHashing = new PasswordHashing(configuration)
+          // lazy val passwordHashing = new PasswordHashing(configuration)
           val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, username, uaIdentifier)
+          Logger.trace(s"testcookie: $cookieForUSerAndDevice")
           if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
-            Logger.debug(s"request for active session: $username / $token / $uaIdentifier")
+            Logger.trace(s"request for active session: $username / $token / $uaIdentifier")
             f(token)(username)(request)
           } else {
             Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))

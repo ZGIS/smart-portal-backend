@@ -85,7 +85,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
       message.setSubject(subject)
 
       message.setText(emailText)
-      logger.debug(emailText)
+      logger.trace(emailText)
 
       // Send message
       val transport: Transport = getMailSession.getTransport("smtp")
@@ -143,7 +143,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
       message.setSubject(subject)
 
       message.setText(emailText)
-      logger.debug(emailText)
+      logger.trace(emailText)
 
       // Send message
       val transport: Transport = getMailSession.getTransport("smtp")
@@ -203,7 +203,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
       message.setSubject(subject)
 
       message.setText(emailText)
-      logger.debug(emailText)
+      logger.trace(emailText)
 
       // Send message
       val transport: Transport = getMailSession.getTransport("smtp")

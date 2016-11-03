@@ -43,7 +43,7 @@ case class User(email: String,
                 lastname: String,
                 password: String,
                 laststatustoken: String,
-                laststatuschange: ZonedDateTime ) extends ClassnameLogger {
+                laststatuschange: ZonedDateTime) extends ClassnameLogger {
 
   /**
     * toString, should be more explicit with date handling
@@ -67,9 +67,14 @@ case class User(email: String,
     *
     * @return
     */
-  def asProfileJs() : ProfileJs = {
-ProfileJs(email, username, firstname, lastname, Some("***"))
+  def asProfileJs(): ProfileJs = {
+    ProfileJs(email, username, firstname, lastname)
   }
 
-                }
+}
 
+/**
+  *  Used for obtaining the email and password from the HTTP login request
+  *  from github.com/mariussoutier/play-angular-require-seed
+  */
+case class LoginCredentials(username: String, password: String)

@@ -19,13 +19,28 @@
 
 import java.time.ZonedDateTime
 
-import models.User
+import models.{LoginCredentials, User}
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json.Writes._
 import play.api.libs.json._
 
 package object controllers {
+
+  /**
+    *  JSON reader for [[models.LoginCredentials]].
+    *  github.com/mariussoutier/play-angular-require-seed
+    */
+  implicit val LoginCredentialsFromJson = (
+    (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "password").read[String](minLength[String](6)))((username, password) => LoginCredentials(username, password))
+
+  implicit val registerJsReads: Reads[RegisterJs] = (
+    (JsPath \ "email").read[String](email) and
+      (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "firstname").read[String] and
+      (JsPath \ "lastname").read[String] and
+      (JsPath \ "password").read[String](minLength[String](8)))(RegisterJs.apply _)
 
   implicit val userReads: Reads[User] = (
     (JsPath \ "email").read[String](email) and
@@ -49,14 +64,12 @@ package object controllers {
     (JsPath \ "email").read[String](email) and
       (JsPath \ "username").read[String](minLength[String](3)) and
       (JsPath \ "firstname").read[String] and
-      (JsPath \ "lastname").read[String] and
-      (JsPath \ "password").readNullable[String](minLength[String](8)))(ProfileJs.apply _)
+      (JsPath \ "lastname").read[String])(ProfileJs.apply _)
 
   implicit val profileJsWrites: Writes[ProfileJs] = (
     (JsPath \ "email").write[String] and
       (JsPath \ "username").write[String] and
       (JsPath \ "firstname").write[String] and
-      (JsPath \ "lastname").write[String] and
-      (JsPath \ "password").writeNullable[String])(unlift(ProfileJs.unapply))
+      (JsPath \ "lastname").write[String])(unlift(ProfileJs.unapply))
 
 }

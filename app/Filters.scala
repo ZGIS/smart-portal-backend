@@ -42,23 +42,23 @@ import play.filters.headers.SecurityHeadersFilter
  * @param env Basic environment settings for the current application.
  * @param exampleFilter A demonstration filter that adds a header to
  * each response.
- * @param corsFilter A demonstration filter that adds a header to
  * each response.
  */
 @Singleton
 class Filters @Inject() (
   env: Environment,
-  exampleFilter: ExampleFilter,
-  corsFilter: CORSFilter,
-  csrfFilter: CSRFFilter,
-  securityHeadersFilter: SecurityHeadersFilter) extends HttpFilters {
+  exampleFilter: ExampleFilter
+  //corsFilter: CORSFilter,
+  //csrfFilter: CSRFFilter,
+  //securityHeadersFilter: SecurityHeadersFilter
+                        ) extends HttpFilters {
 
   override val filters = {
     // Use the example filter if we're running development mode. If
     // we're running in production or test mode then don't use any
     // filters at all.
-    if (env.mode == Mode.Dev) Seq(exampleFilter, csrfFilter, securityHeadersFilter)
-    else Seq(corsFilter, csrfFilter, securityHeadersFilter)
+    if (env.mode == Mode.Dev) Seq(exampleFilter)
+    else Seq()
   }
 
 }

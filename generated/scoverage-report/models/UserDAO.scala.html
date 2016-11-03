@@ -44,7 +44,7 @@
 </span>20 <span style=''>package models
 </span>21 <span style=''>
 </span>22 <span style=''>import java.time.ZonedDateTime
-</span>23 <span style=''>import javax.inject.Inject
+</span>23 <span style=''>import javax.inject.{Inject, Singleton}
 </span>24 <span style=''>
 </span>25 <span style=''>import anorm.SqlParser._
 </span>26 <span style=''>import anorm._
@@ -57,270 +57,281 @@
 </span>33 <span style=''>  * @param db
 </span>34 <span style=''>  * @param passwordHashing
 </span>35 <span style=''>  */
-</span>36 <span style=''>class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
-</span>37 <span style=''>
-</span>38 <span style=''>  /**
-</span>39 <span style=''>    * Parse a User from a ResultSet
-</span>40 <span style=''>    *
-</span>41 <span style=''>    */
-</span>42 <span style=''>  val userParser = {
-</span>43 <span style=''>    </span><span style='background: #AEF1AE'>get[String]("email") ~
-</span>44 <span style=''></span><span style='background: #AEF1AE'>      get[String]("username") ~
-</span>45 <span style=''></span><span style='background: #AEF1AE'>      get[String]("firstname") ~
-</span>46 <span style=''></span><span style='background: #AEF1AE'>      get[String]("lastname") ~
-</span>47 <span style=''></span><span style='background: #AEF1AE'>      get[String]("password") ~
-</span>48 <span style=''></span><span style='background: #AEF1AE'>      get[String]("laststatustoken") ~
-</span>49 <span style=''></span><span style='background: #AEF1AE'>      get[ZonedDateTime]("laststatuschange") map {
-</span>50 <span style=''></span><span style='background: #AEF1AE'>      case email~username~firstname~lastname~password~laststatustoken~laststatuschange =>
-</span>51 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>User(email, username, firstname, lastname, password, laststatustoken, laststatuschange)</span><span style='background: #AEF1AE'>
-</span>52 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>53 <span style=''>  }
-</span>54 <span style=''>
-</span>55 <span style=''>  /**
-</span>56 <span style=''>    *
-</span>57 <span style=''>    */
-</span>58 <span style=''>  val macroUserParser: RowParser[User] = Macro.namedParser[User]
-</span>59 <span style=''>
-</span>60 <span style=''>  /**
-</span>61 <span style=''>    * Retrieve a User from username.
-</span>62 <span style=''>    *
-</span>63 <span style=''>    * @param username
-</span>64 <span style=''>    */
-</span>65 <span style=''>  def findByUsername(username: String): Option[User] = {
-</span>66 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>67 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users where username = {username}").on(
-</span>68 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
-</span>69 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
-</span>70 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>71 <span style=''>  }
-</span>72 <span style=''>
-</span>73 <span style=''>  /**
-</span>74 <span style=''>    * Retrieve all users.
-</span>75 <span style=''>    */
-</span>76 <span style=''>  def findAll: Seq[User] = {
-</span>77 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>78 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users").as(userParser *)
-</span>79 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>80 <span style=''>  }
-</span>81 <span style=''>
-</span>82 <span style=''>  /**
-</span>83 <span style=''>    * Authenticate a User.
-</span>84 <span style=''>    *
-</span>85 <span style=''>    * @param username
-</span>86 <span style=''>    * @param password
-</span>87 <span style=''>    */
-</span>88 <span style=''>  def authenticate(username: String, password: String): Option[User] = {
-</span>89 <span style=''>
-</span>90 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>91 <span style=''></span><span style='background: #F0ADAD'>      SQL(
-</span>92 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>93 <span style=''></span><span style='background: #F0ADAD'>         select * from users where
-</span>94 <span style=''></span><span style='background: #F0ADAD'>         username = {username}
-</span>95 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>96 <span style=''></span><span style='background: #F0ADAD'>      ).on(
-</span>97 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
-</span>98 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
-</span>99 <span style=''></span><span style='background: #F0ADAD'>    }.filter { user =>
-</span>100 <span style=''></span><span style='background: #F0ADAD'>      passwordHashing.validatePassword(password, user.password)
-</span>101 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>102 <span style=''>
-</span>103 <span style=''>  }
-</span>104 <span style=''>
-</span>105 <span style=''>  /**
-</span>106 <span style=''>    * Create a User with a NamedParameterSet (supposedly more typesafe?)
-</span>107 <span style=''>    *
-</span>108 <span style=''>    * new java.time. API only partially implemented in Anorm Type mapping
-</span>109 <span style=''>    *
-</span>110 <span style=''>    * @param user
-</span>111 <span style=''>    */
-</span>112 <span style=''>  def createWithNps(user: User): Option[User] = {
-</span>113 <span style=''>
-</span>114 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>115 <span style=''></span><span style='background: #F0ADAD'>      val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
-</span>116 <span style=''></span><span style='background: #F0ADAD'>        "email" -> user.email,
-</span>117 <span style=''></span><span style='background: #F0ADAD'>        "username" -> user.username,
-</span>118 <span style=''></span><span style='background: #F0ADAD'>        "firstname" -> user.firstname,
-</span>119 <span style=''></span><span style='background: #F0ADAD'>        "lastname" -> user.lastname,
-</span>120 <span style=''></span><span style='background: #F0ADAD'>        "laststatustoken" -> user.laststatustoken,
-</span>121 <span style=''></span><span style='background: #F0ADAD'>        "password" -> user.password,
-</span>122 <span style=''></span><span style='background: #F0ADAD'>        "laststatuschange" -> user.laststatuschange)
-</span>123 <span style=''></span><span style='background: #F0ADAD'>
-</span>124 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
-</span>125 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>126 <span style=''></span><span style='background: #F0ADAD'>          insert into users values (
-</span>127 <span style=''></span><span style='background: #F0ADAD'>            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
-</span>128 <span style=''></span><span style='background: #F0ADAD'>          )
-</span>129 <span style=''></span><span style='background: #F0ADAD'>        """).on(nps: _*).executeUpdate()
-</span>130 <span style=''></span><span style='background: #F0ADAD'>
-</span>131 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
-</span>132 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
-</span>133 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
-</span>134 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>135 <span style=''></span><span style='background: #F0ADAD'>
+</span>36 <span style=''>@Singleton
+</span>37 <span style=''>class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
+</span>38 <span style=''>
+</span>39 <span style=''>  /**
+</span>40 <span style=''>    * Parse a User from a ResultSet
+</span>41 <span style=''>    *
+</span>42 <span style=''>    */
+</span>43 <span style=''>  val userParser = {
+</span>44 <span style=''>    </span><span style='background: #AEF1AE'>get[String]("email") ~
+</span>45 <span style=''></span><span style='background: #AEF1AE'>      get[String]("username") ~
+</span>46 <span style=''></span><span style='background: #AEF1AE'>      get[String]("firstname") ~
+</span>47 <span style=''></span><span style='background: #AEF1AE'>      get[String]("lastname") ~
+</span>48 <span style=''></span><span style='background: #AEF1AE'>      get[String]("password") ~
+</span>49 <span style=''></span><span style='background: #AEF1AE'>      get[String]("laststatustoken") ~
+</span>50 <span style=''></span><span style='background: #AEF1AE'>      get[ZonedDateTime]("laststatuschange") map {
+</span>51 <span style=''></span><span style='background: #AEF1AE'>      case email~username~firstname~lastname~password~laststatustoken~laststatuschange =>
+</span>52 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>User(email, username, firstname, lastname, password, laststatustoken, laststatuschange)</span><span style='background: #AEF1AE'>
+</span>53 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>54 <span style=''>  }
+</span>55 <span style=''>
+</span>56 <span style=''>  /**
+</span>57 <span style=''>    *
+</span>58 <span style=''>    */
+</span>59 <span style=''>  val macroUserParser: RowParser[User] = Macro.namedParser[User]
+</span>60 <span style=''>
+</span>61 <span style=''>  /**
+</span>62 <span style=''>    * Retrieve a User from username.
+</span>63 <span style=''>    *
+</span>64 <span style=''>    * @param username
+</span>65 <span style=''>    */
+</span>66 <span style=''>  def findByUsername(username: String): Option[User] = {
+</span>67 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>68 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users where username = {username}").on(
+</span>69 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
+</span>70 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
+</span>71 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>72 <span style=''>  }
+</span>73 <span style=''>
+</span>74 <span style=''>  /**
+</span>75 <span style=''>    * Retrieve all users.
+</span>76 <span style=''>    */
+</span>77 <span style=''>  def findAll: Seq[User] = {
+</span>78 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>79 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users").as(userParser *)
+</span>80 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>81 <span style=''>  }
+</span>82 <span style=''>
+</span>83 <span style=''>  /**
+</span>84 <span style=''>    * Authenticate a User.
+</span>85 <span style=''>    *
+</span>86 <span style=''>    * @param username
+</span>87 <span style=''>    * @param password
+</span>88 <span style=''>    */
+</span>89 <span style=''>  def authenticate(username: String, password: String): Option[User] = {
+</span>90 <span style=''>
+</span>91 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>92 <span style=''></span><span style='background: #F0ADAD'>      SQL(
+</span>93 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>94 <span style=''></span><span style='background: #F0ADAD'>         select * from users where
+</span>95 <span style=''></span><span style='background: #F0ADAD'>         username = {username}
+</span>96 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>97 <span style=''></span><span style='background: #F0ADAD'>      ).on(
+</span>98 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
+</span>99 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
+</span>100 <span style=''></span><span style='background: #F0ADAD'>    }.filter { user =>
+</span>101 <span style=''></span><span style='background: #F0ADAD'>      passwordHashing.validatePassword(password, user.password)
+</span>102 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>103 <span style=''>
+</span>104 <span style=''>  }
+</span>105 <span style=''>
+</span>106 <span style=''>  /**
+</span>107 <span style=''>    * Create a User with a NamedParameterSet (supposedly more typesafe?)
+</span>108 <span style=''>    *
+</span>109 <span style=''>    * new java.time. API only partially implemented in Anorm Type mapping
+</span>110 <span style=''>    *
+</span>111 <span style=''>    * @param user
+</span>112 <span style=''>    */
+</span>113 <span style=''>  def createWithNps(user: User): Option[User] = {
+</span>114 <span style=''>
+</span>115 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>116 <span style=''></span><span style='background: #F0ADAD'>      val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
+</span>117 <span style=''></span><span style='background: #F0ADAD'>        "email" -> user.email,
+</span>118 <span style=''></span><span style='background: #F0ADAD'>        "username" -> user.username,
+</span>119 <span style=''></span><span style='background: #F0ADAD'>        "firstname" -> user.firstname,
+</span>120 <span style=''></span><span style='background: #F0ADAD'>        "lastname" -> user.lastname,
+</span>121 <span style=''></span><span style='background: #F0ADAD'>        "laststatustoken" -> user.laststatustoken,
+</span>122 <span style=''></span><span style='background: #F0ADAD'>        "password" -> user.password,
+</span>123 <span style=''></span><span style='background: #F0ADAD'>        "laststatuschange" -> user.laststatuschange)
+</span>124 <span style=''></span><span style='background: #F0ADAD'>
+</span>125 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
+</span>126 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>127 <span style=''></span><span style='background: #F0ADAD'>          insert into users values (
+</span>128 <span style=''></span><span style='background: #F0ADAD'>            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
+</span>129 <span style=''></span><span style='background: #F0ADAD'>          )
+</span>130 <span style=''></span><span style='background: #F0ADAD'>        """).on(nps: _*).executeUpdate()
+</span>131 <span style=''></span><span style='background: #F0ADAD'>
+</span>132 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
+</span>133 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
+</span>134 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
+</span>135 <span style=''></span><span style='background: #F0ADAD'>      }
 </span>136 <span style=''></span><span style='background: #F0ADAD'>
-</span>137 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>138 <span style=''>  }
-</span>139 <span style=''>
-</span>140 <span style=''>  /**
-</span>141 <span style=''>    * Create a User.
-</span>142 <span style=''>    *
-</span>143 <span style=''>    * @param user
-</span>144 <span style=''>    * @return
-</span>145 <span style=''>    */
-</span>146 <span style=''>  def create(user: User): Option[User] = {
-</span>147 <span style=''>
-</span>148 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>149 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
-</span>150 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>151 <span style=''></span><span style='background: #F0ADAD'>          insert into users values (
-</span>152 <span style=''></span><span style='background: #F0ADAD'>            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
-</span>153 <span style=''></span><span style='background: #F0ADAD'>          )
-</span>154 <span style=''></span><span style='background: #F0ADAD'>        """).on(
-</span>155 <span style=''></span><span style='background: #F0ADAD'>        'email -> user.email,
-</span>156 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username,
-</span>157 <span style=''></span><span style='background: #F0ADAD'>        'firstname -> user.firstname,
-</span>158 <span style=''></span><span style='background: #F0ADAD'>        'lastname -> user.lastname,
-</span>159 <span style=''></span><span style='background: #F0ADAD'>        'password -> user.password,
-</span>160 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> user.laststatustoken,
-</span>161 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange
-</span>162 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
-</span>163 <span style=''></span><span style='background: #F0ADAD'>
-</span>164 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
-</span>165 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
-</span>166 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
-</span>167 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>168 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>169 <span style=''>  }
-</span>170 <span style=''>
-</span>171 <span style=''>  /**
-</span>172 <span style=''>    * Update single parts of user without touch password
-</span>173 <span style=''>    *
-</span>174 <span style=''>    * @param user
-</span>175 <span style=''>    * @return
-</span>176 <span style=''>    */
-</span>177 <span style=''>  def updateNoPass(user: User) : Option[User] = {
-</span>178 <span style=''>
-</span>179 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>180 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
-</span>181 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>182 <span style=''></span><span style='background: #F0ADAD'>          update users set
-</span>183 <span style=''></span><span style='background: #F0ADAD'>            email = {email},
-</span>184 <span style=''></span><span style='background: #F0ADAD'>            firstname = {firstname},
-</span>185 <span style=''></span><span style='background: #F0ADAD'>            lastname = {lastname},
-</span>186 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = {laststatuschange} where username = {username}
-</span>187 <span style=''></span><span style='background: #F0ADAD'>        """).on(
-</span>188 <span style=''></span><span style='background: #F0ADAD'>        'email -> user.email,
-</span>189 <span style=''></span><span style='background: #F0ADAD'>        'firstname -> user.firstname,
-</span>190 <span style=''></span><span style='background: #F0ADAD'>        'lastname -> user.lastname,
-</span>191 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange,
-</span>192 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username
-</span>193 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
-</span>194 <span style=''></span><span style='background: #F0ADAD'>
-</span>195 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
-</span>196 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
-</span>197 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
-</span>198 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>199 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>200 <span style=''>
-</span>201 <span style=''>  }
-</span>202 <span style=''>
-</span>203 <span style=''>  /**
-</span>204 <span style=''>    * Update password parts of user without other parts
-</span>205 <span style=''>    * @param user
-</span>206 <span style=''>    * @return
-</span>207 <span style=''>    */
-</span>208 <span style=''>  def updatePassword(user: User) : Option[User] = {
-</span>209 <span style=''>
-</span>210 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>211 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
-</span>212 <span style=''></span><span style='background: #F0ADAD'>        """
-</span>213 <span style=''></span><span style='background: #F0ADAD'>          update users set
-</span>214 <span style=''></span><span style='background: #F0ADAD'>            password = {password},
-</span>215 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = {laststatustoken},
-</span>216 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = {laststatuschange} where username = {username}
-</span>217 <span style=''></span><span style='background: #F0ADAD'>        """).on(
-</span>218 <span style=''></span><span style='background: #F0ADAD'>        'password -> user.password,
-</span>219 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> user.laststatustoken,
-</span>220 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange,
-</span>221 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username
-</span>222 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
-</span>223 <span style=''></span><span style='background: #F0ADAD'>
-</span>224 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
-</span>225 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
-</span>226 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
-</span>227 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>228 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>229 <span style=''>
-</span>230 <span style=''>  }
-</span>231 <span style=''>
-</span>232 <span style=''>  // more utility functions
-</span>233 <span style=''>
-</span>234 <span style=''>  /**
-</span>235 <span style=''>    * find User By Email
-</span>236 <span style=''>    *
-</span>237 <span style=''>    * @param email
-</span>238 <span style=''>    * @return
-</span>239 <span style=''>    */
-</span>240 <span style=''>  def findUserByEmail(email: String) : Option[User] = {
-</span>241 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>242 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users where email = {email}").on(
-</span>243 <span style=''></span><span style='background: #F0ADAD'>        'email -> email
-</span>244 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
-</span>245 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>246 <span style=''>  }
-</span>247 <span style=''>
-</span>248 <span style=''>  /**
-</span>249 <span style=''>    * delete a User
-</span>250 <span style=''>    *
-</span>251 <span style=''>    * @param username
-</span>252 <span style=''>    * @return
-</span>253 <span style=''>    */
-</span>254 <span style=''>  def deleteUser(username: String) : Boolean = {
-</span>255 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>256 <span style=''></span><span style='background: #F0ADAD'>      SQL("delete from users where username = {username}").on(
-</span>257 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
-</span>258 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
-</span>259 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>260 <span style=''>
-</span>261 <span style=''>    rowCount match {
-</span>262 <span style=''>      case 1 => </span><span style='background: #F0ADAD'>true</span><span style=''>
-</span>263 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
-</span>264 <span style=''>    }
-</span>265 <span style=''>  }
-</span>266 <span style=''>
-</span>267 <span style=''>  /**
-</span>268 <span style=''>    * find Users By their status token
-</span>269 <span style=''>    *
-</span>270 <span style=''>    * @param regStatus
-</span>271 <span style=''>    * @return
-</span>272 <span style=''>    */
-</span>273 <span style=''>  def findUsersByToken(regStatus: String) : Seq[User] = {
-</span>274 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>275 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users where laststatustoken like '{regStatus}:%'").on(
-</span>276 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> regStatus
-</span>277 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser *)
-</span>278 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>279 <span style=''>  }
-</span>280 <span style=''>
-</span>281 <span style=''>  /**
-</span>282 <span style=''>    * find Users By their status token "REGISTERED"
-</span>283 <span style=''>    *
-</span>284 <span style=''>    * @return
-</span>285 <span style=''>    */
-</span>286 <span style=''>  def findRegisteredOnlyUsers : Seq[User] = {
-</span>287 <span style=''>    </span><span style='background: #F0ADAD'>findUsersByToken("REGISTERED")</span><span style=''>
-</span>288 <span style=''>  }
-</span>289 <span style=''>
-</span>290 <span style=''>  /**
-</span>291 <span style=''>    * find Users By their status token "ACTIVE"
-</span>292 <span style=''>    *
-</span>293 <span style=''>    * @return
-</span>294 <span style=''>    */
-</span>295 <span style=''>  def findActiveUsers : Seq[User] = {
-</span>296 <span style=''>    </span><span style='background: #F0ADAD'>findUsersByToken("ACTIVE")</span><span style=''>
-</span>297 <span style=''>  }
-</span>298 <span style=''>
-</span>299 <span style=''>}
+</span>137 <span style=''></span><span style='background: #F0ADAD'>
+</span>138 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>139 <span style=''>  }
+</span>140 <span style=''>
+</span>141 <span style=''>  /**
+</span>142 <span style=''>    * Create a User.
+</span>143 <span style=''>    *
+</span>144 <span style=''>    * @param user
+</span>145 <span style=''>    * @return
+</span>146 <span style=''>    */
+</span>147 <span style=''>  def create(user: User): Option[User] = {
+</span>148 <span style=''>
+</span>149 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>150 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
+</span>151 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>152 <span style=''></span><span style='background: #F0ADAD'>          insert into users values (
+</span>153 <span style=''></span><span style='background: #F0ADAD'>            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
+</span>154 <span style=''></span><span style='background: #F0ADAD'>          )
+</span>155 <span style=''></span><span style='background: #F0ADAD'>        """).on(
+</span>156 <span style=''></span><span style='background: #F0ADAD'>        'email -> user.email,
+</span>157 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username,
+</span>158 <span style=''></span><span style='background: #F0ADAD'>        'firstname -> user.firstname,
+</span>159 <span style=''></span><span style='background: #F0ADAD'>        'lastname -> user.lastname,
+</span>160 <span style=''></span><span style='background: #F0ADAD'>        'password -> user.password,
+</span>161 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> user.laststatustoken,
+</span>162 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange
+</span>163 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
+</span>164 <span style=''></span><span style='background: #F0ADAD'>
+</span>165 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
+</span>166 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
+</span>167 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
+</span>168 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>169 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>170 <span style=''>  }
+</span>171 <span style=''>
+</span>172 <span style=''>  /**
+</span>173 <span style=''>    * Update single parts of user without touch password
+</span>174 <span style=''>    *
+</span>175 <span style=''>    * @param user
+</span>176 <span style=''>    * @return
+</span>177 <span style=''>    */
+</span>178 <span style=''>  def updateNoPass(user: User) : Option[User] = {
+</span>179 <span style=''>
+</span>180 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>181 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
+</span>182 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>183 <span style=''></span><span style='background: #F0ADAD'>          update users set
+</span>184 <span style=''></span><span style='background: #F0ADAD'>            email = {email},
+</span>185 <span style=''></span><span style='background: #F0ADAD'>            firstname = {firstname},
+</span>186 <span style=''></span><span style='background: #F0ADAD'>            lastname = {lastname},
+</span>187 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = {laststatustoken},
+</span>188 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = {laststatuschange} where username = {username}
+</span>189 <span style=''></span><span style='background: #F0ADAD'>        """).on(
+</span>190 <span style=''></span><span style='background: #F0ADAD'>        'email -> user.email,
+</span>191 <span style=''></span><span style='background: #F0ADAD'>        'firstname -> user.firstname,
+</span>192 <span style=''></span><span style='background: #F0ADAD'>        'lastname -> user.lastname,
+</span>193 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> user.laststatustoken,
+</span>194 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange,
+</span>195 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username
+</span>196 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
+</span>197 <span style=''></span><span style='background: #F0ADAD'>
+</span>198 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
+</span>199 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
+</span>200 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
+</span>201 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>202 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>203 <span style=''>
+</span>204 <span style=''>  }
+</span>205 <span style=''>
+</span>206 <span style=''>  /**
+</span>207 <span style=''>    * Update password parts of user without other parts
+</span>208 <span style=''>    * @param user
+</span>209 <span style=''>    * @return
+</span>210 <span style=''>    */
+</span>211 <span style=''>  def updatePassword(user: User) : Option[User] = {
+</span>212 <span style=''>
+</span>213 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>214 <span style=''></span><span style='background: #F0ADAD'>      val rowCount = SQL(
+</span>215 <span style=''></span><span style='background: #F0ADAD'>        """
+</span>216 <span style=''></span><span style='background: #F0ADAD'>          update users set
+</span>217 <span style=''></span><span style='background: #F0ADAD'>            password = {password},
+</span>218 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = {laststatustoken},
+</span>219 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = {laststatuschange} where username = {username}
+</span>220 <span style=''></span><span style='background: #F0ADAD'>        """).on(
+</span>221 <span style=''></span><span style='background: #F0ADAD'>        'password -> user.password,
+</span>222 <span style=''></span><span style='background: #F0ADAD'>        'laststatustoken -> user.laststatustoken,
+</span>223 <span style=''></span><span style='background: #F0ADAD'>        'laststatuschange -> user.laststatuschange,
+</span>224 <span style=''></span><span style='background: #F0ADAD'>        'username -> user.username
+</span>225 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
+</span>226 <span style=''></span><span style='background: #F0ADAD'>
+</span>227 <span style=''></span><span style='background: #F0ADAD'>      rowCount match {
+</span>228 <span style=''></span><span style='background: #F0ADAD'>        case 1 => Some(user)
+</span>229 <span style=''></span><span style='background: #F0ADAD'>        case _ => None
+</span>230 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>231 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>232 <span style=''>
+</span>233 <span style=''>  }
+</span>234 <span style=''>
+</span>235 <span style=''>  // more utility functions
+</span>236 <span style=''>
+</span>237 <span style=''>  /**
+</span>238 <span style=''>    * find User By Email
+</span>239 <span style=''>    *
+</span>240 <span style=''>    * @param email
+</span>241 <span style=''>    * @return
+</span>242 <span style=''>    */
+</span>243 <span style=''>  def findUserByEmail(email: String) : Option[User] = {
+</span>244 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>245 <span style=''></span><span style='background: #F0ADAD'>      SQL("select * from users where email = {email}").on(
+</span>246 <span style=''></span><span style='background: #F0ADAD'>        'email -> email
+</span>247 <span style=''></span><span style='background: #F0ADAD'>      ).as(userParser.singleOpt)
+</span>248 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>249 <span style=''>  }
+</span>250 <span style=''>
+</span>251 <span style=''>  /**
+</span>252 <span style=''>    * delete a User
+</span>253 <span style=''>    *
+</span>254 <span style=''>    * @param username
+</span>255 <span style=''>    * @return
+</span>256 <span style=''>    */
+</span>257 <span style=''>  def deleteUser(username: String) : Boolean = {
+</span>258 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>259 <span style=''></span><span style='background: #F0ADAD'>      SQL("delete from users where username = {username}").on(
+</span>260 <span style=''></span><span style='background: #F0ADAD'>        'username -> username
+</span>261 <span style=''></span><span style='background: #F0ADAD'>      ).executeUpdate()
+</span>262 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>263 <span style=''>
+</span>264 <span style=''>    rowCount match {
+</span>265 <span style=''>      case 1 => </span><span style='background: #F0ADAD'>true</span><span style=''>
+</span>266 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>267 <span style=''>    }
+</span>268 <span style=''>  }
+</span>269 <span style=''>
+</span>270 <span style=''>  /**
+</span>271 <span style=''>    * find Users By their status token
+</span>272 <span style=''>    *
+</span>273 <span style=''>    * @param token
+</span>274 <span style=''>    * @return
+</span>275 <span style=''>    */
+</span>276 <span style=''>  def findUsersByToken(token: String) : Seq[User] = {
+</span>277 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>278 <span style=''></span><span style='background: #F0ADAD'>      SQL(s"""select * from users where laststatustoken like '${token}'""").as(userParser *)
+</span>279 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>280 <span style=''>  }
+</span>281 <span style=''>
+</span>282 <span style=''>  /**
+</span>283 <span style=''>    * find Users By their status token "REGISTERED" and their uniqu registration link id
+</span>284 <span style=''>    *
+</span>285 <span style=''>    * @param regLink
+</span>286 <span style=''>    * @return
+</span>287 <span style=''>    */
+</span>288 <span style=''>  def findRegisteredUsersByRegLink(regLink: String) : Seq[User] = {
+</span>289 <span style=''>    </span><span style='background: #F0ADAD'>findUsersByToken(s"REGISTERED:$regLink")</span><span style=''>
+</span>290 <span style=''>  }
+</span>291 <span style=''>
+</span>292 <span style=''>  /**
+</span>293 <span style=''>    * find Users By their status token "REGISTERED"
+</span>294 <span style=''>    *
+</span>295 <span style=''>    * @return
+</span>296 <span style=''>    */
+</span>297 <span style=''>  def findRegisteredOnlyUsers : Seq[User] = {
+</span>298 <span style=''>    </span><span style='background: #F0ADAD'>findUsersByToken("REGISTERED%")</span><span style=''>
+</span>299 <span style=''>  }
+</span>300 <span style=''>
+</span>301 <span style=''>  /**
+</span>302 <span style=''>    * find Users By their status token "ACTIVE"
+</span>303 <span style=''>    *
+</span>304 <span style=''>    * @return
+</span>305 <span style=''>    */
+</span>306 <span style=''>  def findActiveUsers : Seq[User] = {
+</span>307 <span style=''>    </span><span style='background: #F0ADAD'>findUsersByToken("ACTIVE%")</span><span style=''>
+</span>308 <span style=''>  }
+</span>309 <span style=''>
+</span>310 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -334,15 +345,36 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          43
+          44
         </td>
         <td>
-          696
+          864
         </td>
         <td>
-          1322
+          1345
           -
-          1329
+          1345
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          863
+        </td>
+        <td>
+          1346
+          -
+          1353
         </td>
         <td>
           Literal
@@ -355,15 +387,15 @@
         </td>
       </tr><tr>
         <td>
-          43
+          45
         </td>
         <td>
-          697
+          866
         </td>
         <td>
-          1321
+          1374
           -
-          1321
+          1374
         </td>
         <td>
           Select
@@ -376,36 +408,15 @@
         </td>
       </tr><tr>
         <td>
-          44
+          45
         </td>
         <td>
-          699
+          865
         </td>
         <td>
-          1350
+          1375
           -
-          1350
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          44
-        </td>
-        <td>
-          698
-        </td>
-        <td>
-          1351
-          -
-          1361
+          1385
         </td>
         <td>
           Literal
@@ -418,15 +429,15 @@
         </td>
       </tr><tr>
         <td>
-          44
+          45
         </td>
         <td>
-          700
+          867
         </td>
         <td>
-          1339
+          1363
           -
-          1362
+          1386
         </td>
         <td>
           ApplyToImplicitArgs
@@ -439,15 +450,15 @@
         </td>
       </tr><tr>
         <td>
-          45
+          46
         </td>
         <td>
-          702
+          869
         </td>
         <td>
-          1382
+          1406
           -
-          1382
+          1406
         </td>
         <td>
           Select
@@ -460,15 +471,15 @@
         </td>
       </tr><tr>
         <td>
-          45
+          46
         </td>
         <td>
-          701
+          868
         </td>
         <td>
-          1383
+          1407
           -
-          1394
+          1418
         </td>
         <td>
           Literal
@@ -481,15 +492,15 @@
         </td>
       </tr><tr>
         <td>
-          45
+          46
         </td>
         <td>
-          703
+          870
         </td>
         <td>
-          1371
-          -
           1395
+          -
+          1419
         </td>
         <td>
           ApplyToImplicitArgs
@@ -502,57 +513,15 @@
         </td>
       </tr><tr>
         <td>
-          46
+          47
         </td>
         <td>
-          705
+          873
         </td>
         <td>
-          1415
+          1428
           -
-          1415
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          46
-        </td>
-        <td>
-          704
-        </td>
-        <td>
-          1416
-          -
-          1426
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          &quot;lastname&quot;
-        </td>
-      </tr><tr>
-        <td>
-          46
-        </td>
-        <td>
-          706
-        </td>
-        <td>
-          1404
-          -
-          1427
+          1451
         </td>
         <td>
           ApplyToImplicitArgs
@@ -568,12 +537,12 @@
           47
         </td>
         <td>
-          708
+          872
         </td>
         <td>
-          1447
+          1439
           -
-          1447
+          1439
         </td>
         <td>
           Select
@@ -589,12 +558,54 @@
           47
         </td>
         <td>
-          707
+          871
         </td>
         <td>
-          1448
+          1440
           -
-          1458
+          1450
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;lastname&quot;
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          875
+        </td>
+        <td>
+          1471
+          -
+          1471
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          874
+        </td>
+        <td>
+          1472
+          -
+          1482
         </td>
         <td>
           Literal
@@ -607,15 +618,15 @@
         </td>
       </tr><tr>
         <td>
-          47
+          48
         </td>
         <td>
-          709
+          876
         </td>
         <td>
-          1436
+          1460
           -
-          1459
+          1483
         </td>
         <td>
           ApplyToImplicitArgs
@@ -628,15 +639,15 @@
         </td>
       </tr><tr>
         <td>
-          48
+          49
         </td>
         <td>
-          711
+          878
         </td>
         <td>
-          1479
+          1503
           -
-          1479
+          1503
         </td>
         <td>
           Select
@@ -649,15 +660,15 @@
         </td>
       </tr><tr>
         <td>
-          48
+          49
         </td>
         <td>
-          710
+          877
         </td>
         <td>
-          1480
+          1504
           -
-          1497
+          1521
         </td>
         <td>
           Literal
@@ -670,15 +681,15 @@
         </td>
       </tr><tr>
         <td>
-          48
+          49
         </td>
         <td>
-          712
+          879
         </td>
         <td>
-          1468
+          1492
           -
-          1498
+          1522
         </td>
         <td>
           ApplyToImplicitArgs
@@ -691,15 +702,36 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          714
+          882
         </td>
         <td>
-          1525
+          1531
           -
-          1525
+          1569
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[java.time.ZonedDateTime](&quot;laststatuschange&quot;)(anorm.this.Column.columnToZonedDateTime)
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          881
+        </td>
+        <td>
+          1549
+          -
+          1549
         </td>
         <td>
           Select
@@ -712,15 +744,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          717
+          884
         </td>
         <td>
-          1310
+          1334
           -
-          1743
+          1767
         </td>
         <td>
           Apply
@@ -735,15 +767,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          713
+          880
         </td>
         <td>
-          1526
+          1550
           -
-          1544
+          1568
         </td>
         <td>
           Literal
@@ -756,36 +788,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          52
         </td>
         <td>
-          715
+          883
         </td>
         <td>
-          1507
+          1674
           -
-          1545
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.SqlParser.get
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.get[java.time.ZonedDateTime](&quot;laststatuschange&quot;)(anorm.this.Column.columnToZonedDateTime)
-        </td>
-      </tr><tr>
-        <td>
-          51
-        </td>
-        <td>
-          716
-        </td>
-        <td>
-          1650
-          -
-          1737
+          1761
         </td>
         <td>
           Apply
@@ -798,15 +809,15 @@
         </td>
       </tr><tr>
         <td>
-          66
+          67
         </td>
         <td>
-          719
+          886
         </td>
         <td>
-          1973
+          1997
           -
-          2149
+          2173
         </td>
         <td>
           Apply
@@ -826,15 +837,15 @@
         </td>
       </tr><tr>
         <td>
-          69
+          70
         </td>
         <td>
-          718
+          885
         </td>
         <td>
-          2022
+          2046
           -
-          2143
+          2167
         </td>
         <td>
           ApplyToImplicitArgs
@@ -854,15 +865,15 @@
         </td>
       </tr><tr>
         <td>
-          77
+          78
         </td>
         <td>
-          721
+          888
         </td>
         <td>
-          2227
+          2251
           -
-          2325
+          2349
         </td>
         <td>
           Apply
@@ -875,15 +886,15 @@
         </td>
       </tr><tr>
         <td>
-          78
+          79
         </td>
         <td>
-          720
+          887
         </td>
         <td>
-          2276
+          2300
           -
-          2319
+          2343
         </td>
         <td>
           ApplyToImplicitArgs
@@ -896,15 +907,15 @@
         </td>
       </tr><tr>
         <td>
-          98
+          99
         </td>
         <td>
-          722
+          889
         </td>
         <td>
-          2548
+          2572
           -
-          2717
+          2741
         </td>
         <td>
           ApplyToImplicitArgs
@@ -924,15 +935,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
-          725
+          892
         </td>
         <td>
-          2499
+          2523
           -
-          2810
+          2834
         </td>
         <td>
           Apply
@@ -952,36 +963,15 @@
         </td>
       </tr><tr>
         <td>
-          100
+          101
         </td>
         <td>
-          723
+          891
         </td>
         <td>
-          2790
+          2771
           -
-          2803
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.User.password
-        </td>
-        <td style="background: #F0ADAD">
-          user.password
-        </td>
-      </tr><tr>
-        <td>
-          100
-        </td>
-        <td>
-          724
-        </td>
-        <td>
-          2747
-          -
-          2804
+          2828
         </td>
         <td>
           Apply
@@ -994,15 +984,36 @@
         </td>
       </tr><tr>
         <td>
-          114
+          101
         </td>
         <td>
-          780
+          890
         </td>
         <td>
-          3062
+          2814
           -
-          3793
+          2827
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.User.password
+        </td>
+        <td style="background: #F0ADAD">
+          user.password
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          947
+        </td>
+        <td>
+          3086
+          -
+          3817
         </td>
         <td>
           Apply
@@ -1071,15 +1082,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          116
         </td>
         <td>
-          776
+          943
         </td>
         <td>
-          3121
+          3145
           -
-          3464
+          3488
         </td>
         <td>
           Apply
@@ -1141,36 +1152,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          117
         </td>
         <td>
-          729
+          899
         </td>
         <td>
-          3196
+          3212
           -
-          3196
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.ToStatementPriority0.stringToStatement
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ToStatement.stringToStatement
-        </td>
-      </tr><tr>
-        <td>
-          116
-        </td>
-        <td>
-          732
-        </td>
-        <td>
-          3188
-          -
-          3209
+          3233
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1190,15 +1180,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          117
         </td>
         <td>
-          726
+          893
         </td>
         <td>
-          3188
+          3212
           -
-          3195
+          3219
         </td>
         <td>
           Literal
@@ -1211,204 +1201,15 @@
         </td>
       </tr><tr>
         <td>
-          116
-        </td>
-        <td>
-          728
-        </td>
-        <td>
-          3188
-          -
-          3209
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[String](user.email)
-        </td>
-      </tr><tr>
-        <td>
-          116
-        </td>
-        <td>
-          731
-        </td>
-        <td>
-          3196
-          -
-          3196
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue[String](x$17)(x$19, x$18)
-        </td>
-      </tr><tr>
-        <td>
-          116
-        </td>
-        <td>
-          727
-        </td>
-        <td>
-          3199
-          -
-          3209
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.User.email
-        </td>
-        <td style="background: #F0ADAD">
-          user.email
-        </td>
-      </tr><tr>
-        <td>
-          116
-        </td>
-        <td>
-          730
-        </td>
-        <td>
-          3196
-          -
-          3196
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$17)
-        </td>
-      </tr><tr>
-        <td>
           117
         </td>
         <td>
-          738
+          896
         </td>
         <td>
-          3230
+          3220
           -
-          3230
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue[String](x$23)(x$25, x$24)
-        </td>
-      </tr><tr>
-        <td>
-          117
-        </td>
-        <td>
-          735
-        </td>
-        <td>
-          3219
-          -
-          3246
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;username&quot;).-&gt;[String](user.username)
-        </td>
-      </tr><tr>
-        <td>
-          117
-        </td>
-        <td>
-          737
-        </td>
-        <td>
-          3230
-          -
-          3230
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$23)
-        </td>
-      </tr><tr>
-        <td>
-          117
-        </td>
-        <td>
-          734
-        </td>
-        <td>
-          3233
-          -
-          3246
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.User.username
-        </td>
-        <td style="background: #F0ADAD">
-          user.username
-        </td>
-      </tr><tr>
-        <td>
-          117
-        </td>
-        <td>
-          733
-        </td>
-        <td>
-          3219
-          -
-          3229
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;username&quot;
-        </td>
-      </tr><tr>
-        <td>
-          117
-        </td>
-        <td>
-          736
-        </td>
-        <td>
-          3230
-          -
-          3230
+          3220
         </td>
         <td>
           Select
@@ -1424,12 +1225,222 @@
           117
         </td>
         <td>
-          739
+          895
         </td>
         <td>
-          3219
+          3212
           -
-          3246
+          3233
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[String](user.email)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          898
+        </td>
+        <td>
+          3220
+          -
+          3220
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$17)(x$19, x$18)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          894
+        </td>
+        <td>
+          3223
+          -
+          3233
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          user.email
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          897
+        </td>
+        <td>
+          3220
+          -
+          3220
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$17)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          902
+        </td>
+        <td>
+          3243
+          -
+          3270
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;username&quot;).-&gt;[String](user.username)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          905
+        </td>
+        <td>
+          3254
+          -
+          3254
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$23)(x$25, x$24)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          904
+        </td>
+        <td>
+          3254
+          -
+          3254
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$23)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          901
+        </td>
+        <td>
+          3257
+          -
+          3270
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.User.username
+        </td>
+        <td style="background: #F0ADAD">
+          user.username
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          900
+        </td>
+        <td>
+          3243
+          -
+          3253
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;username&quot;
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          903
+        </td>
+        <td>
+          3254
+          -
+          3254
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          906
+        </td>
+        <td>
+          3243
+          -
+          3270
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1449,15 +1460,15 @@
         </td>
       </tr><tr>
         <td>
-          118
+          119
         </td>
         <td>
-          741
+          908
         </td>
         <td>
-          3271
+          3295
           -
-          3285
+          3309
         </td>
         <td>
           Select
@@ -1470,15 +1481,15 @@
         </td>
       </tr><tr>
         <td>
-          118
+          119
         </td>
         <td>
-          744
+          911
         </td>
         <td>
-          3268
+          3292
           -
-          3268
+          3292
         </td>
         <td>
           Apply
@@ -1491,36 +1502,15 @@
         </td>
       </tr><tr>
         <td>
-          118
+          119
         </td>
         <td>
-          743
+          913
         </td>
         <td>
-          3268
+          3280
           -
-          3268
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.ToStatementPriority0.stringToStatement
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ToStatement.stringToStatement
-        </td>
-      </tr><tr>
-        <td>
-          118
-        </td>
-        <td>
-          746
-        </td>
-        <td>
-          3256
-          -
-          3285
+          3309
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1540,15 +1530,15 @@
         </td>
       </tr><tr>
         <td>
-          118
+          119
         </td>
         <td>
-          740
+          907
         </td>
         <td>
-          3256
+          3280
           -
-          3267
+          3291
         </td>
         <td>
           Literal
@@ -1561,78 +1551,15 @@
         </td>
       </tr><tr>
         <td>
-          118
-        </td>
-        <td>
-          742
-        </td>
-        <td>
-          3256
-          -
-          3285
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;firstname&quot;).-&gt;[String](user.firstname)
-        </td>
-      </tr><tr>
-        <td>
-          118
-        </td>
-        <td>
-          745
-        </td>
-        <td>
-          3268
-          -
-          3268
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue[String](x$29)(x$31, x$30)
-        </td>
-      </tr><tr>
-        <td>
           119
         </td>
         <td>
-          747
+          910
         </td>
         <td>
-          3295
+          3292
           -
-          3305
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;lastname&quot;
-        </td>
-      </tr><tr>
-        <td>
-          119
-        </td>
-        <td>
-          750
-        </td>
-        <td>
-          3306
-          -
-          3306
+          3292
         </td>
         <td>
           Select
@@ -1648,12 +1575,75 @@
           119
         </td>
         <td>
-          753
+          909
         </td>
         <td>
-          3295
+          3280
           -
-          3322
+          3309
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;firstname&quot;).-&gt;[String](user.firstname)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          912
+        </td>
+        <td>
+          3292
+          -
+          3292
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$29)(x$31, x$30)
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          917
+        </td>
+        <td>
+          3330
+          -
+          3330
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          920
+        </td>
+        <td>
+          3319
+          -
+          3346
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1673,36 +1663,36 @@
         </td>
       </tr><tr>
         <td>
-          119
+          120
         </td>
         <td>
-          752
+          914
         </td>
         <td>
-          3306
+          3319
           -
-          3306
+          3329
         </td>
         <td>
-          ApplyToImplicitArgs
+          Literal
         </td>
         <td>
-          anorm.ParameterValue.toParameterValue
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue[String](x$35)(x$37, x$36)
+          &quot;lastname&quot;
         </td>
       </tr><tr>
         <td>
-          119
+          120
         </td>
         <td>
-          749
+          916
         </td>
         <td>
-          3295
+          3319
           -
-          3322
+          3346
         </td>
         <td>
           Apply
@@ -1715,15 +1705,36 @@
         </td>
       </tr><tr>
         <td>
-          119
+          120
         </td>
         <td>
-          751
+          919
         </td>
         <td>
-          3306
+          3330
           -
-          3306
+          3330
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$35)(x$37, x$36)
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          918
+        </td>
+        <td>
+          3330
+          -
+          3330
         </td>
         <td>
           Apply
@@ -1736,15 +1747,15 @@
         </td>
       </tr><tr>
         <td>
-          119
+          120
         </td>
         <td>
-          748
+          915
         </td>
         <td>
-          3309
+          3333
           -
-          3322
+          3346
         </td>
         <td>
           Select
@@ -1757,15 +1768,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          756
+          923
         </td>
         <td>
-          3332
+          3356
           -
-          3373
+          3397
         </td>
         <td>
           Apply
@@ -1778,15 +1789,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          759
+          926
         </td>
         <td>
-          3350
+          3374
           -
-          3350
+          3374
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1799,15 +1810,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          755
+          922
         </td>
         <td>
-          3353
+          3377
           -
-          3373
+          3397
         </td>
         <td>
           Select
@@ -1820,15 +1831,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          758
+          925
         </td>
         <td>
-          3350
+          3374
           -
-          3350
+          3374
         </td>
         <td>
           Apply
@@ -1841,36 +1852,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          757
+          927
         </td>
         <td>
-          3350
+          3356
           -
-          3350
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.ToStatementPriority0.stringToStatement
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ToStatement.stringToStatement
-        </td>
-      </tr><tr>
-        <td>
-          120
-        </td>
-        <td>
-          760
-        </td>
-        <td>
-          3332
-          -
-          3373
+          3397
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1890,15 +1880,15 @@
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          754
+          921
         </td>
         <td>
-          3332
+          3356
           -
-          3349
+          3373
         </td>
         <td>
           Literal
@@ -1914,75 +1904,12 @@
           121
         </td>
         <td>
-          765
+          924
         </td>
         <td>
-          3394
+          3374
           -
-          3394
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$47)
-        </td>
-      </tr><tr>
-        <td>
-          121
-        </td>
-        <td>
-          762
-        </td>
-        <td>
-          3397
-          -
-          3410
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.User.password
-        </td>
-        <td style="background: #F0ADAD">
-          user.password
-        </td>
-      </tr><tr>
-        <td>
-          121
-        </td>
-        <td>
-          761
-        </td>
-        <td>
-          3383
-          -
-          3393
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;password&quot;
-        </td>
-      </tr><tr>
-        <td>
-          121
-        </td>
-        <td>
-          764
-        </td>
-        <td>
-          3394
-          -
-          3394
+          3374
         </td>
         <td>
           Select
@@ -1995,15 +1922,78 @@
         </td>
       </tr><tr>
         <td>
-          121
+          122
         </td>
         <td>
-          767
+          932
         </td>
         <td>
-          3383
+          3418
           -
-          3410
+          3418
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$47)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          929
+        </td>
+        <td>
+          3421
+          -
+          3434
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.User.password
+        </td>
+        <td style="background: #F0ADAD">
+          user.password
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          931
+        </td>
+        <td>
+          3418
+          -
+          3418
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          934
+        </td>
+        <td>
+          3407
+          -
+          3434
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2023,36 +2013,36 @@
         </td>
       </tr><tr>
         <td>
-          121
+          122
         </td>
         <td>
-          766
+          928
         </td>
         <td>
-          3394
+          3407
           -
-          3394
+          3417
         </td>
         <td>
-          ApplyToImplicitArgs
+          Literal
         </td>
         <td>
-          anorm.ParameterValue.toParameterValue
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          anorm.this.ParameterValue.toParameterValue[String](x$47)(x$49, x$48)
+          &quot;password&quot;
         </td>
       </tr><tr>
         <td>
-          121
+          122
         </td>
         <td>
-          763
+          930
         </td>
         <td>
-          3383
+          3407
           -
-          3410
+          3434
         </td>
         <td>
           Apply
@@ -2068,12 +2058,33 @@
           122
         </td>
         <td>
-          774
+          933
         </td>
         <td>
-          3439
+          3418
           -
-          3439
+          3418
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$47)(x$49, x$48)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          941
+        </td>
+        <td>
+          3463
+          -
+          3463
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2086,15 +2097,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          123
         </td>
         <td>
-          768
+          935
         </td>
         <td>
-          3420
+          3444
           -
-          3438
+          3462
         </td>
         <td>
           Literal
@@ -2107,15 +2118,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          123
         </td>
         <td>
-          771
+          938
         </td>
         <td>
-          3439
+          3463
           -
-          3439
+          3463
         </td>
         <td>
           Select
@@ -2128,15 +2139,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          123
         </td>
         <td>
-          770
+          937
         </td>
         <td>
-          3420
+          3444
           -
-          3463
+          3487
         </td>
         <td>
           Apply
@@ -2149,15 +2160,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          123
         </td>
         <td>
-          773
+          940
         </td>
         <td>
-          3439
+          3463
           -
-          3439
+          3463
         </td>
         <td>
           Apply
@@ -2170,15 +2181,57 @@
         </td>
       </tr><tr>
         <td>
-          122
+          123
         </td>
         <td>
-          775
+          936
         </td>
         <td>
-          3420
+          3466
+          -
+          3487
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.User.laststatuschange
+        </td>
+        <td style="background: #F0ADAD">
+          user.laststatuschange
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          939
+        </td>
+        <td>
+          3463
           -
           3463
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.JavaTimeToStatement.zonedDateTimeToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          942
+        </td>
+        <td>
+          3444
+          -
+          3487
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2198,57 +2251,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          130
         </td>
         <td>
-          769
+          944
         </td>
         <td>
-          3442
+          3511
           -
-          3463
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.User.laststatuschange
-        </td>
-        <td style="background: #F0ADAD">
-          user.laststatuschange
-        </td>
-      </tr><tr>
-        <td>
-          122
-        </td>
-        <td>
-          772
-        </td>
-        <td>
-          3439
-          -
-          3439
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.JavaTimeToStatement.zonedDateTimeToStatement
-        </td>
-        <td style="background: #F0ADAD">
-          anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData)
-        </td>
-      </tr><tr>
-        <td>
-          129
-        </td>
-        <td>
-          777
-        </td>
-        <td>
-          3487
-          -
-          3701
+          3725
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2261,15 +2272,15 @@
         </td>
       </tr><tr>
         <td>
-          132
+          133
         </td>
         <td>
-          778
+          945
         </td>
         <td>
-          3744
+          3768
           -
-          3754
+          3778
         </td>
         <td>
           Apply
@@ -2282,15 +2293,15 @@
         </td>
       </tr><tr>
         <td>
-          133
+          134
         </td>
         <td>
-          779
+          946
         </td>
         <td>
-          3773
+          3797
           -
-          3777
+          3801
         </td>
         <td>
           Select
@@ -2303,15 +2314,15 @@
         </td>
       </tr><tr>
         <td>
-          148
+          149
         </td>
         <td>
-          784
+          951
         </td>
         <td>
-          3919
+          3943
           -
-          4564
+          4588
         </td>
         <td>
           Apply
@@ -2379,15 +2390,15 @@
         </td>
       </tr><tr>
         <td>
-          162
+          163
         </td>
         <td>
-          781
+          948
         </td>
         <td>
-          3983
+          4007
           -
-          4474
+          4498
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2449,15 +2460,15 @@
         </td>
       </tr><tr>
         <td>
-          165
+          166
         </td>
         <td>
-          782
+          949
         </td>
         <td>
-          4517
+          4541
           -
-          4527
+          4551
         </td>
         <td>
           Apply
@@ -2470,15 +2481,15 @@
         </td>
       </tr><tr>
         <td>
-          166
+          167
         </td>
         <td>
-          783
+          950
         </td>
         <td>
-          4546
+          4570
           -
-          4550
+          4574
         </td>
         <td>
           Select
@@ -2491,15 +2502,15 @@
         </td>
       </tr><tr>
         <td>
-          179
+          180
         </td>
         <td>
-          788
+          955
         </td>
         <td>
-          4733
+          4757
           -
-          5341
+          5464
         </td>
         <td>
           Apply
@@ -2509,7 +2520,7 @@
         </td>
         <td style="background: #F0ADAD">
           UserDAO.this.db.withConnection[Option[models.User]](((implicit connection: java.sql.Connection) =&gt; {
-  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            email = {email},\n            firstname = {firstname},\n            lastname = {lastname},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](user.email))({
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            email = {email},\n            firstname = {firstname},\n            lastname = {lastname},\n            laststatustoken = {laststatustoken},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](user.email))({
   ((a: String) =&gt; {
     &lt;artifact&gt; val x$101: String = a;
     &lt;artifact&gt; val x$102: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
@@ -2530,19 +2541,26 @@
     &lt;artifact&gt; val x$115: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$113);
     anorm.this.ParameterValue.toParameterValue[String](x$113)(x$115, x$114)
   })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$119: String = a;
+    &lt;artifact&gt; val x$120: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$121: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$119);
+    anorm.this.ParameterValue.toParameterValue[String](x$119)(x$121, x$120)
+  })
 }), anorm.this.NamedParameter.symbol[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatuschange&quot;)).-&gt;[java.time.ZonedDateTime](user.laststatuschange))({
   ((a: java.time.ZonedDateTime) =&gt; {
-    &lt;artifact&gt; val x$119: java.time.ZonedDateTime = a;
-    &lt;artifact&gt; val x$120: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
-    &lt;artifact&gt; val x$121: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$119);
-    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$119)(x$121, x$120)
+    &lt;artifact&gt; val x$125: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$126: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$127: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$125);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$125)(x$127, x$126)
   })
 }), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](user.username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$125: String = a;
-    &lt;artifact&gt; val x$126: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$127: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$125);
-    anorm.this.ParameterValue.toParameterValue[String](x$125)(x$127, x$126)
+    &lt;artifact&gt; val x$131: String = a;
+    &lt;artifact&gt; val x$132: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$133: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$131);
+    anorm.this.ParameterValue.toParameterValue[String](x$131)(x$133, x$132)
   })
 })).executeUpdate()(connection);
   rowCount match {
@@ -2553,15 +2571,15 @@
         </td>
       </tr><tr>
         <td>
-          193
+          196
         </td>
         <td>
-          785
+          952
         </td>
         <td>
-          4797
+          4821
           -
-          5251
+          5374
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2570,7 +2588,7 @@
           anorm.Sql.executeUpdate
         </td>
         <td style="background: #F0ADAD">
-          anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            email = {email},\n            firstname = {firstname},\n            lastname = {lastname},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](user.email))({
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            email = {email},\n            firstname = {firstname},\n            lastname = {lastname},\n            laststatustoken = {laststatustoken},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](user.email))({
   ((a: String) =&gt; {
     &lt;artifact&gt; val x$101: String = a;
     &lt;artifact&gt; val x$102: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
@@ -2591,33 +2609,40 @@
     &lt;artifact&gt; val x$115: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$113);
     anorm.this.ParameterValue.toParameterValue[String](x$113)(x$115, x$114)
   })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$119: String = a;
+    &lt;artifact&gt; val x$120: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$121: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$119);
+    anorm.this.ParameterValue.toParameterValue[String](x$119)(x$121, x$120)
+  })
 }), anorm.this.NamedParameter.symbol[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatuschange&quot;)).-&gt;[java.time.ZonedDateTime](user.laststatuschange))({
   ((a: java.time.ZonedDateTime) =&gt; {
-    &lt;artifact&gt; val x$119: java.time.ZonedDateTime = a;
-    &lt;artifact&gt; val x$120: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
-    &lt;artifact&gt; val x$121: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$119);
-    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$119)(x$121, x$120)
+    &lt;artifact&gt; val x$125: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$126: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$127: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$125);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$125)(x$127, x$126)
   })
 }), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](user.username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$125: String = a;
-    &lt;artifact&gt; val x$126: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$127: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$125);
-    anorm.this.ParameterValue.toParameterValue[String](x$125)(x$127, x$126)
+    &lt;artifact&gt; val x$131: String = a;
+    &lt;artifact&gt; val x$132: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$133: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$131);
+    anorm.this.ParameterValue.toParameterValue[String](x$131)(x$133, x$132)
   })
 })).executeUpdate()(connection)
         </td>
       </tr><tr>
         <td>
-          196
+          199
         </td>
         <td>
-          786
+          953
         </td>
         <td>
-          5294
+          5417
           -
-          5304
+          5427
         </td>
         <td>
           Apply
@@ -2630,15 +2655,15 @@
         </td>
       </tr><tr>
         <td>
-          197
+          200
         </td>
         <td>
-          787
+          954
         </td>
         <td>
-          5323
+          5446
           -
-          5327
+          5450
         </td>
         <td>
           Select
@@ -2651,15 +2676,15 @@
         </td>
       </tr><tr>
         <td>
-          210
+          213
         </td>
         <td>
-          792
+          959
         </td>
         <td>
-          5506
+          5629
           -
-          6079
+          6202
         </td>
         <td>
           Apply
@@ -2671,31 +2696,31 @@
           UserDAO.this.db.withConnection[Option[models.User]](((implicit connection: java.sql.Connection) =&gt; {
   val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            password = {password},\n            laststatustoken = {laststatustoken},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;password&quot;)).-&gt;[String](user.password))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$131: String = a;
-    &lt;artifact&gt; val x$132: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$133: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$131);
-    anorm.this.ParameterValue.toParameterValue[String](x$131)(x$133, x$132)
-  })
-}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
-  ((a: String) =&gt; {
     &lt;artifact&gt; val x$137: String = a;
     &lt;artifact&gt; val x$138: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
     &lt;artifact&gt; val x$139: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$137);
     anorm.this.ParameterValue.toParameterValue[String](x$137)(x$139, x$138)
   })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$143: String = a;
+    &lt;artifact&gt; val x$144: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$145: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$143);
+    anorm.this.ParameterValue.toParameterValue[String](x$143)(x$145, x$144)
+  })
 }), anorm.this.NamedParameter.symbol[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatuschange&quot;)).-&gt;[java.time.ZonedDateTime](user.laststatuschange))({
   ((a: java.time.ZonedDateTime) =&gt; {
-    &lt;artifact&gt; val x$143: java.time.ZonedDateTime = a;
-    &lt;artifact&gt; val x$144: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
-    &lt;artifact&gt; val x$145: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$143);
-    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$143)(x$145, x$144)
+    &lt;artifact&gt; val x$149: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$150: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$151: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$149);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$149)(x$151, x$150)
   })
 }), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](user.username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$149: String = a;
-    &lt;artifact&gt; val x$150: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$151: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$149);
-    anorm.this.ParameterValue.toParameterValue[String](x$149)(x$151, x$150)
+    &lt;artifact&gt; val x$155: String = a;
+    &lt;artifact&gt; val x$156: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$157: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$155);
+    anorm.this.ParameterValue.toParameterValue[String](x$155)(x$157, x$156)
   })
 })).executeUpdate()(connection);
   rowCount match {
@@ -2706,15 +2731,15 @@
         </td>
       </tr><tr>
         <td>
-          222
+          225
         </td>
         <td>
-          789
+          956
         </td>
         <td>
-          5570
+          5693
           -
-          5989
+          6112
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2725,45 +2750,45 @@
         <td style="background: #F0ADAD">
           anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;\n          update users set\n            password = {password},\n            laststatustoken = {laststatustoken},\n            laststatuschange = {laststatuschange} where username = {username}\n        &quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;password&quot;)).-&gt;[String](user.password))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$131: String = a;
-    &lt;artifact&gt; val x$132: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$133: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$131);
-    anorm.this.ParameterValue.toParameterValue[String](x$131)(x$133, x$132)
-  })
-}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
-  ((a: String) =&gt; {
     &lt;artifact&gt; val x$137: String = a;
     &lt;artifact&gt; val x$138: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
     &lt;artifact&gt; val x$139: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$137);
     anorm.this.ParameterValue.toParameterValue[String](x$137)(x$139, x$138)
   })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](user.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$143: String = a;
+    &lt;artifact&gt; val x$144: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$145: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$143);
+    anorm.this.ParameterValue.toParameterValue[String](x$143)(x$145, x$144)
+  })
 }), anorm.this.NamedParameter.symbol[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatuschange&quot;)).-&gt;[java.time.ZonedDateTime](user.laststatuschange))({
   ((a: java.time.ZonedDateTime) =&gt; {
-    &lt;artifact&gt; val x$143: java.time.ZonedDateTime = a;
-    &lt;artifact&gt; val x$144: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
-    &lt;artifact&gt; val x$145: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$143);
-    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$143)(x$145, x$144)
+    &lt;artifact&gt; val x$149: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$150: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$151: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$149);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$149)(x$151, x$150)
   })
 }), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](user.username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$149: String = a;
-    &lt;artifact&gt; val x$150: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$151: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$149);
-    anorm.this.ParameterValue.toParameterValue[String](x$149)(x$151, x$150)
+    &lt;artifact&gt; val x$155: String = a;
+    &lt;artifact&gt; val x$156: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$157: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$155);
+    anorm.this.ParameterValue.toParameterValue[String](x$155)(x$157, x$156)
   })
 })).executeUpdate()(connection)
         </td>
       </tr><tr>
         <td>
-          225
+          228
         </td>
         <td>
-          790
+          957
         </td>
         <td>
-          6032
+          6155
           -
-          6042
+          6165
         </td>
         <td>
           Apply
@@ -2776,15 +2801,15 @@
         </td>
       </tr><tr>
         <td>
-          226
+          229
         </td>
         <td>
-          791
+          958
         </td>
         <td>
-          6061
+          6184
           -
-          6065
+          6188
         </td>
         <td>
           Select
@@ -2797,15 +2822,15 @@
         </td>
       </tr><tr>
         <td>
-          241
+          244
         </td>
         <td>
-          794
+          961
         </td>
         <td>
-          6252
+          6375
           -
-          6416
+          6539
         </td>
         <td>
           Apply
@@ -2816,24 +2841,24 @@
         <td style="background: #F0ADAD">
           UserDAO.this.db.withConnection[Option[models.User]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;select * from users where email = {email}&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](email))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$155: String = a;
-    &lt;artifact&gt; val x$156: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$157: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$155);
-    anorm.this.ParameterValue.toParameterValue[String](x$155)(x$157, x$156)
+    &lt;artifact&gt; val x$161: String = a;
+    &lt;artifact&gt; val x$162: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$163: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$161);
+    anorm.this.ParameterValue.toParameterValue[String](x$161)(x$163, x$162)
   })
 })).as[Option[models.User]](UserDAO.this.userParser.singleOpt)(connection)))
         </td>
       </tr><tr>
         <td>
-          244
+          247
         </td>
         <td>
-          793
+          960
         </td>
         <td>
-          6301
+          6424
           -
-          6410
+          6533
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2844,24 +2869,24 @@
         <td style="background: #F0ADAD">
           anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;select * from users where email = {email}&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](email))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$155: String = a;
-    &lt;artifact&gt; val x$156: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$157: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$155);
-    anorm.this.ParameterValue.toParameterValue[String](x$155)(x$157, x$156)
+    &lt;artifact&gt; val x$161: String = a;
+    &lt;artifact&gt; val x$162: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$163: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$161);
+    anorm.this.ParameterValue.toParameterValue[String](x$161)(x$163, x$162)
   })
 })).as[Option[models.User]](UserDAO.this.userParser.singleOpt)(connection)
         </td>
       </tr><tr>
         <td>
-          255
+          258
         </td>
         <td>
-          796
+          963
         </td>
         <td>
-          6565
+          6688
           -
-          6730
+          6853
         </td>
         <td>
           Apply
@@ -2872,24 +2897,24 @@
         <td style="background: #F0ADAD">
           UserDAO.this.db.withConnection[Int](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;delete from users where username = {username}&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$161: String = a;
-    &lt;artifact&gt; val x$162: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$163: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$161);
-    anorm.this.ParameterValue.toParameterValue[String](x$161)(x$163, x$162)
+    &lt;artifact&gt; val x$167: String = a;
+    &lt;artifact&gt; val x$168: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$169: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$167);
+    anorm.this.ParameterValue.toParameterValue[String](x$167)(x$169, x$168)
   })
 })).executeUpdate()(connection)))
         </td>
       </tr><tr>
         <td>
-          258
+          261
         </td>
         <td>
-          795
+          962
         </td>
         <td>
-          6614
+          6737
           -
-          6724
+          6847
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2900,24 +2925,24 @@
         <td style="background: #F0ADAD">
           anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;delete from users where username = {username}&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;username&quot;)).-&gt;[String](username))({
   ((a: String) =&gt; {
-    &lt;artifact&gt; val x$161: String = a;
-    &lt;artifact&gt; val x$162: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$163: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$161);
-    anorm.this.ParameterValue.toParameterValue[String](x$161)(x$163, x$162)
+    &lt;artifact&gt; val x$167: String = a;
+    &lt;artifact&gt; val x$168: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$169: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$167);
+    anorm.this.ParameterValue.toParameterValue[String](x$167)(x$169, x$168)
   })
 })).executeUpdate()(connection)
         </td>
       </tr><tr>
         <td>
-          262
+          265
         </td>
         <td>
-          797
+          964
         </td>
         <td>
-          6769
+          6892
           -
-          6773
+          6896
         </td>
         <td>
           Literal
@@ -2930,15 +2955,15 @@
         </td>
       </tr><tr>
         <td>
-          263
+          266
         </td>
         <td>
-          798
+          965
         </td>
         <td>
-          6790
+          6913
           -
-          6795
+          6918
         </td>
         <td>
           Literal
@@ -2951,15 +2976,15 @@
         </td>
       </tr><tr>
         <td>
-          274
+          277
         </td>
         <td>
-          800
+          967
         </td>
         <td>
-          6964
+          7079
           -
-          7155
+          7220
         </td>
         <td>
           Apply
@@ -2968,26 +2993,19 @@
           play.api.db.Database.withConnection
         </td>
         <td style="background: #F0ADAD">
-          UserDAO.this.db.withConnection[List[models.User]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;select * from users where laststatustoken like \'{regStatus}:%\'&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](regStatus))({
-  ((a: String) =&gt; {
-    &lt;artifact&gt; val x$167: String = a;
-    &lt;artifact&gt; val x$168: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$169: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$167);
-    anorm.this.ParameterValue.toParameterValue[String](x$167)(x$169, x$168)
-  })
-})).as[List[models.User]](UserDAO.this.userParser.*)(connection)))
+          UserDAO.this.db.withConnection[List[models.User]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from users where laststatustoken like \'&quot;, &quot;\'&quot;).s(token))).as[List[models.User]](UserDAO.this.userParser.*)(connection)))
         </td>
       </tr><tr>
         <td>
-          277
+          278
         </td>
         <td>
-          799
+          966
         </td>
         <td>
-          7013
+          7128
           -
-          7149
+          7214
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2996,45 +3014,38 @@
           anorm.WithResult.as
         </td>
         <td style="background: #F0ADAD">
-          anorm.`package`.sqlToSimple(anorm.`package`.SQL(&quot;select * from users where laststatustoken like \'{regStatus}:%\'&quot;)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](regStatus))({
-  ((a: String) =&gt; {
-    &lt;artifact&gt; val x$167: String = a;
-    &lt;artifact&gt; val x$168: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
-    &lt;artifact&gt; val x$169: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$167);
-    anorm.this.ParameterValue.toParameterValue[String](x$167)(x$169, x$168)
-  })
-})).as[List[models.User]](UserDAO.this.userParser.*)(connection)
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from users where laststatustoken like \'&quot;, &quot;\'&quot;).s(token))).as[List[models.User]](UserDAO.this.userParser.*)(connection)
         </td>
       </tr><tr>
         <td>
-          287
+          289
         </td>
         <td>
-          801
+          968
         </td>
         <td>
-          7296
+          7458
           -
-          7326
+          7480
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.UserDAO.findUsersByToken
+          scala.StringContext.s
         </td>
         <td style="background: #F0ADAD">
-          UserDAO.this.findUsersByToken(&quot;REGISTERED&quot;)
+          scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLink)
         </td>
       </tr><tr>
         <td>
-          296
+          289
         </td>
         <td>
-          802
+          969
         </td>
         <td>
-          7455
+          7441
           -
           7481
         </td>
@@ -3045,7 +3056,49 @@
           models.UserDAO.findUsersByToken
         </td>
         <td style="background: #F0ADAD">
-          UserDAO.this.findUsersByToken(&quot;ACTIVE&quot;)
+          UserDAO.this.findUsersByToken(scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLink))
+        </td>
+      </tr><tr>
+        <td>
+          298
+        </td>
+        <td>
+          970
+        </td>
+        <td>
+          7622
+          -
+          7653
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.UserDAO.findUsersByToken
+        </td>
+        <td style="background: #F0ADAD">
+          UserDAO.this.findUsersByToken(&quot;REGISTERED%&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          307
+        </td>
+        <td>
+          971
+        </td>
+        <td>
+          7782
+          -
+          7809
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.UserDAO.findUsersByToken
+        </td>
+        <td style="background: #F0ADAD">
+          UserDAO.this.findUsersByToken(&quot;ACTIVE%&quot;)
         </td>
       </tr>
     </table>

@@ -53,7 +53,7 @@ class PasswordHashing @Inject()(configuration: Configuration) {
 
   private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
 
-  Logger.debug(s"Reading configuration application.secret")
+  Logger.debug("Reading configuration application.secret")
 
   /**
     * create Session Cookie

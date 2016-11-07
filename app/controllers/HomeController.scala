@@ -98,7 +98,7 @@ class HomeController @Inject() (config: Configuration,
         // find user in db and compare password stuff
         userDAO.authenticate(credentials.username, credentials.password).fold {
           logger.error("User or password wrong.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
+          Unauthorized(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
         } { user =>
           val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
           // logger.debug(s"Logging in username from $uaIdentifier")
@@ -131,7 +131,7 @@ class HomeController @Inject() (config: Configuration,
     val data = request.body.asJson.getOrElse(Json.obj("status" -> "ERR", "message" -> "gconnect went south"))
     logger.debug(data.toString())
     // do lots of Google OAuth2 stuff
-    Ok(data)
+    Unauthorized(data)
   }
 
   /**

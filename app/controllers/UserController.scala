@@ -25,6 +25,7 @@ import javax.inject._
 import models.{LoginCredentials, User, UserDAO}
 import play.api.Configuration
 import play.api.cache.CacheApi
+import play.api.http.Status._
 import play.api.libs.json.{JsError, Json}
 import play.api.mvc.{Action, Controller, Cookie}
 import services.EmailService
@@ -219,7 +220,7 @@ class UserController @Inject()(config: Configuration,
             Ok(Json.toJson(user.asProfileJs()))
           } else {
             logger.error("Username Security Token mismatch.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+            Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
           }
         }
   }
@@ -290,7 +291,7 @@ class UserController @Inject()(config: Configuration,
 
               } else {
                 logger.error("Username Security Token mismatch.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+                Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
               }
             }
 

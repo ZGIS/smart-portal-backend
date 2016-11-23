@@ -108,7 +108,7 @@ class HomeController @Inject() (config: Configuration,
           // logger.debug(s"Logging in username from $uaIdentifier")
           val token = passwordHashing.createSessionCookie(user.username, uaIdentifier)
           cache.set(token, user.username)
-          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username))
+          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username, "userprofile" -> user.asProfileJs()))
             .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
         }
       })

@@ -19,11 +19,12 @@
 
 package services
 
-import java.util.Properties
+import java.io.IOException
 import javax.inject.{Inject, Singleton}
 import javax.mail._
 import javax.mail.internet._
 
+import com.sendgrid._
 import play.api.Configuration
 import utils.ClassnameLogger
 
@@ -35,14 +36,10 @@ import utils.ClassnameLogger
 @Singleton
 class EmailService @Inject()(configuration: Configuration) extends ClassnameLogger {
 
-  lazy private val emailUsername: String = configuration.getString("email.username").getOrElse("user")
-  lazy private val emailPassword: String = configuration.getString("email.password").getOrElse("pass")
-  lazy private val emailFrom: String = configuration.getString("email.from").getOrElse("portal@smart-project.info")
-  lazy private val emailServAddress: String = configuration.getString("email.serv.address").getOrElse("mail.smart-project.info")
-  lazy private val emailServPort: String = configuration.getString("email.serv.port").getOrElse("587")
+  lazy private val apikey: String = configuration.getString("email.sendgrid.apikey").getOrElse("empty-api-key")
+  lazy private val emailFrom: String = configuration.getString("email.sendgrid.from").getOrElse("allixender@googlemail.com")
 
-  var mailServerProperties: Properties = System.getProperties()
-  var getMailSession: javax.mail.Session = _
+  lazy val sg = new SendGrid(apikey)
 
   /**
     * send a Registration Email with a pre-generated unique link to confirm your account
@@ -54,13 +51,6 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
     * @return
     */
   def sendRegistrationEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean = {
-
-    mailServerProperties.put("mail.smtp.host", emailServAddress)
-    mailServerProperties.put("mail.smtp.port", emailServPort)
-    mailServerProperties.put("mail.smtp.auth", "true")
-    mailServerProperties.put("mail.smtp.starttls.enable", "true")
-
-    getMailSession = Session.getDefaultInstance(mailServerProperties, null)
 
     val emailText =
       """Hello %s,
@@ -74,28 +64,27 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
         |Your GW HUB Team
       """.format(usernameTo, linkId, emailFrom).stripMargin
 
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
     try {
-      // Create a default MimeMessage object.
-      val message = new MimeMessage(getMailSession)
-      // Set From: header field of the header.
-      message.setFrom(new InternetAddress(emailFrom))
-      // Set To: header field of the header.
-      message.addRecipient(Message.RecipientType.TO, new InternetAddress(emailTo))
-      // Set Subject: header field. eg "Please confirm your GW HUB account"
-      message.setSubject(subject)
 
-      message.setText(emailText)
-      logger.trace(emailText)
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
 
-      // Send message
-      val transport: Transport = getMailSession.getTransport("smtp")
-      transport.connect(emailServAddress, emailUsername, emailPassword)
-      transport.sendMessage(message, message.getAllRecipients)
-      transport.close()
       true
     } catch {
-      case mex: MessagingException => {
-        logger.error("Messaging exception: " + mex.getLocalizedMessage)
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
         false
       }
       case e: Exception => {
@@ -115,13 +104,6 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
     */
   def sendConfirmationEmail(emailTo: String, subject: String, usernameTo: String): Boolean = {
 
-    mailServerProperties.put("mail.smtp.host", emailServAddress)
-    mailServerProperties.put("mail.smtp.port", emailServPort)
-    mailServerProperties.put("mail.smtp.auth", "true")
-    mailServerProperties.put("mail.smtp.starttls.enable", "true")
-
-    getMailSession = Session.getDefaultInstance(mailServerProperties, null)
-
     val emailText =
       """Hello %s,
         |thank you for registering on the GW HUB, your account is now active.
@@ -132,28 +114,26 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
         |Your GW HUB Team
       """.format(usernameTo, emailFrom).stripMargin
 
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
     try {
-      // Create a default MimeMessage object.
-      val message = new MimeMessage(getMailSession)
-      // Set From: header field of the header.
-      message.setFrom(new InternetAddress(emailFrom))
-      // Set To: header field of the header.
-      message.addRecipient(Message.RecipientType.TO, new InternetAddress(emailTo))
-      // Set Subject: header field. eg "Please confirm your GW HUB account"
-      message.setSubject(subject)
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
 
-      message.setText(emailText)
-      logger.trace(emailText)
-
-      // Send message
-      val transport: Transport = getMailSession.getTransport("smtp")
-      transport.connect(emailServAddress, emailUsername, emailPassword)
-      transport.sendMessage(message, message.getAllRecipients)
-      transport.close()
       true
     } catch {
-      case mex: MessagingException => {
-        logger.error("Messaging exception: " + mex.getLocalizedMessage)
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
         false
       }
       case e: Exception => {
@@ -162,65 +142,4 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
       }
     }
   }
-
-  /**
-    * send and Info Email to many recipients, with the message body provided
-    *
-    * @param emailTo
-    * @param subject
-    * @param usernameTo
-    * @param mainMessageText
-    */
-  def sendInfoEmail(emailTo: List[String], subject: String, usernameTo: String, mainMessageText: String): Boolean = {
-
-    mailServerProperties.put("mail.smtp.host", emailServAddress)
-    mailServerProperties.put("mail.smtp.port", emailServPort)
-    mailServerProperties.put("mail.smtp.auth", "true")
-    mailServerProperties.put("mail.smtp.starttls.enable", "true")
-
-    getMailSession = Session.getDefaultInstance(mailServerProperties, null)
-
-    val emailText =
-      """Hello %s,
-        |
-        |%s
-        |
-        |If you have any question please email us to %s.
-        |
-        |Your GW HUB Team
-      """.format(usernameTo, mainMessageText, emailFrom).stripMargin
-
-    try {
-      // Create a default MimeMessage object.
-      val message = new MimeMessage(getMailSession)
-      // Set From: header field of the header.
-      message.setFrom(new InternetAddress(emailFrom))
-      // Set To: header field of the header.
-
-      message.addRecipients(Message.RecipientType.TO, emailTo.mkString(", "))
-
-      // Set Subject: header field. eg "Please confirm your GW HUB account"
-      message.setSubject(subject)
-
-      message.setText(emailText)
-      logger.trace(emailText)
-
-      // Send message
-      val transport: Transport = getMailSession.getTransport("smtp")
-      transport.connect(emailServAddress, emailUsername, emailPassword)
-      transport.sendMessage(message, message.getAllRecipients)
-      transport.close()
-      true
-    } catch {
-      case mex: MessagingException => {
-        logger.error("Messaging exception: " + mex.getLocalizedMessage)
-        false
-      }
-      case e: Exception => {
-        logger.error("Other email problem: " + e.getLocalizedMessage)
-        false
-      }
-    }
-  }
-
 }

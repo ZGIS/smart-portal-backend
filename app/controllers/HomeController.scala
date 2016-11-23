@@ -69,6 +69,10 @@ class HomeController @Inject() (config: Configuration,
     NoContent.withHeaders(headers: _*)
   }
 
+  def discovery(fields: Option[String]) = Action { request =>
+    Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
+  }
+
   /**
     * Create an Action to render an HTML page with a welcome message.
     * The configuration in the `routes` file means that this method
@@ -104,7 +108,7 @@ class HomeController @Inject() (config: Configuration,
           // logger.debug(s"Logging in username from $uaIdentifier")
           val token = passwordHashing.createSessionCookie(user.username, uaIdentifier)
           cache.set(token, user.username)
-          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username))
+          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username, "userprofile" -> user.asProfileJs()))
             .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
         }
       })

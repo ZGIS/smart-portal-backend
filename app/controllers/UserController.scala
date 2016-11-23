@@ -73,8 +73,9 @@ class UserController @Inject()(config: Configuration,
                                cacheApi: CacheApi,
                                emailService: EmailService,
                                userDAO: UserDAO,
-                               override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
+                               override val passwordHashing: PasswordHashing)extends Controller with ClassnameLogger with Security {
 
+  //TODO SR why not as VAL in parameters? Like passwordHashing?
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
 

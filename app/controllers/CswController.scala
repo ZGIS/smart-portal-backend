@@ -89,12 +89,12 @@ class CswController @Inject()(val configuration: Configuration,
       response.xml match {
         case e: Elem if e.label == "TransactionResponse" => {
           val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
-          Ok(Json.obj("status" -> "ok", "fileIdentifier" -> fileIdentifier, "message" -> s"Inserted as ${fileIdentifier}." ))
+          Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier, "message" -> s"Inserted as ${fileIdentifier}." ))
         }
         case e: Elem if e.label == "ExceptionReport" => {
           val message = (e \\ "Exception" \\ "ExceptionText").text
           //TODO SR make this InternalServerError
-          Ok(Json.obj("status" -> "failed", "message" -> message))
+          Ok(Json.obj("type" -> "danger", "message" -> message))
         }
         case x => InternalServerError(s"Unexpected Response: ${response}")
       }

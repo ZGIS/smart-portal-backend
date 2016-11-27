@@ -27,11 +27,14 @@ EXPOSE 9000
 
 # We need envs for
 # ${?APPLICATION_SECRET}
+# ${?JAVA_OPTS}
 # ${?PG_DBNAME}
 # ${?PG_USER}
 # ${?PG_PASSWORD}
-# ${?EMAIL_USERNAME}
-# ${?EMAIL_PASSWORD}
+# ${?CSWI_URL}
+# ${?PYCSW_URL}
+# ${?UPLOAD_DATA_DIR}
+# ${?SENDGRID_API_KEY}
 # ${?APP_TIMEZONE}
 
 CMD [ "/smart-portal-backend-1.0-SNAPSHOT/bin/smart-portal-backend", \

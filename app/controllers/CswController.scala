@@ -51,7 +51,9 @@ class CswController @Inject()(val configuration: Configuration,
   val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
   val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
 
-  /** calls CSW:Transaction -> Insert */
+  /** calls CSW:Transaction -> Insert
+    * FIXME should implement HasToken(parse.json) instead of Action.async, to only allow authenticated users
+    */
   def insert:Action[AnyContent] = Action.async { request =>
     logger.debug(request.body.asJson.toString)
 

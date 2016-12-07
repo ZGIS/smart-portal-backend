@@ -48,6 +48,9 @@ libraryDependencies ++= Seq(
   "com.typesafe.play" %% "anorm" % "2.5.2",
   "org.postgresql" % "postgresql" % postgresDriver,
 
+  //  "com.vividsolutions" % "jts" 	% "1.14",
+  "org.locationtech.spatial4j" % "spatial4j" % "0.6",
+
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,
   "com.google.http-client" % "google-http-client" % googleVersion,

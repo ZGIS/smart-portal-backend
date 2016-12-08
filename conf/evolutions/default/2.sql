@@ -15,9 +15,9 @@ CREATE TABLE owc_feature_types_as_document_has_owc_entries (
   owc_feature_types_as_document_id varchar(255) REFERENCES owc_feature_types(id),
   owc_feature_types_as_entry_id varchar(255) REFERENCES owc_feature_types(id)
 );
-ALTER TABLE owc_feature_types_as_document_has_owc_entries
-  ADD CONSTRAINT owc_feature_types_as_document_has_owc_entries_unique
-UNIQUE (owc_feature_types_as_document_id, owc_feature_types_as_entry_id);
+-- ALTER TABLE owc_feature_types_as_document_has_owc_entries
+--   ADD CONSTRAINT owc_feature_types_as_document_has_owc_entries_unique
+--   UNIQUE (owc_feature_types_as_document_id, owc_feature_types_as_entry_id);
 
 CREATE TABLE owc_authors (
   name varchar(255) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE owc_categories (
   term varchar(255) NOT NULL,
   label varchar(255)
 );
-ALTER TABLE owc_categories ADD CONSTRAINT owc_categories_unique UNIQUE (scheme, term);
+-- ALTER TABLE owc_categories ADD CONSTRAINT owc_categories_unique UNIQUE (scheme, term);
 
 -- CONSTRAINT u_constraint UNIQUE (scheme, term)
 -- # belongs to owc_properties_has_owc_category: foreign key owc_category -> owc_properties (categories)  n:n,
@@ -44,7 +44,7 @@ CREATE TABLE owc_links (
   href varchar(255) NOT NULL,
   title varchar(255)
 );
-ALTER TABLE owc_links ADD CONSTRAINT owc_links_unique UNIQUE (rel, href);
+-- ALTER TABLE owc_links ADD CONSTRAINT owc_links_unique UNIQUE (rel, href);
 
 -- CONSTRAINT u_constraint UNIQUE (rel, href)
 -- # belongs to owc_properties_has_owc_links: foreign key owc_links -> owc_properties (links) n:n,
@@ -54,7 +54,7 @@ CREATE TABLE owc_properties (
   lang varchar(255) NOT NULL,
   title varchar(255) NOT NULL,
   subtitle varchar(255),
-  updated TIMESTAMP,
+  updated TIMESTAMPTZ,
   generator varchar(255),
   creator varchar(255),
   publisher varchar(255),
@@ -66,26 +66,26 @@ CREATE TABLE owc_feature_types_has_owc_properties (
   owc_feature_types_id varchar(255) REFERENCES owc_feature_types(id),
   owc_properties_id INT REFERENCES owc_properties(id)
 );
-ALTER TABLE owc_feature_types_has_owc_properties
-  ADD CONSTRAINT owc_feature_types_has_owc_properties_unique
-UNIQUE (owc_feature_types_id, owc_properties_id);
+-- ALTER TABLE owc_feature_types_has_owc_properties
+--   ADD CONSTRAINT owc_feature_types_has_owc_properties_unique
+--   UNIQUE (owc_feature_types_id, owc_properties_id);
 
 -- # has authors: foreign key owc_properties -> owc_author n:n,
 CREATE TABLE owc_properties_has_owc_authors (
   owc_properties_id INT REFERENCES owc_properties(id),
   owc_authors_id varchar(255) REFERENCES owc_authors(name)
 );
-ALTER TABLE owc_properties_has_owc_authors
-  ADD CONSTRAINT owc_properties_has_owc_authors_unique UNIQUE (owc_properties_id, owc_authors_id);
+-- ALTER TABLE owc_properties_has_owc_authors
+--   ADD CONSTRAINT owc_properties_has_owc_authors_unique UNIQUE (owc_properties_id, owc_authors_id);
 
 -- # has contributors: foreign key owc_properties -> owc_author n:n,
 CREATE TABLE owc_properties_has_owc_authors_as_contributors (
   owc_properties_id INT REFERENCES owc_properties(id),
   owc_authors_id varchar(255) REFERENCES owc_authors(name)
 );
-ALTER TABLE owc_properties_has_owc_authors_as_contributors
-  ADD CONSTRAINT owc_properties_has_owc_authors_as_contributors_unique
-UNIQUE (owc_properties_id, owc_authors_id);
+-- ALTER TABLE owc_properties_has_owc_authors_as_contributors
+--   ADD CONSTRAINT owc_properties_has_owc_authors_as_contributors_unique
+--   UNIQUE (owc_properties_id, owc_authors_id);
 
 -- # has categories: foreign key owc_properties -> owc_category n:n,
 CREATE TABLE owc_properties_has_owc_categories (
@@ -93,9 +93,9 @@ CREATE TABLE owc_properties_has_owc_categories (
   owc_categories_scheme VARCHAR(255) REFERENCES owc_categories(scheme),
   owc_categories_term VARCHAR(255) REFERENCES owc_categories(term)
 );
-ALTER TABLE owc_properties_has_owc_categories
-  ADD CONSTRAINT owc_properties_has_owc_categories_unique
-UNIQUE (owc_properties_id, owc_categories_scheme, owc_categories_term);
+-- ALTER TABLE owc_properties_has_owc_categories
+--   ADD CONSTRAINT owc_properties_has_owc_categories_unique
+--   UNIQUE (owc_properties_id, owc_categories_scheme, owc_categories_term);
 
 -- # has links: foreign key owc_properties -> owc_links n:n,
 CREATE TABLE owc_properties_has_owc_links (
@@ -103,9 +103,9 @@ CREATE TABLE owc_properties_has_owc_links (
   owc_links_rel VARCHAR(255) REFERENCES owc_links(rel),
   owc_links_href VARCHAR(255) REFERENCES owc_links(href)
 );
-ALTER TABLE owc_properties_has_owc_links
-  ADD CONSTRAINT owc_properties_has_owc_links_unique
-UNIQUE (owc_properties_id, owc_links_rel, owc_links_href);
+-- ALTER TABLE owc_properties_has_owc_links
+--   ADD CONSTRAINT owc_properties_has_owc_links_unique
+--  UNIQUE (owc_properties_id, owc_links_rel, owc_links_href);
 
 -- # trait OwcOffering, impl are WfsOffering, WmsOffering, etc .. type is based on 'code' property
 CREATE TABLE owc_offerings (
@@ -121,9 +121,9 @@ CREATE TABLE owc_feature_types_as_entry_has_owc_offerings (
   owc_feature_types_as_entry_id varchar(255) REFERENCES owc_feature_types(id),
   owc_offerings_id INT REFERENCES owc_offerings(id)
 );
-ALTER TABLE owc_feature_types_as_entry_has_owc_offerings
-  ADD CONSTRAINT owc_feature_types_as_entry_has_owc_offerings_unique
-UNIQUE (owc_feature_types_as_entry_id, owc_offerings_id);
+-- ALTER TABLE owc_feature_types_as_entry_has_owc_offerings
+--   ADD CONSTRAINT owc_feature_types_as_entry_has_owc_offerings_unique
+--   UNIQUE (owc_feature_types_as_entry_id, owc_offerings_id);
 
 CREATE TABLE owc_operations (
   id SERIAL,
@@ -142,7 +142,7 @@ CREATE TABLE owc_offerings_has_owc_operations (
   owc_offerings_id INT REFERENCES owc_offerings(id),
   owc_operations_id INT REFERENCES owc_operations(id)
 );
-ALTER TABLE owc_offerings_has_owc_operations ADD CONSTRAINT owc_offerings_has_owc_operations_unique UNIQUE (owc_offerings_id, owc_operations_id);
+-- ALTER TABLE owc_offerings_has_owc_operations ADD CONSTRAINT owc_offerings_has_owc_operations_unique UNIQUE (owc_offerings_id, owc_operations_id);
 
 # --- !Downs
 

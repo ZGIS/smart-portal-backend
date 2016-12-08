@@ -64,8 +64,10 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
 
         val regLinkId = java.util.UUID.randomUUID().toString()
         val testPass = "testpass123"
+        val testPassUpd = "testpass12345"
         val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
         val cryptPass = passwordHashing.createHash(testPass)
+        val cryptPassUpd = passwordHashing.createHash(testPassUpd)
 
         val testUser1 = User("test@blubb.com",
           "test",
@@ -80,7 +82,7 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
           "Hans",
           "Wurst",
           cryptPass,
-          s"REGISTERED:$regLinkId",
+          "ACTIVE:REGCONFIRMED",
           testTime)
 
         // create
@@ -97,15 +99,8 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
         // authenticate
         userDao.authenticate(testUser2.username, testPass) mustEqual Some(testUser2)
 
-        // updateNoPass
-
-        // updatePassword
-
         // findUserByEmail
         userDao.findUserByEmail("test2@blubb.com") mustEqual Some(testUser2)
-
-        // deleteUser
-        userDao.deleteUser("test2") mustEqual true
 
         // findUsersByToken
 
@@ -113,10 +108,39 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
         userDao.findRegisteredUsersByRegLink(regLinkId).size mustEqual 1
 
         // findRegisteredOnlyUsers
+        val regUsers = userDao.findRegisteredOnlyUsers
+        regUsers.size mustBe 1
+        regUsers.headOption.get.username mustEqual "test"
+
 
         // findActiveUsers
+        val activeUsers = userDao.findActiveUsers
+        activeUsers.size mustBe 1
+        activeUsers.headOption.get.username mustEqual "test2"
 
+        // updateNoPass
+        val testUser2_1 = User("test2@blubb.com",
+          "test2",
+          "Hans",
+          "Wurst-Ebermann",
+          cryptPassUpd,
+          "ACTIVE:PROFILEUPDATE",
+          testTime)
 
+        userDao.updateNoPass(testUser2_1) mustEqual Some(testUser2_1)
+        userDao.findByUsername("test2").get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2", testPass).get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2", testPassUpd) mustEqual None
+
+        // updatePassword
+        userDao.updatePassword(testUser2_1) mustEqual Some(testUser2_1)
+        userDao.findByUsername("test2").get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2", testPassUpd).get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2", testPass) mustEqual None
+
+        // deleteUser
+        userDao.deleteUser("test2") mustEqual true
+        userDao.findAll.size mustBe 1
 
       }
     }

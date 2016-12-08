@@ -60,7 +60,7 @@ trait WithTestDatabase {
       )
     ) { database =>
 
-      Evolutions.withEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("test/")) {
+      Evolutions.withEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/")) {
 
         block(database)
 

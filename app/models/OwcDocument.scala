@@ -47,11 +47,18 @@ import utils.ClassnameLogger
   */
 trait OwcFeatureType {
   val id: String
-  val bbox: Rectangle
+  val bbox: Option[Rectangle]
   val properties: OwcProperties
 }
 
-case class Author(name: String, email: String, uri: Option[String])
+/**
+  * Author field
+  *
+  * @param name
+  * @param email
+  * @param uri
+  */
+case class OwcAuthor(name: String, email: Option[String], uri: Option[String])
 
 /**
   * reusable pattern of tagging things in the entry lists for declaration in subsequent processes,
@@ -61,23 +68,22 @@ case class Author(name: String, email: String, uri: Option[String])
   * @param term   identifier of a view group: nz-overview
   * @param label  human readable name of the term: New Zealand Overview, National Scale models..
   */
-case class Category(scheme: String, term: String, label: String)
+case class OwcCategory(scheme: String, term: String, label: Option[String])
 
 /**
   *
-  * @param rel one of typically "self", "profile", "icon"
+  * @param rel one of typically "self", "profile", "icon", "via"
   * @param mimeType
   * @param href
   * @param title
   */
-case class Link(rel: String, mimeType: String, href: String, title: Option[String])
+case class OwcLink(rel: String, mimeType: Option[String], href: String, title: Option[String])
 
 /**
   *
   * @param lang
   * @param title
   * @param subtitle // aka abstract / abstrakt, not sure why they called it subtitle in geojson spec of OWC
-  * @param content // only allowed in properties of OwcEntry (Feature), could hold the actual teaser one pager overview?
   * @param updated
   * @param generator
   * @param rights
@@ -90,82 +96,203 @@ case class OwcProperties(
                           lang: String = "en",
                           title: String,
                           subtitle: Option[String],
-                          content: Option[String],
                           updated: Option[ZonedDateTime],
                           generator: Option[String],
-                          rights: String,
-                          authors: List[Author],
-                          contributors: List[Author],
+                          rights: Option[String],
+                          authors: List[OwcAuthor],
+                          contributors: List[OwcAuthor],
                           creator: Option[String],
                           publisher: Option[String],
-                          categories: List[Category],
-                          links: List[Link])
+                          categories: List[OwcCategory],
+                          links: List[OwcLink])
 
-
+/**
+  * trait OwcOffering
+  */
 trait OwcOffering {
   val code: String
+  val operations: List[OwcOperation]
+  val content: List[String]
 }
 
+/**
+  * object for request contentType and POST data
+  *
+  * @param contentType
+  * @param postData
+  */
 case class OwcPostRequestConfig(contentType: String, postData: String)
 
-case class OwcOperation (
-  code: String, // e.g. GetCapabilities
-method: String, // GET, POST ...
-contentType: String, // e.g. "application/xml", for expected return type (accept header?)
-  href: String, // could be URL / URI type though
-request: Option[OwcPostRequestConfig],
-  result: Option[String]
-                        )
+/**
+  *
+  * @param code
+  * @param method
+  * @param contentType
+  * @param href
+  * @param request
+  * @param result
+  */
+case class OwcOperation(
+                         code: String, // e.g. GetCapabilities
+                         method: String, // GET, POST ...
+                         contentType: String, // e.g. "application/xml", for expected return type (accept header?)
+                         href: String, // could be URL / URI type though
+                         request: Option[OwcPostRequestConfig], // only need to hold data when method is POST
+                         result: Option[String] // could hold inline result of the request, not sure if we need
+                       )
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class WmsOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class WmtsOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts"
-                      ) extends OwcOffering
+                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
+                         operations: List[OwcOperation],
+                         content: List[String]
+                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class WfsOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class WcsOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class CswOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class WpsOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class GmlOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class KmlOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class GeoTiffOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff"
-                      ) extends OwcOffering
+                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
+                            operations: List[OwcOperation],
+                            content: List[String]
+                          ) extends OwcOffering
 
 // the following two are not in the spec, but we need them so I made up an extension
 
+/**
+  * not in the spec, but we need them so I made up an extension
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class SosOffering(
-                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos"
+                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
+                        operations: List[OwcOperation],
+                        content: List[String]
                       ) extends OwcOffering
 
+/**
+  * not in the spec, but we need them so I made up an extension
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
+case class NetCdfOffering(
+                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
+                            operations: List[OwcOperation],
+                            content: List[String]
+                          ) extends OwcOffering
 
+/**
+  * not in the spec, but we need them so I made up an extension
+  *
+  * @param code
+  * @param operations
+  * @param content
+  */
 case class HttpLinkOffering(
-                              code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link"
-                            ) extends OwcOffering
+                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
+                             operations: List[OwcOperation],
+                             content: List[String]
+                           ) extends OwcOffering
 
 /**
   * implicit type is Feature
+  *
   * @param id
   * @param bbox
   * @param properties
@@ -173,7 +300,7 @@ case class HttpLinkOffering(
   */
 case class OwcEntry(
                      id: String,
-                     bbox: Rectangle,
+                     bbox: Option[Rectangle],
                      properties: OwcProperties,
                      offerings: List[OwcOffering] // special here of course
                    ) extends OwcFeatureType
@@ -190,7 +317,7 @@ case class OwcEntry(
   */
 case class OwcDocument(
                         id: String,
-                        bbox: Rectangle,
+                        bbox: Option[Rectangle],
                         properties: OwcProperties,
                         features: List[OwcEntry] // special here of course
                       ) extends OwcFeatureType

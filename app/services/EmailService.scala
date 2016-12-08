@@ -21,8 +21,6 @@ package services
 
 import java.io.IOException
 import javax.inject.{Inject, Singleton}
-import javax.mail._
-import javax.mail.internet._
 
 import com.sendgrid._
 import play.api.Configuration

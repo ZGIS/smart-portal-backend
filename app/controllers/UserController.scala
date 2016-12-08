@@ -25,7 +25,6 @@ import javax.inject._
 import models.{LoginCredentials, User, UserDAO}
 import play.api.Configuration
 import play.api.cache.CacheApi
-import play.api.http.Status._
 import play.api.libs.json.{JsError, Json}
 import play.api.mvc.{Action, Controller, Cookie}
 import services.EmailService

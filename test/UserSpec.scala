@@ -64,7 +64,7 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
 
         val regLinkId = java.util.UUID.randomUUID().toString()
         val testPass = "testpass123"
-        val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.of("Pacific/Auckland"))
+        val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
         val cryptPass = passwordHashing.createHash(testPass)
 
         val testUser1 = User("test@blubb.com",

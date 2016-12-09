@@ -27,14 +27,15 @@ import org.scalatest.{BeforeAndAfter, Ignore, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.libs.json._
 import models._
+import models.owc._
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
 import play.api.{Application, Configuration}
 import play.api.inject.guice.GuiceApplicationBuilder
 
 /**
-  * Test Spec for [[OwcDocument]]
+  * Test Spec for [[OwcProperties]]
   */
-class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
@@ -50,7 +51,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
   private lazy val ctx = SpatialContext.GEO
 
-  "OwcDocument " can {
+  "OwcProperties " can {
     lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
 
     "handle OwcAuthor with DB" in {
@@ -60,7 +61,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
         val author2 = OwcAuthor("Alex K", Some(""), None)
         val author3 = OwcAuthor("Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
 
-        val owcDao = new OwcDAO(database)
+        val owcDao = new OwcPropertiesDAO(database)
 
         owcDao.getAllOwcAuthors.size mustEqual 0
         owcDao.createOwcAuthor(author1) mustEqual Some(author1)
@@ -84,7 +85,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
     "handle OwcCategory with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcDAO(database)
+        val owcDao = new OwcPropertiesDAO(database)
 
         val category1 = OwcCategory("view-groups", "sac_add", Some("Informative Layers"))
         val category2 = OwcCategory("search-domain", "Uncertainty", Some("Uncertainty of Models"))
@@ -112,7 +113,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
     "handle OwcLink with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcDAO(database)
+        val owcDao = new OwcPropertiesDAO(database)
 
         val link1 = OwcLink("profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
         val link2 = OwcLink("self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
@@ -137,7 +138,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
     "handle OwcProperties with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcDAO(database)
+        val owcDao = new OwcPropertiesDAO(database)
 
         val link1 = OwcLink("profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
         val link2 = OwcLink("self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)

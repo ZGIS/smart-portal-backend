@@ -17,15 +17,9 @@
  * limitations under the License.
  */
 
-package models
-
-import java.time.ZonedDateTime
-import javax.inject.{Inject, Singleton}
+package models.owc
 
 import org.locationtech.spatial4j.shape.Rectangle
-import play.api.db.Database
-import utils.ClassnameLogger
-
 
 /**
   * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
@@ -45,66 +39,6 @@ import utils.ClassnameLogger
   *
   * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
   */
-trait OwcFeatureType {
-  val id: String
-  val bbox: Option[Rectangle]
-  val properties: OwcProperties
-}
-
-/**
-  * Author field
-  *
-  * @param name
-  * @param email
-  * @param uri
-  */
-case class OwcAuthor(name: String, email: Option[String], uri: Option[String])
-
-/**
-  * reusable pattern of tagging things in the entry lists for declaration in subsequent processes,
-  * e.g. accordeon groups in legends panel(we have to implement that in the mapviewer though)
-  *
-  * @param scheme e.g. for mapviewer: view-groups
-  * @param term   identifier of a view group: nz-overview
-  * @param label  human readable name of the term: New Zealand Overview, National Scale models..
-  */
-case class OwcCategory(scheme: String, term: String, label: Option[String])
-
-/**
-  *
-  * @param rel one of typically "self", "profile", "icon", "via"
-  * @param mimeType
-  * @param href
-  * @param title
-  */
-case class OwcLink(rel: String, mimeType: Option[String], href: String, title: Option[String])
-
-/**
-  *
-  * @param lang
-  * @param title
-  * @param subtitle // aka abstract / abstrakt, not sure why they called it subtitle in geojson spec of OWC
-  * @param updated
-  * @param generator
-  * @param rights
-  * @param authors
-  * @param contributors
-  * @param categories
-  * @param links
-  */
-case class OwcProperties(
-                          lang: String = "en",
-                          title: String,
-                          subtitle: Option[String],
-                          updated: Option[ZonedDateTime],
-                          generator: Option[String],
-                          rights: Option[String],
-                          authors: List[OwcAuthor],
-                          contributors: List[OwcAuthor],
-                          creator: Option[String],
-                          publisher: Option[String],
-                          categories: List[OwcCategory],
-                          links: List[OwcLink])
 
 /**
   * trait OwcOffering
@@ -272,10 +206,10 @@ case class SosOffering(
   * @param content
   */
 case class NetCdfOffering(
-                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
-                            operations: List[OwcOperation],
-                            content: List[String]
-                          ) extends OwcOffering
+                           code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
+                           operations: List[OwcOperation],
+                           content: List[String]
+                         ) extends OwcOffering
 
 /**
   * not in the spec, but we need them so I made up an extension
@@ -289,37 +223,5 @@ case class HttpLinkOffering(
                              operations: List[OwcOperation],
                              content: List[String]
                            ) extends OwcOffering
-
-/**
-  * implicit type is Feature
-  *
-  * @param id
-  * @param bbox
-  * @param properties
-  * @param offerings // aka resources
-  */
-case class OwcEntry(
-                     id: String,
-                     bbox: Option[Rectangle],
-                     properties: OwcProperties,
-                     offerings: List[OwcOffering] // special here of course
-                   ) extends OwcFeatureType
-
-/**
-  * the OwcDocument wraps it all up
-  * implicit type is FeatureCollection
-  * properties.links must contain a profile link element
-  *
-  * @param id
-  * @param bbox
-  * @param properties
-  * @param features // aka the entries
-  */
-case class OwcDocument(
-                        id: String,
-                        bbox: Option[Rectangle],
-                        properties: OwcProperties,
-                        features: List[OwcEntry] // special here of course
-                      ) extends OwcFeatureType
 
 

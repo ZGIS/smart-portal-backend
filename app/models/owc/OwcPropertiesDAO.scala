@@ -17,18 +17,18 @@
  * limitations under the License.
  */
 
-package models
+package models.owc
 
-import java.time.ZonedDateTime
 import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser._
 import anorm._
+import models.owc.OwcLink
 import play.api.db._
 import utils.ClassnameLogger
 
 /**
-  * OwcDAO - store and retrieve OWS Context Documents
+  * OwcPropertiesDAO - store and retrieve OWS Context Documents
   * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
   * about the things they provide the context for (i.e. other data sets, services, metadata records)
   * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
@@ -36,24 +36,7 @@ import utils.ClassnameLogger
   * @param db
   */
 @Singleton
-class OwcDAO @Inject()(db: Database) extends ClassnameLogger {
-
-  val tableOwcDocumentsHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
-  val tableOwcEntriesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
-  val tableOwcFeatureTypesHasOwcProperties = "owc_feature_types_has_owc_properties"
-  val tableOwcPropertiesHasOwcAuthors = "owc_properties_has_owc_authors"
-  val tableOwcPropertiesHasContributors = "owc_properties_has_owc_authors_as_contributors"
-  val tableOwcPropertiesHasOwcCategories = "owc_properties_has_owc_categories"
-  val tableOwcPropertiesHasLinks = "owc_properties_has_owc_links"
-  val tableOwcOfferingsHasOwcOperation = "owc_offerings_has_owc_operations"
-
-  val tableOwcOperations = "owc_operation"
-  val tableOwcOfferings = "owc_offerings"
-  val tableOwcProperties = "owc_properties"
-  val tableOwcLinks = "owc_links"
-  val tableOwcCategories = "owc_categories"
-  val tableOwcAuthors = "owc_authors"
-  val tableOwcFeatureTypes = "owc_feature_types"
+class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
 
   /***********
    * OwcAuthor
@@ -447,6 +430,22 @@ class OwcDAO @Inject()(db: Database) extends ClassnameLogger {
     rowCount match {
       case 1 => true
       case _ => false
+    }
+  }
+
+  /**************
+    * OwcProperties
+    *************/
+
+  /**
+    * Parse a OwcProperties from a ResultSet
+    */
+  val owcPropertiesParser = {
+    str("scheme") ~
+      str("term") ~
+      get[Option[String]]("label") map {
+      case scheme ~ term ~ label =>
+        OwcCategory(scheme, term, label)
     }
   }
 

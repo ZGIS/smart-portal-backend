@@ -45,135 +45,136 @@
 </span>21 <span style=''>
 </span>22 <span style=''>import javax.inject._
 </span>23 <span style=''>
-</span>24 <span style=''>import models.{LoginCredentials, UserDAO}
-</span>25 <span style=''>import play.api.Configuration
-</span>26 <span style=''>import play.api.cache._
-</span>27 <span style=''>import play.api.libs.json.Writes._
-</span>28 <span style=''>import play.api.libs.json._
-</span>29 <span style=''>import play.api.mvc._
-</span>30 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
-</span>31 <span style=''>
+</span>24 <span style=''>import models._
+</span>25 <span style=''>import models.users._
+</span>26 <span style=''>import play.api.Configuration
+</span>27 <span style=''>import play.api.cache._
+</span>28 <span style=''>import play.api.libs.json.Writes._
+</span>29 <span style=''>import play.api.libs.json._
+</span>30 <span style=''>import play.api.mvc._
+</span>31 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
 </span>32 <span style=''>
-</span>33 <span style=''>/**
-</span>34 <span style=''>  * HomeController, maybe rename? Provides login and logout
-</span>35 <span style=''>  *
-</span>36 <span style=''>  * @param config
-</span>37 <span style=''>  * @param cacheApi
-</span>38 <span style=''>  * @param passwordHashing
-</span>39 <span style=''>  */
-</span>40 <span style=''>@Singleton
-</span>41 <span style=''>class HomeController @Inject() (config: Configuration,
-</span>42 <span style=''>                                cacheApi: CacheApi,
-</span>43 <span style=''>                                override val passwordHashing: PasswordHashing,
-</span>44 <span style=''>                                userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
-</span>45 <span style=''>
-</span>46 <span style=''>  val cache: play.api.cache.CacheApi = </span><span style='background: #AEF1AE'>cacheApi</span><span style=''>
-</span>47 <span style=''>  val configuration: play.api.Configuration = </span><span style='background: #AEF1AE'>config</span><span style=''>
-</span>48 <span style=''>
-</span>49 <span style=''>  /**
-</span>50 <span style=''>    * to handle CORS and HttpSecurity headers, maybe that is already managed through the Filters?!
-</span>51 <span style=''>    *
-</span>52 <span style=''>    * @return
-</span>53 <span style=''>    */
-</span>54 <span style=''>  def headers = </span><span style='background: #F0ADAD'>List(
-</span>55 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Origin" -> "*",
-</span>56 <span style=''></span><span style='background: #F0ADAD'>    "Allow" -> "*",
-</span>57 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS",
-</span>58 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date",
-</span>59 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Credentials" -> "true"
-</span>60 <span style=''></span><span style='background: #F0ADAD'>  )</span><span style=''>
-</span>61 <span style=''>
-</span>62 <span style=''>  /**
-</span>63 <span style=''>    * CORS needs preflight OPTION
-</span>64 <span style=''>    *
-</span>65 <span style=''>    * @param all
-</span>66 <span style=''>    * @return
-</span>67 <span style=''>    */
-</span>68 <span style=''>  def preflight(all: String) = </span><span style='background: #F0ADAD'>Action { request =>
-</span>69 <span style=''></span><span style='background: #F0ADAD'>    NoContent.withHeaders(headers: _*)
-</span>70 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>71 <span style=''>
-</span>72 <span style=''>  def discovery(fields: Option[String]) = </span><span style='background: #F0ADAD'>Action { request =>
-</span>73 <span style=''></span><span style='background: #F0ADAD'>    Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
-</span>74 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>75 <span style=''>
-</span>76 <span style=''>  /**
-</span>77 <span style=''>    * Create an Action to render an HTML page with a welcome message.
-</span>78 <span style=''>    * The configuration in the `routes` file means that this method
-</span>79 <span style=''>    * will be called when the application receives a `GET` request with
-</span>80 <span style=''>    * a path of `/`.
-</span>81 <span style=''>    */
-</span>82 <span style=''>  def index = </span><span style='background: #AEF1AE'>Action {
-</span>83 <span style=''></span><span style='background: #AEF1AE'>    Ok(views.html.index("Your new application is ready."))
-</span>84 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>85 <span style=''>
-</span>86 <span style=''>  /**
-</span>87 <span style=''>    * login with JSON (from Angular / form)
-</span>88 <span style=''>    * {"username":"akmoch","password":"testpass123"}
-</span>89 <span style=''>    *
-</span>90 <span style=''>    * Create the authentication token and sets the cookie [[AuthTokenCookieKey]]
-</span>91 <span style=''>    * for AngularJS to use also in X-XSRF-TOKEN in HTTP header.
-</span>92 <span style=''>    *
-</span>93 <span style=''>    * @return
-</span>94 <span style=''>    */
-</span>95 <span style=''>  def login = </span><span style='background: #AEF1AE'>Action(parse.json) { implicit request =>
-</span>96 <span style=''></span><span style='background: #AEF1AE'>    request.body.validate[LoginCredentials].fold(
-</span>97 <span style=''></span><span style='background: #AEF1AE'>      errors => {
-</span>98 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>logger.error(JsError.toJson(errors).toString())</span><span style='background: #AEF1AE'>
-</span>99 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))</span><span style='background: #AEF1AE'>
-</span>100 <span style=''></span><span style='background: #AEF1AE'>      },
-</span>101 <span style=''></span><span style='background: #AEF1AE'>      valid = credentials => {
-</span>102 <span style=''></span><span style='background: #AEF1AE'>        // find user in db and compare password stuff
-</span>103 <span style=''></span><span style='background: #AEF1AE'>        userDAO.authenticate(credentials.username, credentials.password).fold {
-</span>104 <span style=''></span><span style='background: #AEF1AE'>          logger.error("User or password wrong.")
-</span>105 <span style=''></span><span style='background: #AEF1AE'>          Unauthorized(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
-</span>106 <span style=''></span><span style='background: #AEF1AE'>        } { user =>
-</span>107 <span style=''></span><span style='background: #AEF1AE'>          val uaIdentifier: String = </span><span style='background: #F0ADAD'>request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)</span><span style='background: #AEF1AE'>
-</span>108 <span style=''></span><span style='background: #AEF1AE'>          // logger.debug(s"Logging in username from $uaIdentifier")
-</span>109 <span style=''></span><span style='background: #AEF1AE'>          val token = </span><span style='background: #F0ADAD'>passwordHashing.createSessionCookie(user.username, uaIdentifier)</span><span style='background: #AEF1AE'>
-</span>110 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>cache.set(token, user.username)</span><span style='background: #AEF1AE'>
-</span>111 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username, "userprofile" -> user.asProfileJs()))
-</span>112 <span style=''></span><span style='background: #F0ADAD'>            .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))</span><span style='background: #AEF1AE'>
-</span>113 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>114 <span style=''></span><span style='background: #AEF1AE'>      })
-</span>115 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>116 <span style=''>
-</span>117 <span style=''>  /**
-</span>118 <span style=''>    * Log-out a user. Invalidates the authentication token.
-</span>119 <span style=''>    *
-</span>120 <span style=''>    * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
-</span>121 <span style=''>    * X-XSRF-TOKEN in HTTP header.
-</span>122 <span style=''>    */
-</span>123 <span style=''>  def logout = </span><span style='background: #AEF1AE'>HasToken(parse.empty) { token =>
-</span>124 <span style=''></span><span style='background: #AEF1AE'>    username => implicit request =>
-</span>125 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
-</span>126 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
-</span>127 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>128 <span style=''>
-</span>129 <span style=''>  /**
-</span>130 <span style=''>    * part of OAuth2 Flow for Google Login in
-</span>131 <span style=''>    *
-</span>132 <span style=''>    * @return
-</span>133 <span style=''>    */
-</span>134 <span style=''>  def gconnect = </span><span style='background: #AEF1AE'>Action { implicit request =>
-</span>135 <span style=''></span><span style='background: #AEF1AE'>    val data = request.body.asJson.getOrElse(</span><span style='background: #F0ADAD'>Json.obj("status" -> "ERR", "message" -> "gconnect went south")</span><span style='background: #AEF1AE'>)
-</span>136 <span style=''></span><span style='background: #AEF1AE'>    logger.debug(</span><span style='background: #F0ADAD'>data.toString()</span><span style='background: #AEF1AE'>)
-</span>137 <span style=''></span><span style='background: #AEF1AE'>    // do lots of Google OAuth2 stuff
-</span>138 <span style=''></span><span style='background: #AEF1AE'>    Unauthorized(data)
-</span>139 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>140 <span style=''>
-</span>141 <span style=''>  /**
-</span>142 <span style=''>    * Disconnect the Google login
-</span>143 <span style=''>    *
-</span>144 <span style=''>    * @return
-</span>145 <span style=''>    */
-</span>146 <span style=''>  def gdisconnect = </span><span style='background: #AEF1AE'>HasToken(parse.empty) { token =>
-</span>147 <span style=''></span><span style='background: #AEF1AE'>    username => implicit request =>
-</span>148 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
-</span>149 <span style=''></span><span style='background: #AEF1AE'>      // do some Google OAuth2 unregisteR
-</span>150 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
-</span>151 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>152 <span style=''>}
+</span>33 <span style=''>
+</span>34 <span style=''>/**
+</span>35 <span style=''>  * HomeController, maybe rename? Provides login and logout
+</span>36 <span style=''>  *
+</span>37 <span style=''>  * @param config
+</span>38 <span style=''>  * @param cacheApi
+</span>39 <span style=''>  * @param passwordHashing
+</span>40 <span style=''>  */
+</span>41 <span style=''>@Singleton
+</span>42 <span style=''>class HomeController @Inject() (config: Configuration,
+</span>43 <span style=''>                                cacheApi: CacheApi,
+</span>44 <span style=''>                                override val passwordHashing: PasswordHashing,
+</span>45 <span style=''>                                userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
+</span>46 <span style=''>
+</span>47 <span style=''>  val cache: play.api.cache.CacheApi = </span><span style='background: #AEF1AE'>cacheApi</span><span style=''>
+</span>48 <span style=''>  val configuration: play.api.Configuration = </span><span style='background: #AEF1AE'>config</span><span style=''>
+</span>49 <span style=''>
+</span>50 <span style=''>  /**
+</span>51 <span style=''>    * to handle CORS and HttpSecurity headers, maybe that is already managed through the Filters?!
+</span>52 <span style=''>    *
+</span>53 <span style=''>    * @return
+</span>54 <span style=''>    */
+</span>55 <span style=''>  def headers = </span><span style='background: #F0ADAD'>List(
+</span>56 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Origin" -> "*",
+</span>57 <span style=''></span><span style='background: #F0ADAD'>    "Allow" -> "*",
+</span>58 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS",
+</span>59 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date",
+</span>60 <span style=''></span><span style='background: #F0ADAD'>    "Access-Control-Allow-Credentials" -> "true"
+</span>61 <span style=''></span><span style='background: #F0ADAD'>  )</span><span style=''>
+</span>62 <span style=''>
+</span>63 <span style=''>  /**
+</span>64 <span style=''>    * CORS needs preflight OPTION
+</span>65 <span style=''>    *
+</span>66 <span style=''>    * @param all
+</span>67 <span style=''>    * @return
+</span>68 <span style=''>    */
+</span>69 <span style=''>  def preflight(all: String) = </span><span style='background: #F0ADAD'>Action { request =>
+</span>70 <span style=''></span><span style='background: #F0ADAD'>    NoContent.withHeaders(headers: _*)
+</span>71 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>72 <span style=''>
+</span>73 <span style=''>  def discovery(fields: Option[String]) = </span><span style='background: #F0ADAD'>Action { request =>
+</span>74 <span style=''></span><span style='background: #F0ADAD'>    Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
+</span>75 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>76 <span style=''>
+</span>77 <span style=''>  /**
+</span>78 <span style=''>    * Create an Action to render an HTML page with a welcome message.
+</span>79 <span style=''>    * The configuration in the `routes` file means that this method
+</span>80 <span style=''>    * will be called when the application receives a `GET` request with
+</span>81 <span style=''>    * a path of `/`.
+</span>82 <span style=''>    */
+</span>83 <span style=''>  def index = </span><span style='background: #AEF1AE'>Action {
+</span>84 <span style=''></span><span style='background: #AEF1AE'>    Ok(views.html.index("Your new application is ready."))
+</span>85 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>86 <span style=''>
+</span>87 <span style=''>  /**
+</span>88 <span style=''>    * login with JSON (from Angular / form)
+</span>89 <span style=''>    * {"username":"akmoch","password":"testpass123"}
+</span>90 <span style=''>    *
+</span>91 <span style=''>    * Create the authentication token and sets the cookie [[AuthTokenCookieKey]]
+</span>92 <span style=''>    * for AngularJS to use also in X-XSRF-TOKEN in HTTP header.
+</span>93 <span style=''>    *
+</span>94 <span style=''>    * @return
+</span>95 <span style=''>    */
+</span>96 <span style=''>  def login = </span><span style='background: #AEF1AE'>Action(parse.json) { implicit request =>
+</span>97 <span style=''></span><span style='background: #AEF1AE'>    request.body.validate[LoginCredentials].fold(
+</span>98 <span style=''></span><span style='background: #AEF1AE'>      errors => {
+</span>99 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>logger.error(JsError.toJson(errors).toString())</span><span style='background: #AEF1AE'>
+</span>100 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))</span><span style='background: #AEF1AE'>
+</span>101 <span style=''></span><span style='background: #AEF1AE'>      },
+</span>102 <span style=''></span><span style='background: #AEF1AE'>      valid = credentials => {
+</span>103 <span style=''></span><span style='background: #AEF1AE'>        // find user in db and compare password stuff
+</span>104 <span style=''></span><span style='background: #AEF1AE'>        userDAO.authenticate(credentials.username, credentials.password).fold {
+</span>105 <span style=''></span><span style='background: #AEF1AE'>          logger.error("User or password wrong.")
+</span>106 <span style=''></span><span style='background: #AEF1AE'>          Unauthorized(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
+</span>107 <span style=''></span><span style='background: #AEF1AE'>        } { user =>
+</span>108 <span style=''></span><span style='background: #AEF1AE'>          val uaIdentifier: String = </span><span style='background: #F0ADAD'>request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)</span><span style='background: #AEF1AE'>
+</span>109 <span style=''></span><span style='background: #AEF1AE'>          // logger.debug(s"Logging in username from $uaIdentifier")
+</span>110 <span style=''></span><span style='background: #AEF1AE'>          val token = </span><span style='background: #F0ADAD'>passwordHashing.createSessionCookie(user.username, uaIdentifier)</span><span style='background: #AEF1AE'>
+</span>111 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>cache.set(token, user.username)</span><span style='background: #AEF1AE'>
+</span>112 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username, "userprofile" -> user.asProfileJs()))
+</span>113 <span style=''></span><span style='background: #F0ADAD'>            .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))</span><span style='background: #AEF1AE'>
+</span>114 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>115 <span style=''></span><span style='background: #AEF1AE'>      })
+</span>116 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>117 <span style=''>
+</span>118 <span style=''>  /**
+</span>119 <span style=''>    * Log-out a user. Invalidates the authentication token.
+</span>120 <span style=''>    *
+</span>121 <span style=''>    * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
+</span>122 <span style=''>    * X-XSRF-TOKEN in HTTP header.
+</span>123 <span style=''>    */
+</span>124 <span style=''>  def logout = </span><span style='background: #AEF1AE'>HasToken(parse.empty) { token =>
+</span>125 <span style=''></span><span style='background: #AEF1AE'>    username => implicit request =>
+</span>126 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
+</span>127 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
+</span>128 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>129 <span style=''>
+</span>130 <span style=''>  /**
+</span>131 <span style=''>    * part of OAuth2 Flow for Google Login in
+</span>132 <span style=''>    *
+</span>133 <span style=''>    * @return
+</span>134 <span style=''>    */
+</span>135 <span style=''>  def gconnect = </span><span style='background: #AEF1AE'>Action { implicit request =>
+</span>136 <span style=''></span><span style='background: #AEF1AE'>    val data = request.body.asJson.getOrElse(</span><span style='background: #F0ADAD'>Json.obj("status" -> "ERR", "message" -> "gconnect went south")</span><span style='background: #AEF1AE'>)
+</span>137 <span style=''></span><span style='background: #AEF1AE'>    logger.debug(</span><span style='background: #F0ADAD'>data.toString()</span><span style='background: #AEF1AE'>)
+</span>138 <span style=''></span><span style='background: #AEF1AE'>    // do lots of Google OAuth2 stuff
+</span>139 <span style=''></span><span style='background: #AEF1AE'>    Unauthorized(data)
+</span>140 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>141 <span style=''>
+</span>142 <span style=''>  /**
+</span>143 <span style=''>    * Disconnect the Google login
+</span>144 <span style=''>    *
+</span>145 <span style=''>    * @return
+</span>146 <span style=''>    */
+</span>147 <span style=''>  def gdisconnect = </span><span style='background: #AEF1AE'>HasToken(parse.empty) { token =>
+</span>148 <span style=''></span><span style='background: #AEF1AE'>    username => implicit request =>
+</span>149 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
+</span>150 <span style=''></span><span style='background: #AEF1AE'>      // do some Google OAuth2 unregisteR
+</span>151 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
+</span>152 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>153 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -187,15 +188,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          46
+          47
         </td>
         <td>
           142
         </td>
         <td>
-          1635
+          1631
           -
-          1643
+          1639
         </td>
         <td>
           Select
@@ -208,15 +209,15 @@
         </td>
       </tr><tr>
         <td>
-          47
+          48
         </td>
         <td>
           143
         </td>
         <td>
-          1690
+          1686
           -
-          1696
+          1692
         </td>
         <td>
           Select
@@ -229,15 +230,15 @@
         </td>
       </tr><tr>
         <td>
-          54
+          55
         </td>
         <td>
           149
         </td>
         <td>
-          1846
+          1842
           -
-          2193
+          2189
         </td>
         <td>
           Apply
@@ -250,15 +251,15 @@
         </td>
       </tr><tr>
         <td>
-          55
+          56
         </td>
         <td>
           144
         </td>
         <td>
-          1856
+          1852
           -
-          1892
+          1888
         </td>
         <td>
           Apply
@@ -271,15 +272,15 @@
         </td>
       </tr><tr>
         <td>
-          56
+          57
         </td>
         <td>
           145
         </td>
         <td>
-          1898
+          1894
           -
-          1912
+          1908
         </td>
         <td>
           Apply
@@ -292,15 +293,15 @@
         </td>
       </tr><tr>
         <td>
-          57
+          58
         </td>
         <td>
           146
         </td>
         <td>
-          1918
+          1914
           -
-          1972
+          1968
         </td>
         <td>
           Apply
@@ -313,15 +314,15 @@
         </td>
       </tr><tr>
         <td>
-          58
+          59
         </td>
         <td>
           147
         </td>
         <td>
-          1978
+          1974
           -
-          2139
+          2135
         </td>
         <td>
           Apply
@@ -334,15 +335,15 @@
         </td>
       </tr><tr>
         <td>
-          59
+          60
         </td>
         <td>
           148
         </td>
         <td>
-          2145
+          2141
           -
-          2189
+          2185
         </td>
         <td>
           Apply
@@ -355,15 +356,15 @@
         </td>
       </tr><tr>
         <td>
-          68
+          69
         </td>
         <td>
           152
         </td>
         <td>
-          2310
+          2306
           -
-          2372
+          2368
         </td>
         <td>
           Apply
@@ -376,15 +377,15 @@
         </td>
       </tr><tr>
         <td>
-          69
+          70
         </td>
         <td>
           151
         </td>
         <td>
-          2334
+          2330
           -
-          2368
+          2364
         </td>
         <td>
           Apply
@@ -397,15 +398,15 @@
         </td>
       </tr><tr>
         <td>
-          69
+          70
         </td>
         <td>
           150
         </td>
         <td>
-          2356
+          2352
           -
-          2363
+          2359
         </td>
         <td>
           Select
@@ -418,15 +419,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          73
         </td>
         <td>
           167
         </td>
         <td>
-          2416
+          2412
           -
-          2510
+          2506
         </td>
         <td>
           Apply
@@ -439,15 +440,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           155
         </td>
         <td>
-          2464
+          2460
           -
-          2464
+          2460
         </td>
         <td>
           Select
@@ -460,15 +461,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           164
         </td>
         <td>
-          2442
+          2438
           -
-          2442
+          2438
         </td>
         <td>
           Select
@@ -481,15 +482,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           158
         </td>
         <td>
-          2470
+          2466
           -
-          2476
+          2472
         </td>
         <td>
           Literal
@@ -502,15 +503,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           166
         </td>
         <td>
-          2440
+          2436
           -
-          2506
+          2502
         </td>
         <td>
           ApplyToImplicitArgs
@@ -523,15 +524,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           160
         </td>
         <td>
-          2480
+          2476
           -
-          2480
+          2476
         </td>
         <td>
           Select
@@ -544,15 +545,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           163
         </td>
         <td>
-          2443
+          2439
           -
-          2505
+          2501
         </td>
         <td>
           Apply
@@ -565,15 +566,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           154
         </td>
         <td>
-          2464
+          2460
           -
-          2468
+          2464
         </td>
         <td>
           Literal
@@ -586,15 +587,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           157
         </td>
         <td>
-          2452
+          2448
           -
-          2468
+          2464
         </td>
         <td>
           Apply
@@ -607,15 +608,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           156
         </td>
         <td>
-          2464
+          2460
           -
-          2468
+          2464
         </td>
         <td>
           ApplyToImplicitArgs
@@ -628,15 +629,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           165
         </td>
         <td>
-          2442
+          2438
           -
-          2442
+          2438
         </td>
         <td>
           ApplyToImplicitArgs
@@ -649,15 +650,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           159
         </td>
         <td>
-          2480
+          2476
           -
-          2504
+          2500
         </td>
         <td>
           Literal
@@ -670,15 +671,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           153
         </td>
         <td>
-          2452
+          2448
           -
-          2460
+          2456
         </td>
         <td>
           Literal
@@ -691,15 +692,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           162
         </td>
         <td>
-          2470
+          2466
           -
-          2504
+          2500
         </td>
         <td>
           Apply
@@ -712,15 +713,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          74
         </td>
         <td>
           161
         </td>
         <td>
-          2480
+          2476
           -
-          2504
+          2500
         </td>
         <td>
           ApplyToImplicitArgs
@@ -733,15 +734,15 @@
         </td>
       </tr><tr>
         <td>
-          82
+          83
         </td>
         <td>
           174
         </td>
         <td>
-          2770
+          2766
           -
-          2841
+          2837
         </td>
         <td>
           Apply
@@ -754,15 +755,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           173
         </td>
         <td>
-          2783
+          2779
           -
-          2837
+          2833
         </td>
         <td>
           ApplyToImplicitArgs
@@ -775,15 +776,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           169
         </td>
         <td>
-          2785
+          2781
           -
-          2785
+          2781
         </td>
         <td>
           Select
@@ -796,15 +797,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           172
         </td>
         <td>
-          2785
+          2781
           -
-          2785
+          2781
         </td>
         <td>
           ApplyToImplicitArgs
@@ -817,15 +818,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           168
         </td>
         <td>
-          2786
+          2782
           -
-          2836
+          2832
         </td>
         <td>
           Apply
@@ -838,15 +839,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           171
         </td>
         <td>
-          2785
+          2781
           -
-          2785
+          2781
         </td>
         <td>
           ApplyToImplicitArgs
@@ -859,15 +860,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          84
         </td>
         <td>
           170
         </td>
         <td>
-          2785
+          2781
           -
-          2785
+          2781
         </td>
         <td>
           Select
@@ -880,15 +881,15 @@
         </td>
       </tr><tr>
         <td>
-          95
+          96
         </td>
         <td>
           175
         </td>
         <td>
-          3145
+          3141
           -
-          3155
+          3151
         </td>
         <td>
           Select
@@ -901,15 +902,15 @@
         </td>
       </tr><tr>
         <td>
-          95
+          96
         </td>
         <td>
           250
         </td>
         <td>
-          3138
+          3134
           -
-          4265
+          4261
         </td>
         <td>
           Apply
@@ -918,13 +919,13 @@
           play.api.mvc.ActionBuilder.apply
         </td>
         <td style="background: #AEF1AE">
-          play.api.mvc.Action.apply[play.api.libs.json.JsValue](HomeController.this.parse.json)(((implicit request: play.api.mvc.Request[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJson).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+          play.api.mvc.Action.apply[play.api.libs.json.JsValue](HomeController.this.parse.json)(((implicit request: play.api.mvc.Request[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.users.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJson).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
   HomeController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
   HomeController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-}), ((credentials: models.LoginCredentials) =&gt; HomeController.this.userDAO.authenticate(credentials.username, credentials.password).fold[play.api.mvc.Result]({
+}), ((credentials: models.users.LoginCredentials) =&gt; HomeController.this.userDAO.authenticate(credentials.username, credentials.password).fold[play.api.mvc.Result]({
   HomeController.this.logger.error(&quot;User or password wrong.&quot;);
   HomeController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Username or password wrong.&quot;)(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-})(((user: models.User) =&gt; {
+})(((user: models.users.User) =&gt; {
   val uaIdentifier: String = request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault);
   val token: String = HomeController.this.passwordHashing.createSessionCookie(user.username, uaIdentifier);
   HomeController.this.cache.set(token, user.username, HomeController.this.cache.set$default$3);
@@ -942,15 +943,15 @@
         </td>
       </tr><tr>
         <td>
-          96
+          97
         </td>
         <td>
           176
         </td>
         <td>
-          3204
+          3200
           -
-          3204
+          3200
         </td>
         <td>
           Select
@@ -963,15 +964,15 @@
         </td>
       </tr><tr>
         <td>
-          96
+          97
         </td>
         <td>
           249
         </td>
         <td>
-          3183
+          3179
           -
-          4261
+          4257
         </td>
         <td>
           Apply
@@ -980,13 +981,13 @@
           play.api.libs.json.JsResult.fold
         </td>
         <td style="background: #AEF1AE">
-          request.body.validate[models.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJson).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+          request.body.validate[models.users.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJson).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
   HomeController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
   HomeController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-}), ((credentials: models.LoginCredentials) =&gt; HomeController.this.userDAO.authenticate(credentials.username, credentials.password).fold[play.api.mvc.Result]({
+}), ((credentials: models.users.LoginCredentials) =&gt; HomeController.this.userDAO.authenticate(credentials.username, credentials.password).fold[play.api.mvc.Result]({
   HomeController.this.logger.error(&quot;User or password wrong.&quot;);
   HomeController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Username or password wrong.&quot;)(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-})(((user: models.User) =&gt; {
+})(((user: models.users.User) =&gt; {
   val uaIdentifier: String = request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault);
   val token: String = HomeController.this.passwordHashing.createSessionCookie(user.username, uaIdentifier);
   HomeController.this.cache.set(token, user.username, HomeController.this.cache.set$default$3);
@@ -1004,15 +1005,15 @@
         </td>
       </tr><tr>
         <td>
-          98
+          99
         </td>
         <td>
           178
         </td>
         <td>
-          3255
+          3251
           -
-          3302
+          3298
         </td>
         <td>
           Apply
@@ -1025,15 +1026,15 @@
         </td>
       </tr><tr>
         <td>
-          98
+          99
         </td>
         <td>
           177
         </td>
         <td>
-          3268
+          3264
           -
-          3301
+          3297
         </td>
         <td>
           Apply
@@ -1046,15 +1047,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           182
         </td>
         <td>
-          3343
+          3339
           -
-          3348
+          3344
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1067,15 +1068,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           191
         </td>
         <td>
-          3321
+          3317
           -
-          3321
+          3317
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1088,15 +1089,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           185
         </td>
         <td>
-          3363
+          3359
           -
-          3385
+          3381
         </td>
         <td>
           Apply
@@ -1109,15 +1110,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           184
         </td>
         <td>
-          3350
+          3346
           -
-          3359
+          3355
         </td>
         <td>
           Literal
@@ -1130,15 +1131,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           187
         </td>
         <td>
-          3363
+          3359
           -
-          3385
+          3381
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1151,15 +1152,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           181
         </td>
         <td>
-          3343
+          3339
           -
-          3343
+          3339
         </td>
         <td>
           Select
@@ -1172,15 +1173,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           190
         </td>
         <td>
-          3321
+          3317
           -
-          3321
+          3317
         </td>
         <td>
           Select
@@ -1193,15 +1194,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           189
         </td>
         <td>
-          3322
+          3318
           -
-          3386
+          3382
         </td>
         <td>
           Apply
@@ -1214,15 +1215,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           180
         </td>
         <td>
-          3343
+          3339
           -
-          3348
+          3344
         </td>
         <td>
           Literal
@@ -1235,15 +1236,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           183
         </td>
         <td>
-          3331
+          3327
           -
-          3348
+          3344
         </td>
         <td>
           Apply
@@ -1256,15 +1257,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           192
         </td>
         <td>
-          3311
+          3307
           -
-          3387
+          3383
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1277,15 +1278,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           186
         </td>
         <td>
-          3377
+          3373
           -
-          3377
+          3373
         </td>
         <td>
           Select
@@ -1298,15 +1299,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           179
         </td>
         <td>
-          3331
+          3327
           -
-          3339
+          3335
         </td>
         <td>
           Literal
@@ -1319,15 +1320,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          100
         </td>
         <td>
           188
         </td>
         <td>
-          3350
+          3346
           -
-          3385
+          3381
         </td>
         <td>
           Apply
@@ -1340,57 +1341,57 @@
         </td>
       </tr><tr>
         <td>
-          103
+          104
         </td>
         <td>
           194
         </td>
         <td>
-          3533
+          3529
           -
-          3553
+          3549
         </td>
         <td>
           Select
         </td>
         <td>
-          models.LoginCredentials.password
+          models.users.LoginCredentials.password
         </td>
         <td style="background: #AEF1AE">
           credentials.password
         </td>
       </tr><tr>
         <td>
-          103
+          104
         </td>
         <td>
           193
         </td>
         <td>
-          3511
+          3507
           -
-          3531
+          3527
         </td>
         <td>
           Select
         </td>
         <td>
-          models.LoginCredentials.username
+          models.users.LoginCredentials.username
         </td>
         <td style="background: #AEF1AE">
           credentials.username
         </td>
       </tr><tr>
         <td>
-          104
+          105
         </td>
         <td>
           195
         </td>
         <td>
-          3572
+          3568
           -
-          3611
+          3607
         </td>
         <td>
           Apply
@@ -1403,15 +1404,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           200
         </td>
         <td>
-          3644
+          3640
           -
-          3661
+          3657
         </td>
         <td>
           Apply
@@ -1424,15 +1425,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           209
         </td>
         <td>
-          3622
+          3618
           -
-          3707
+          3703
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1445,15 +1446,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           202
         </td>
         <td>
-          3676
+          3672
           -
-          3705
+          3701
         </td>
         <td>
           Literal
@@ -1466,15 +1467,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           205
         </td>
         <td>
-          3663
+          3659
           -
-          3705
+          3701
         </td>
         <td>
           Apply
@@ -1487,15 +1488,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           196
         </td>
         <td>
-          3644
+          3640
           -
-          3652
+          3648
         </td>
         <td>
           Literal
@@ -1508,15 +1509,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           199
         </td>
         <td>
-          3656
+          3652
           -
-          3661
+          3657
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1529,15 +1530,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           208
         </td>
         <td>
-          3634
+          3630
           -
-          3634
+          3630
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1550,15 +1551,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           207
         </td>
         <td>
-          3634
+          3630
           -
-          3634
+          3630
         </td>
         <td>
           Select
@@ -1571,15 +1572,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           198
         </td>
         <td>
-          3656
+          3652
           -
-          3656
+          3652
         </td>
         <td>
           Select
@@ -1592,15 +1593,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           201
         </td>
         <td>
-          3663
+          3659
           -
-          3672
+          3668
         </td>
         <td>
           Literal
@@ -1613,15 +1614,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           204
         </td>
         <td>
-          3676
+          3672
           -
-          3705
+          3701
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1634,15 +1635,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           203
         </td>
         <td>
-          3676
+          3672
           -
-          3676
+          3672
         </td>
         <td>
           Select
@@ -1655,15 +1656,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           197
         </td>
         <td>
-          3656
+          3652
           -
-          3661
+          3657
         </td>
         <td>
           Literal
@@ -1676,15 +1677,15 @@
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
           206
         </td>
         <td>
-          3635
+          3631
           -
-          3706
+          3702
         </td>
         <td>
           Apply
@@ -1697,15 +1698,15 @@
         </td>
       </tr><tr>
         <td>
-          106
+          107
         </td>
         <td>
           248
         </td>
         <td>
-          3490
+          3486
           -
-          4252
+          4248
         </td>
         <td>
           Apply
@@ -1717,7 +1718,7 @@
           HomeController.this.userDAO.authenticate(credentials.username, credentials.password).fold[play.api.mvc.Result]({
   HomeController.this.logger.error(&quot;User or password wrong.&quot;);
   HomeController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Username or password wrong.&quot;)(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-})(((user: models.User) =&gt; {
+})(((user: models.users.User) =&gt; {
   val uaIdentifier: String = request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault);
   val token: String = HomeController.this.passwordHashing.createSessionCookie(user.username, uaIdentifier);
   HomeController.this.cache.set(token, user.username, HomeController.this.cache.set$default$3);
@@ -1735,15 +1736,15 @@
         </td>
       </tr><tr>
         <td>
-          107
+          108
         </td>
         <td>
           211
         </td>
         <td>
-          3812
+          3808
           -
-          3834
+          3830
         </td>
         <td>
           Select
@@ -1756,15 +1757,15 @@
         </td>
       </tr><tr>
         <td>
-          107
+          108
         </td>
         <td>
           210
         </td>
         <td>
-          3785
+          3781
           -
-          3800
+          3796
         </td>
         <td>
           Select
@@ -1777,15 +1778,15 @@
         </td>
       </tr><tr>
         <td>
-          107
+          108
         </td>
         <td>
           212
         </td>
         <td>
-          3765
+          3761
           -
-          3835
+          3831
         </td>
         <td>
           Apply
@@ -1798,15 +1799,15 @@
         </td>
       </tr><tr>
         <td>
-          109
+          110
         </td>
         <td>
           214
         </td>
         <td>
-          3927
+          3923
           -
-          3991
+          3987
         </td>
         <td>
           Apply
@@ -1819,36 +1820,36 @@
         </td>
       </tr><tr>
         <td>
-          109
+          110
         </td>
         <td>
           213
         </td>
         <td>
-          3963
+          3959
           -
-          3976
+          3972
         </td>
         <td>
           Select
         </td>
         <td>
-          models.User.username
+          models.users.User.username
         </td>
         <td style="background: #F0ADAD">
           user.username
         </td>
       </tr><tr>
         <td>
-          110
+          111
         </td>
         <td>
           217
         </td>
         <td>
-          4002
+          3998
           -
-          4033
+          4029
         </td>
         <td>
           Apply
@@ -1861,15 +1862,15 @@
         </td>
       </tr><tr>
         <td>
-          110
+          111
         </td>
         <td>
           216
         </td>
         <td>
-          4008
+          4004
           -
-          4008
+          4004
         </td>
         <td>
           Select
@@ -1882,36 +1883,36 @@
         </td>
       </tr><tr>
         <td>
-          110
+          111
         </td>
         <td>
           215
         </td>
         <td>
-          4019
+          4015
           -
-          4032
+          4028
         </td>
         <td>
           Select
         </td>
         <td>
-          models.User.username
+          models.users.User.username
         </td>
         <td style="background: #F0ADAD">
           user.username
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           218
         </td>
         <td>
-          4056
+          4052
           -
-          4064
+          4060
         </td>
         <td>
           Literal
@@ -1924,15 +1925,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           227
         </td>
         <td>
-          4092
+          4088
           -
-          4102
+          4098
         </td>
         <td>
           Literal
@@ -1945,15 +1946,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           236
         </td>
         <td>
-          4121
+          4117
           -
-          4156
+          4152
         </td>
         <td>
           Apply
@@ -1966,15 +1967,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           226
         </td>
         <td>
-          4074
+          4070
           -
-          4090
+          4086
         </td>
         <td>
           Apply
@@ -1987,15 +1988,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           235
         </td>
         <td>
-          4138
+          4134
           -
-          4156
+          4152
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2008,15 +2009,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           220
         </td>
         <td>
-          4068
+          4064
           -
-          4068
+          4064
         </td>
         <td>
           Select
@@ -2029,15 +2030,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           229
         </td>
         <td>
-          4111
+          4107
           -
-          4111
+          4107
         </td>
         <td>
           Select
@@ -2050,15 +2051,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           238
         </td>
         <td>
-          4046
+          4042
           -
-          4046
+          4042
         </td>
         <td>
           Select
@@ -2071,15 +2072,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           223
         </td>
         <td>
-          4074
+          4070
           -
-          4081
+          4077
         </td>
         <td>
           Literal
@@ -2092,15 +2093,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           232
         </td>
         <td>
-          4121
+          4117
           -
-          4134
+          4130
         </td>
         <td>
           Literal
@@ -2113,15 +2114,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           225
         </td>
         <td>
-          4085
+          4081
           -
-          4090
+          4086
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2134,15 +2135,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           234
         </td>
         <td>
-          4154
+          4150
           -
-          4154
+          4150
         </td>
         <td>
           Select
@@ -2155,36 +2156,36 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           228
         </td>
         <td>
-          4106
+          4102
           -
-          4119
+          4115
         </td>
         <td>
           Select
         </td>
         <td>
-          models.User.username
+          models.users.User.username
         </td>
         <td style="background: #F0ADAD">
           user.username
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           219
         </td>
         <td>
-          4068
+          4064
           -
-          4072
+          4068
         </td>
         <td>
           Literal
@@ -2197,15 +2198,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           237
         </td>
         <td>
-          4047
+          4043
           -
-          4157
+          4153
         </td>
         <td>
           Apply
@@ -2218,15 +2219,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           222
         </td>
         <td>
-          4056
+          4052
           -
-          4072
+          4068
         </td>
         <td>
           Apply
@@ -2239,15 +2240,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           231
         </td>
         <td>
-          4092
+          4088
           -
-          4119
+          4115
         </td>
         <td>
           Apply
@@ -2260,15 +2261,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           230
         </td>
         <td>
-          4106
+          4102
           -
-          4119
+          4115
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2281,15 +2282,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           221
         </td>
         <td>
-          4068
+          4064
           -
-          4072
+          4068
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2302,15 +2303,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           239
         </td>
         <td>
-          4046
+          4042
           -
-          4046
+          4042
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2323,15 +2324,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           224
         </td>
         <td>
-          4085
+          4081
           -
-          4085
+          4081
         </td>
         <td>
           Select
@@ -2344,36 +2345,36 @@
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
           233
         </td>
         <td>
-          4138
+          4134
           -
-          4156
+          4152
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.User.asProfileJs
+          models.users.User.asProfileJs
         </td>
         <td style="background: #F0ADAD">
           user.asProfileJs()
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           245
         </td>
         <td>
-          4184
+          4180
           -
-          4184
+          4180
         </td>
         <td>
           Select
@@ -2386,15 +2387,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           244
         </td>
         <td>
-          4184
+          4180
           -
-          4184
+          4180
         </td>
         <td>
           Select
@@ -2407,15 +2408,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           247
         </td>
         <td>
-          4044
+          4040
           -
-          4242
+          4238
         </td>
         <td>
           Apply
@@ -2437,15 +2438,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           241
         </td>
         <td>
-          4218
+          4214
           -
-          4222
+          4218
         </td>
         <td>
           Select
@@ -2458,15 +2459,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           240
         </td>
         <td>
-          4191
+          4187
           -
-          4209
+          4205
         </td>
         <td>
           Select
@@ -2479,15 +2480,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           243
         </td>
         <td>
-          4184
+          4180
           -
-          4184
+          4180
         </td>
         <td>
           Select
@@ -2500,15 +2501,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           246
         </td>
         <td>
-          4184
+          4180
           -
-          4241
+          4237
         </td>
         <td>
           Apply
@@ -2521,15 +2522,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
           242
         </td>
         <td>
-          4235
+          4231
           -
-          4240
+          4236
         </td>
         <td>
           Literal
@@ -2542,15 +2543,15 @@
         </td>
       </tr><tr>
         <td>
-          123
+          124
         </td>
         <td>
           259
         </td>
         <td>
-          4480
+          4476
           -
-          4650
+          4646
         </td>
         <td>
           Apply
@@ -2566,15 +2567,15 @@
         </td>
       </tr><tr>
         <td>
-          123
+          124
         </td>
         <td>
           251
         </td>
         <td>
-          4489
+          4485
           -
-          4500
+          4496
         </td>
         <td>
           Select
@@ -2587,15 +2588,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          126
         </td>
         <td>
           252
         </td>
         <td>
-          4555
+          4551
           -
-          4574
+          4570
         </td>
         <td>
           Apply
@@ -2608,15 +2609,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           254
         </td>
         <td>
-          4602
+          4598
           -
-          4602
+          4598
         </td>
         <td>
           Select
@@ -2629,15 +2630,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           253
         </td>
         <td>
-          4626
+          4622
           -
-          4644
+          4640
         </td>
         <td>
           Select
@@ -2650,15 +2651,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           256
         </td>
         <td>
-          4602
+          4598
           -
-          4602
+          4598
         </td>
         <td>
           Select
@@ -2671,15 +2672,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           258
         </td>
         <td>
-          4581
+          4577
           -
-          4646
+          4642
         </td>
         <td>
           Apply
@@ -2692,15 +2693,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           255
         </td>
         <td>
-          4602
+          4598
           -
-          4602
+          4598
         </td>
         <td>
           Select
@@ -2713,15 +2714,15 @@
         </td>
       </tr><tr>
         <td>
-          126
+          127
         </td>
         <td>
           257
         </td>
         <td>
-          4602
+          4598
           -
-          4645
+          4641
         </td>
         <td>
           Apply
@@ -2734,15 +2735,15 @@
         </td>
       </tr><tr>
         <td>
-          134
+          135
         </td>
         <td>
           277
         </td>
         <td>
-          4748
+          4744
           -
-          4985
+          4981
         </td>
         <td>
           Apply
@@ -2759,15 +2760,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           262
         </td>
         <td>
-          4843
+          4839
           -
-          4843
+          4839
         </td>
         <td>
           Select
@@ -2780,15 +2781,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           271
         </td>
         <td>
-          4792
+          4788
           -
-          4886
+          4882
         </td>
         <td>
           Apply
@@ -2801,15 +2802,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           265
         </td>
         <td>
-          4850
+          4846
           -
-          4859
+          4855
         </td>
         <td>
           Literal
@@ -2822,15 +2823,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           268
         </td>
         <td>
-          4863
+          4859
           -
-          4884
+          4880
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2843,15 +2844,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           267
         </td>
         <td>
-          4863
+          4859
           -
-          4863
+          4859
         </td>
         <td>
           Select
@@ -2864,15 +2865,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           270
         </td>
         <td>
-          4822
+          4818
           -
-          4885
+          4881
         </td>
         <td>
           Apply
@@ -2885,15 +2886,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           261
         </td>
         <td>
-          4843
+          4839
           -
-          4848
+          4844
         </td>
         <td>
           Literal
@@ -2906,15 +2907,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           264
         </td>
         <td>
-          4831
+          4827
           -
-          4848
+          4844
         </td>
         <td>
           Apply
@@ -2927,15 +2928,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           263
         </td>
         <td>
-          4843
+          4839
           -
-          4848
+          4844
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2948,15 +2949,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           266
         </td>
         <td>
-          4863
+          4859
           -
-          4884
+          4880
         </td>
         <td>
           Literal
@@ -2969,15 +2970,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           260
         </td>
         <td>
-          4831
+          4827
           -
-          4839
+          4835
         </td>
         <td>
           Literal
@@ -2990,15 +2991,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          136
         </td>
         <td>
           269
         </td>
         <td>
-          4850
+          4846
           -
-          4884
+          4880
         </td>
         <td>
           Apply
@@ -3011,15 +3012,15 @@
         </td>
       </tr><tr>
         <td>
-          136
+          137
         </td>
         <td>
           273
         </td>
         <td>
-          4891
+          4887
           -
-          4920
+          4916
         </td>
         <td>
           Apply
@@ -3032,15 +3033,15 @@
         </td>
       </tr><tr>
         <td>
-          136
+          137
         </td>
         <td>
           272
         </td>
         <td>
-          4904
+          4900
           -
-          4919
+          4915
         </td>
         <td>
           Apply
@@ -3053,15 +3054,15 @@
         </td>
       </tr><tr>
         <td>
-          138
+          139
         </td>
         <td>
           274
         </td>
         <td>
-          4975
+          4971
           -
-          4975
+          4971
         </td>
         <td>
           Select
@@ -3074,15 +3075,15 @@
         </td>
       </tr><tr>
         <td>
-          138
+          139
         </td>
         <td>
           276
         </td>
         <td>
-          4963
+          4959
           -
-          4981
+          4977
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3095,15 +3096,15 @@
         </td>
       </tr><tr>
         <td>
-          138
+          139
         </td>
         <td>
           275
         </td>
         <td>
-          4975
+          4971
           -
-          4975
+          4971
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3116,15 +3117,15 @@
         </td>
       </tr><tr>
         <td>
-          146
+          147
         </td>
         <td>
           286
         </td>
         <td>
-          5074
+          5070
           -
-          5286
+          5282
         </td>
         <td>
           Apply
@@ -3140,15 +3141,15 @@
         </td>
       </tr><tr>
         <td>
-          146
+          147
         </td>
         <td>
           278
         </td>
         <td>
-          5083
+          5079
           -
-          5094
+          5090
         </td>
         <td>
           Select
@@ -3161,15 +3162,15 @@
         </td>
       </tr><tr>
         <td>
-          148
+          149
         </td>
         <td>
           279
         </td>
         <td>
-          5149
+          5145
           -
-          5168
+          5164
         </td>
         <td>
           Apply
@@ -3182,15 +3183,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           280
         </td>
         <td>
-          5262
+          5258
           -
-          5280
+          5276
         </td>
         <td>
           Select
@@ -3203,15 +3204,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           283
         </td>
         <td>
-          5238
+          5234
           -
-          5238
+          5234
         </td>
         <td>
           Select
@@ -3224,15 +3225,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           285
         </td>
         <td>
-          5217
+          5213
           -
-          5282
+          5278
         </td>
         <td>
           Apply
@@ -3245,15 +3246,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           282
         </td>
         <td>
-          5238
+          5234
           -
-          5238
+          5234
         </td>
         <td>
           Select
@@ -3266,15 +3267,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           281
         </td>
         <td>
-          5238
+          5234
           -
-          5238
+          5234
         </td>
         <td>
           Select
@@ -3287,15 +3288,15 @@
         </td>
       </tr><tr>
         <td>
-          150
+          151
         </td>
         <td>
           284
         </td>
         <td>
-          5238
+          5234
           -
-          5281
+          5277
         </td>
         <td>
           Apply

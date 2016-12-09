@@ -20,7 +20,7 @@
 import com.google.inject.AbstractModule
 import java.time.Clock
 
-import models.UserDAO
+import models.users.UserDAO
 import services.{ApplicationTimer, AtomicCounter, Counter, EmailService}
 import utils.PasswordHashing
 

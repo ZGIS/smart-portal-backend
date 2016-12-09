@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package models
+package models.users
 
 import java.time.ZonedDateTime
 

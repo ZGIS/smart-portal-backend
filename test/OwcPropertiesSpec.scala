@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+import java.net.InetAddress
 import java.time.{ZoneId, ZonedDateTime}
 
 import anorm.SQL
@@ -31,6 +32,7 @@ import models.owc._
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
 import play.api.{Application, Configuration}
 import play.api.inject.guice.GuiceApplicationBuilder
+import java.util.UUID
 
 /**
   * Test Spec for [[OwcProperties]]
@@ -57,101 +59,111 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
     "handle OwcAuthor with DB" in {
       withTestDatabase { database =>
 
-        val author1 = OwcAuthor("Alex", None, None)
-        val author2 = OwcAuthor("Alex K", Some(""), None)
-        val author3 = OwcAuthor("Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+        val author1 = OwcAuthor(UUID.randomUUID(), "Alex", None, None)
+        val author2 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
+        val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
 
-        val owcDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        owcDao.getAllOwcAuthors.size mustEqual 0
-        owcDao.createOwcAuthor(author1) mustEqual Some(author1)
-        owcDao.createOwcAuthor(author2) mustEqual Some(author2)
-        owcDao.createOwcAuthor(author3) mustEqual Some(author3)
+        owcPropsDao.getAllOwcAuthors.size mustEqual 0
+        owcPropsDao.createOwcAuthor(author1) mustEqual Some(author1)
+        owcPropsDao.createOwcAuthor(author2) mustEqual Some(author2)
+        owcPropsDao.createOwcAuthor(author3) mustEqual Some(author3)
 
-        val authors = owcDao.findOwcAuthorByName("Alex")
+        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcAuthor(author3)
+        thrown.getErrorCode mustEqual 23505
+
+        val authors = owcPropsDao.findOwcAuthorByName("Alex")
         authors.size mustEqual 1
         authors.headOption.get.email mustBe None
 
-        owcDao.findOwcAuthorByName("Alex Kmoch").headOption.get.uri mustEqual Some("http://gns.cri.nz")
+        owcPropsDao.findOwcAuthorByName("Alex Kmoch").headOption.get.uri mustEqual Some("http://gns.cri.nz")
 
-        owcDao.deleteOwcAuthor("Alex K") mustEqual true
+        owcPropsDao.deleteOwcAuthor(author2) mustEqual true
 
-        val author3_1 = OwcAuthor("Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("https://www.gns.cri.nz"))
-        owcDao.updateOwcAuthor(author3_1).get mustEqual author3_1
-        owcDao.findOwcAuthorByName(author3_1.name).headOption.get.uri.get mustEqual "https://www.gns.cri.nz"
+        val author3_1 = OwcAuthor(author3.uuid, author3.name, author3.email, Some("https://www.gns.cri.nz"))
+        owcPropsDao.updateOwcAuthor(author3_1).get mustEqual author3_1
+        owcPropsDao.findOwcAuthorByName(author3_1.name).headOption.get.uri.get mustEqual "https://www.gns.cri.nz"
 
       }
     }
 
     "handle OwcCategory with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val category1 = OwcCategory("view-groups", "sac_add", Some("Informative Layers"))
-        val category2 = OwcCategory("search-domain", "Uncertainty", Some("Uncertainty of Models"))
-        val category3 = OwcCategory("glossary", "uncertainty", Some("margin of error of a measurement"))
+        val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
+        val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
+        val category3 = OwcCategory(UUID.randomUUID(), "glossary", "uncertainty", Some("margin of error of a measurement"))
 
-        owcDao.getAllOwcCategories.size mustEqual 0
-        owcDao.createOwcCategory(category1) mustEqual Some(category1)
-        owcDao.createOwcCategory(category2) mustEqual Some(category2)
-        owcDao.createOwcCategory(category3) mustEqual Some(category3)
+        owcPropsDao.getAllOwcCategories.size mustEqual 0
+        owcPropsDao.createOwcCategory(category1) mustEqual Some(category1)
+        owcPropsDao.createOwcCategory(category2) mustEqual Some(category2)
+        owcPropsDao.createOwcCategory(category3) mustEqual Some(category3)
 
-        owcDao.findOwcCategoriesByScheme("view-groups").head mustEqual category1
-        owcDao.findOwcCategoriesBySchemeAndTerm("search-domain", "Uncertainty").head mustEqual category2
-        // owcDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
+        val thrown = the[java.sql.SQLException] thrownBy  owcPropsDao.createOwcCategory(category3)
+        thrown.getErrorCode mustEqual 23505
 
-        val category3_1 = OwcCategory("glossary", "uncertainty", Some("Margin of Error of Measurements"))
-        owcDao.updateOwcCategory(category3_1) mustEqual Some(category3_1)
-        owcDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").size mustBe 1
-        owcDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").head.label mustEqual category3_1.label
+        owcPropsDao.findOwcCategoriesByScheme("view-groups").head mustEqual category1
+        owcPropsDao.findOwcCategoriesBySchemeAndTerm("search-domain", "uncertainty").head mustEqual category2
+        // owcPropsDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
 
-        owcDao.deleteOwcCategory(category3) mustBe true
-        owcDao.getAllOwcCategories.size mustEqual 2
+        val category3_1 = OwcCategory(category3.uuid, category3.scheme, category3.term, Some("Margin of Error of Measurements"))
+        owcPropsDao.updateOwcCategory(category3_1) mustEqual Some(category3_1)
+        owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").size mustBe 1
+        owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").head.label mustEqual category3_1.label
+
+        owcPropsDao.deleteOwcCategory(category3) mustBe true
+        owcPropsDao.getAllOwcCategories.size mustEqual 2
 
       }
     }
 
     "handle OwcLink with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val link1 = OwcLink("profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
-        val link2 = OwcLink("self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
-        val link3 = OwcLink("icon", Some("image/png"), "http://portal.smart-project.info/fs/images/nz_m.png", None)
+        val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
+        val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
+        val link3 = OwcLink(UUID.randomUUID(), "icon", Some("image/png"), "http://portal.smart-project.info/fs/images/nz_m.png", None)
 
-        owcDao.createOwcLink(link1) mustEqual Some(link1)
-        owcDao.createOwcLink(link2) mustEqual Some(link2)
-        owcDao.createOwcLink(link3) mustEqual Some(link3)
+        owcPropsDao.createOwcLink(link1) mustEqual Some(link1)
+        owcPropsDao.createOwcLink(link2) mustEqual Some(link2)
+        owcPropsDao.createOwcLink(link3) mustEqual Some(link3)
 
-        owcDao.findOwcLinksByHref("http://www.opengis.net/spec/owc-atom/1.0/req/core").size mustBe 1
-        owcDao.findOwcLinksByRelAndHref("self", "http://portal.smart-project.info/context/smart-sac.owc.json").size mustBe 1
+        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcLink(link3)
+        thrown.getErrorCode mustEqual 23505
 
-        val link3_1 = OwcLink("icon", Some("image/png"), "http://portal.smart-project.info/fs/images/nz_m.png", Some("New Zealand Flag"))
-        owcDao.updateOwcLink(link3_1) mustEqual Some(link3_1)
-        owcDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").size mustBe 1
-        owcDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").headOption.get.title mustEqual Some("New Zealand Flag")
+        owcPropsDao.findOwcLinksByHref("http://www.opengis.net/spec/owc-atom/1.0/req/core").size mustBe 1
+        owcPropsDao.findOwcLinksByRelAndHref("self", "http://portal.smart-project.info/context/smart-sac.owc.json").size mustBe 1
 
-        owcDao.deleteOwcLink(link3) mustBe true
-        owcDao.getAllOwcLinks.size mustEqual 2
+        val link3_1 = OwcLink(link3.uuid, link3.rel, link3.mimeType, link3.href, Some("New Zealand Flag"))
+        owcPropsDao.updateOwcLink(link3_1) mustEqual Some(link3_1)
+        owcPropsDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").size mustBe 1
+        owcPropsDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").headOption.get.title mustEqual Some("New Zealand Flag")
+
+        owcPropsDao.deleteOwcLink(link3) mustBe true
+        owcPropsDao.getAllOwcLinks.size mustEqual 2
       }
     }
 
     "handle OwcProperties with DB" in {
       withTestDatabase { database =>
-        val owcDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val link1 = OwcLink("profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
-        val link2 = OwcLink("self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
+        val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
+        val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
 
-        val category1 = OwcCategory("view-groups", "sac_add", Some("Informative Layers"))
-        val category2 = OwcCategory("search-domain", "uncertainty", Some("Uncertainty of Models"))
+        val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
+        val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
 
-        val author1 = OwcAuthor("Alex K", Some(""), None)
-        val author2 = OwcAuthor("Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+        val author1 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
+        val author2 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
 
         val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
 
-        val featurePops1 = OwcProperties(
+        val featureProps1 = OwcProperties(
+          UUID.randomUUID(),
           "en",
           "NZ DTM 100x100",
           Some("Some Bla"),
@@ -162,9 +174,22 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           List(),
           None,
           Some("GNS Science"),
-          List(category1, category2),
-          List(link1, link2)
+          List(), // List(category1, category2),
+          List() // List(link1, link2)
         )
+
+        owcPropsDao.createOwcProperties(featureProps1) mustEqual Some(featureProps1)
+
+        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcProperties(featureProps1)
+        thrown.getErrorCode mustEqual 23505
+
+        owcPropsDao.getAllOwcProperties.size mustBe 1
+
+        owcPropsDao.findOwcPropertiesByUuid(featureProps1.uuid) mustEqual Some(featureProps1)
+
+        owcPropsDao.deleteOwcProperties(featureProps1) mustEqual true
+        owcPropsDao.getAllOwcProperties.size mustBe 0
+
       }
     }
   }

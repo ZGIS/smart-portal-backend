@@ -39,7 +39,7 @@ import org.locationtech.spatial4j.shape.Rectangle
   *
   * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
   */
-trait OwcFeatureType {
+sealed trait OwcFeatureType {
   val id: String
   val bbox: Option[Rectangle]
   val properties: OwcProperties

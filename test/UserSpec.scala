@@ -27,6 +27,7 @@ import org.scalatest.{BeforeAndAfter, Ignore, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.libs.json._
 import models._
+import models.users._
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
 import play.api.{Application, Configuration}
 import play.api.inject.guice.GuiceApplicationBuilder

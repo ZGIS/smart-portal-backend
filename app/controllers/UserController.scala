@@ -22,7 +22,8 @@ package controllers
 import java.time.{ZoneId, ZonedDateTime}
 import javax.inject._
 
-import models.{LoginCredentials, User, UserDAO}
+import models._
+import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, Json}

@@ -21,7 +21,8 @@ package controllers
 
 import javax.inject._
 
-import models.{LoginCredentials, UserDAO}
+import models._
+import models.users._
 import play.api.Configuration
 import play.api.cache._
 import play.api.libs.json.Writes._

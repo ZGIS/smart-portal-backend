@@ -20,6 +20,7 @@
 package models.owc
 
 import java.time.ZonedDateTime
+import java.util.UUID
 
 import org.locationtech.spatial4j.shape.Rectangle
 
@@ -45,34 +46,38 @@ import org.locationtech.spatial4j.shape.Rectangle
 /**
   * Author field
   *
+  * @param uuid
   * @param name
   * @param email
   * @param uri
   */
-case class OwcAuthor(name: String, email: Option[String], uri: Option[String])
+case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Option[String])
 
 /**
   * reusable pattern of tagging things in the entry lists for declaration in subsequent processes,
   * e.g. accordeon groups in legends panel(we have to implement that in the mapviewer though)
   *
+  * @param uuid
   * @param scheme e.g. for mapviewer: view-groups
   * @param term   identifier of a view group: nz-overview
   * @param label  human readable name of the term: New Zealand Overview, National Scale models..
   */
-case class OwcCategory(scheme: String, term: String, label: Option[String])
+case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[String])
 
 /**
   *
+  * @param uuid
   * @param rel one of typically "self", "profile", "icon", "via"
   * @param mimeType
   * @param href
   * @param title
   */
-case class OwcLink(rel: String, mimeType: Option[String], href: String, title: Option[String])
+case class OwcLink(uuid: UUID, rel: String, mimeType: Option[String], href: String, title: Option[String])
 
 /**
   *
-  * @param lang
+  * @param uuid
+  * @param language
   * @param title
   * @param subtitle // aka abstract / abstrakt, not sure why they called it subtitle in geojson spec of OWC
   * @param updated
@@ -84,7 +89,8 @@ case class OwcLink(rel: String, mimeType: Option[String], href: String, title: O
   * @param links
   */
 case class OwcProperties(
-                          lang: String = "en",
+                          uuid: UUID,
+                          language: String,
                           title: String,
                           subtitle: Option[String],
                           updated: Option[ZonedDateTime],

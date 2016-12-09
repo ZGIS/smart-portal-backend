@@ -19,7 +19,8 @@
 
 import java.time.ZonedDateTime
 
-import models.{LoginCredentials, User}
+import models._
+import models.users._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json.Writes._

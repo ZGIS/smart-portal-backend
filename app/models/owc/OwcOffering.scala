@@ -43,7 +43,7 @@ import org.locationtech.spatial4j.shape.Rectangle
 /**
   * trait OwcOffering
   */
-trait OwcOffering {
+sealed trait OwcOffering {
   val code: String
   val operations: List[OwcOperation]
   val content: List[String]

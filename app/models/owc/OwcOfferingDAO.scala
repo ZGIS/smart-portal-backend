@@ -25,7 +25,6 @@ import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser.{get, str}
 import anorm.{RowParser, SQL, SqlParser, ~}
-import org.locationtech.spatial4j.shape.Rectangle
 import play.api.db.Database
 import utils.ClassnameLogger
 
@@ -125,17 +124,17 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
   /**
     * finds owc operations from the offerings relation
     *
-    * @param offeringsUuid
+    * @param offeringUuid
     * @return
     */
-  def findOwcOperationsByOfferingsUUID(offeringsUuid: UUID): Seq[OwcOperation] = {
+  def findOwcOperationsByOfferingUUID(offeringUuid: UUID): Seq[OwcOperation] = {
     db.withConnection { implicit connection =>
       SQL(
         s"""SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,
            | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result
            | FROM $tableOwcOperations op JOIN $tableOwcOfferingsHasOwcOperations ofop ON op.uuid=ofop.owc_operations_uuid
            | WHERE ofop.owc_offerings_uuid={uuid}""".stripMargin).on(
-        'uuid -> offeringsUuid.toString
+        'uuid -> offeringUuid.toString
       )
         .as(owcOperationParser *)
     }
@@ -245,9 +244,9 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
     * @param content
     * @return
     */
-  def instantiateOffering(uuid: String, offeringType: String, code: String, content: Option[String]): OwcOffering = {
+  def instantiateOwcOffering(uuid: String, offeringType: String, code: String, content: Option[String]): OwcOffering = {
     val uuidObj = UUID.fromString(uuid)
-    val ops = findOwcOperationsByOfferingsUUID(UUID.fromString(uuid)).toList
+    val ops = findOwcOperationsByOfferingUUID(UUID.fromString(uuid)).toList
     val contentList = content.map(text => List(text)).getOrElse(List())
 
     offeringType match {
@@ -276,7 +275,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
       str("code") ~
       get[Option[String]]("content") map {
       case uuid ~ offeringType ~ code ~ content =>
-        instantiateOffering(uuid, offeringType, code, content)
+        instantiateOwcOffering(uuid, offeringType, code, content)
     }
   }
 
@@ -302,6 +301,26 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
       SQL(s"""select * from $tableOwcOfferings where uuid = '${uuid.toString}'""").as(owcOfferingParser.singleOpt)
     }
   }
+
+  /**
+    * get OwcOfferings for a featuretype (OwcEntry or OwcDocument)
+    * @param featureTypeId
+    * @return
+    */
+  def findOwcOfferingsForOwcEntry(featureTypeId: String) : Seq[OwcOffering] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""SELECT
+           |o.uuid, o.offering_type, o.code, o.content
+           |FROM $tableOwcOfferings o JOIN $tableOwcEntriesHasOwcOfferings eof ON o.uuid=eof.owc_offerings_uuid
+           |WHERE eof.owc_feature_types_as_entry_id={owc_feature_types_as_entry_id}""".stripMargin).on(
+        'owc_feature_types_as_entry_id -> featureTypeId
+      )
+        .as(owcOfferingParser *)
+    }
+  }
+
+
 
   /**
     * creates an offering and its corresponding child operations

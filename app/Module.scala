@@ -20,6 +20,7 @@
 import com.google.inject.AbstractModule
 import java.time.Clock
 
+import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
 import services.{ApplicationTimer, AtomicCounter, Counter, EmailService}
 import utils.PasswordHashing
@@ -48,6 +49,9 @@ class Module extends AbstractModule {
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[UserDAO]).asEagerSingleton()
+    bind(classOf[OwcPropertiesDAO]).asEagerSingleton()
+    bind(classOf[OwcOfferingDAO]).asEagerSingleton()
+    bind(classOf[OwcDocumentDAO]).asEagerSingleton()
   }
 
 }

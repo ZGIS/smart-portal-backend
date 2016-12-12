@@ -28,7 +28,7 @@ import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
 
 /**
-  * Test Spec for [[OwcProperties]]
+  * Test Spec for [[OwcPropertiesDAO]] with [[OwcProperties]], [[OwcAuthor]], [[OwcCategory]] and [[OwcLink]]
   */
 class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 

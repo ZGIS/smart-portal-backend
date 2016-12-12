@@ -17,25 +17,17 @@
  * limitations under the License.
  */
 
-import java.net.InetAddress
-import java.time.{ZoneId, ZonedDateTime}
-
-import anorm.SQL
-import com.typesafe.config.ConfigFactory
-import org.locationtech.spatial4j.context.SpatialContext
-import org.locationtech.spatial4j.shape._
-import org.scalatest.{BeforeAndAfter, Ignore, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
-import play.api.libs.json._
-import models._
-import models.owc._
-import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
-import play.api.{Application, Configuration}
-import play.api.inject.guice.GuiceApplicationBuilder
 import java.util.UUID
 
+import com.typesafe.config.ConfigFactory
+import models.owc._
+import org.scalatest.{BeforeAndAfter, TestData}
+import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.{Application, Configuration}
+
 /**
-  * Test Spec for [[OwcOffering]]
+  * Test Spec for [[OwcOfferingDAO]] with [[OwcOffering]] and [[OwcOperation]]
   */
 class OwcOfferingSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 

@@ -620,6 +620,24 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * get properties for a featuretype (OwcEntry or OwcDocument)
+    * @param featureTypeId
+    * @return
+    */
+  def findOwcPropertiesForOwcFeatureType(featureTypeId: String) : Option[OwcProperties] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""SELECT
+           |p.uuid, p.language, p.title, p.subtitle, p.updated, p.generator, p.rights, p.creator, p.publisher
+           |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
+           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
+        'owc_feature_types_id -> featureTypeId
+      )
+        .as(owcPropertiesParser.singleOpt)
+    }
+  }
+
+  /**
     * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
     *
     * @param owcProperties

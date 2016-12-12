@@ -608,6 +608,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * find owc properties by title, title has unique constraint, that's why wild card search is intended
     *
     * @param title
     * @return
@@ -619,6 +620,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
     *
     * @param owcProperties
     * @return

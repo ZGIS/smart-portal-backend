@@ -113,7 +113,7 @@ CREATE TABLE owc_operations (
   uuid varchar(255),
   code varchar(255) NOT NULL,
   method varchar(255) NOT NULL,
-  contentType varchar(255) NOT NULL,
+  content_type varchar(255) NOT NULL,
   href varchar(255) NOT NULL,
   request_content_type varchar(255),
   request_post_data text,

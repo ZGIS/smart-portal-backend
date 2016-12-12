@@ -19,8 +19,12 @@
 
 package models.owc
 
+import java.io.InvalidClassException
+import java.util.UUID
 import javax.inject.{Inject, Singleton}
 
+import anorm.SqlParser.{get, str}
+import anorm.{RowParser, SQL, SqlParser, ~}
 import org.locationtech.spatial4j.shape.Rectangle
 import play.api.db.Database
 import utils.ClassnameLogger
@@ -36,4 +40,359 @@ import utils.ClassnameLogger
 @Singleton
 class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
 
+  /** *********
+    * OwcOperation
+    * **********/
+
+  /**
+    * Parse a OwcOperation from a ResultSet
+    */
+  val owcOperationParser = {
+    str("uuid") ~
+      str("code") ~
+      str("method") ~
+      str("content_type") ~
+      str("href") ~
+      get[Option[String]]("request_content_type") ~
+      get[Option[String]]("request_post_data") ~
+      get[Option[String]]("result") map {
+      case uuid ~ code ~ method ~ contentType ~ href ~ requestContentType ~ requestPostData ~ result =>
+        OwcOperation(
+          UUID.fromString(uuid),
+          code,
+          method,
+          contentType,
+          href,
+          requestConfigParser(requestContentType, requestPostData),
+          result)
+    }
+  }
+
+  /**
+    * build request config if both fields are defined
+    *
+    * @param contentTypeOpt
+    * @param postDataOpt
+    * @return
+    */
+  def requestConfigParser(
+                           contentTypeOpt: Option[String],
+                           postDataOpt: Option[String]
+                         ): Option[OwcPostRequestConfig] = {
+    (contentTypeOpt, postDataOpt) match {
+      case (contentType, postData) if contentType.isDefined && postData.isDefined => {
+        Some(OwcPostRequestConfig(contentType.get, postData.get))
+      }
+      case _ => None
+    }
+  }
+
+  /**
+    * Retrieve all OwcOperations.
+    *
+    * @return
+    */
+  def getAllOwcOperations: Seq[OwcOperation] = {
+    db.withConnection { implicit connection =>
+      SQL(s"select * from $tableOwcOperations").as(owcOperationParser *)
+    }
+  }
+
+  /**
+    * Find specific OwcOperation.
+    *
+    * @param code
+    * @return
+    */
+  def findOwcOperationByCode(code: String): Seq[OwcOperation] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcOperations where code like '${code}'""").as(owcOperationParser *)
+    }
+  }
+
+  /**
+    * Find specific OwcOperation.
+    *
+    * @param uuid
+    * @return
+    */
+  def findOwcOperationByUuid(uuid: UUID): Option[OwcOperation] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcOperations where uuid = '${uuid.toString}'""").as(owcOperationParser.singleOpt)
+    }
+  }
+
+  /**
+    * finds owc operations from the offerings relation
+    *
+    * @param offeringsUuid
+    * @return
+    */
+  def findOwcOperationsByOfferingsUUID(offeringsUuid: UUID): Seq[OwcOperation] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,
+           | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result
+           | FROM $tableOwcOperations op JOIN $tableOwcOfferingsHasOwcOperations ofop ON op.uuid=ofop.owc_operations_uuid
+           | WHERE ofop.owc_offerings_uuid={uuid}""".stripMargin).on(
+        'uuid -> offeringsUuid.toString
+      )
+        .as(owcOperationParser *)
+    }
+  }
+
+  /**
+    * Create an owcOperation.
+    *
+    * @param owcOperation
+    * @return
+    */
+  def createOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+          insert into $tableOwcOperations values (
+            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result}
+          )
+        """).on(
+        'uuid -> owcOperation.uuid.toString,
+        'code -> owcOperation.code,
+        'method -> owcOperation.method,
+        'content_type -> owcOperation.contentType,
+        'href -> owcOperation.href,
+        'request_content_type -> owcOperation.request.map(_.contentType),
+        'request_post_data -> owcOperation.request.map(_.postData),
+        'result -> owcOperation.result
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(owcOperation)
+        case _ => None
+      }
+    }
+  }
+
+  /**
+    * Update single OwcOperation
+    *
+    * @param owcOperation
+    * @return
+    */
+  def updateOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+           |update $tableOwcOperations set
+           |code = {code},
+           |method = {method},
+           |content_type = {content_type},
+           |href = {href},
+           |request_content_type = {request_content_type},
+           |request_post_data = {request_post_data},
+           |result = {result} where uuid = {uuid}
+        """.stripMargin).on(
+        'code -> owcOperation.code,
+        'method -> owcOperation.method,
+        'content_type -> owcOperation.contentType,
+        'href -> owcOperation.href,
+        'request_content_type -> owcOperation.request.map(_.contentType),
+        'request_post_data -> owcOperation.request.map(_.postData),
+        'result -> owcOperation.result,
+        'uuid -> owcOperation.uuid.toString
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(owcOperation)
+        case _ => None
+      }
+    }
+
+  }
+
+  /**
+    * delete an OwcOperation
+    *
+    * @param owcOperation
+    * @return
+    */
+  def deleteOwcOperation(owcOperation: OwcOperation): Boolean = {
+    val rowCount = db.withConnection { implicit connection =>
+      SQL(s"delete from $tableOwcOperations where uuid = {uuid}").on(
+        'uuid -> owcOperation.uuid.toString
+      ).executeUpdate()
+    }
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
+  /** *********
+    * OwcOffering
+    * **********/
+
+  /**
+    * instantiates the concrete type of the offering,
+    * I believe there is possibly also something from Ratiopharm, like Class.forName, reflection etc,
+    * I am not even sure right now if we need the type
+    *
+    * @param uuid
+    * @param offeringType
+    * @param code
+    * @param content
+    * @return
+    */
+  def instantiateOffering(uuid: String, offeringType: String, code: String, content: Option[String]): OwcOffering = {
+    val uuidObj = UUID.fromString(uuid)
+    val ops = findOwcOperationsByOfferingsUUID(UUID.fromString(uuid)).toList
+    val contentList = content.map(text => List(text)).getOrElse(List())
+
+    offeringType match {
+      case "WmsOffering" => WmsOffering(uuidObj, code, ops, contentList)
+      case "WmtsOffering" => WmtsOffering(uuidObj, code, ops, contentList)
+      case "WfsOffering" => WfsOffering(uuidObj, code, ops, contentList)
+      case "WcsOffering" => WcsOffering(uuidObj, code, ops, contentList)
+      case "CswOffering" => CswOffering(uuidObj, code, ops, contentList)
+      case "WpsOffering" => WpsOffering(uuidObj, code, ops, contentList)
+      case "GmlOffering" => GmlOffering(uuidObj, code, ops, contentList)
+      case "KmlOffering" => KmlOffering(uuidObj, code, ops, contentList)
+      case "GeoTiffOffering" => GeoTiffOffering(uuidObj, code, ops, contentList)
+      case "SosOffering" => SosOffering(uuidObj, code, ops, contentList)
+      case "NetCdfOffering" => NetCdfOffering(uuidObj, code, ops, contentList)
+      case "HttpLinkOffering" => HttpLinkOffering(uuidObj, code, ops, contentList)
+      case _ => throw new InvalidClassException(offeringType, s"Unknown Offering type $offeringType")
+    }
+  }
+
+  /**
+    * Parse a OwcOperation from a ResultSet
+    */
+  val owcOfferingParser: RowParser[OwcOffering] = {
+    str("uuid") ~
+      str("offering_type") ~
+      str("code") ~
+      get[Option[String]]("content") map {
+      case uuid ~ offeringType ~ code ~ content =>
+        instantiateOffering(uuid, offeringType, code, content)
+    }
+  }
+
+  /**
+    * get all the offerings
+    *
+    * @return
+    */
+  def getAllOwcOfferings: Seq[OwcOffering] = {
+    db.withConnection { implicit connection =>
+      SQL(s"select * from $tableOwcOfferings").as(owcOfferingParser *)
+    }
+  }
+
+  /**
+    * finds the distinct offering by uuid
+    *
+    * @param uuid
+    * @return
+    */
+  def findOwcOfferingByUuid(uuid: UUID): Option[OwcOffering] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcOfferings where uuid = '${uuid.toString}'""").as(owcOfferingParser.singleOpt)
+    }
+  }
+
+  /**
+    * creates an offering and its corresponding child operations
+    *
+    * @param owcOffering
+    * @return
+    */
+  def createOwcOffering(owcOffering: OwcOffering): Option[OwcOffering] = {
+    db.withTransaction {
+      implicit connection => {
+
+        val rowCount = SQL(
+          s"""
+          insert into $tableOwcOfferings values (
+            {uuid}, {offering_type}, {code}, {content}
+          )
+        """).on(
+          'uuid -> owcOffering.uuid.toString,
+          'offering_type -> owcOffering.getClass.getSimpleName,
+          'code -> owcOffering.code,
+          'content -> owcOffering.content.headOption
+        ).executeUpdate()
+
+        owcOffering.operations.foreach {
+          owcOperation => {
+            if (findOwcOperationByUuid(owcOperation.uuid).isEmpty) {
+              createOwcOperation(owcOperation)
+            }
+
+            SQL(
+              s"""insert into $tableOwcOfferingsHasOwcOperations  values (
+                 |{owc_offerings_uuid}, {owc_operations_uuid}
+                 |)
+               """.stripMargin).on(
+              'owc_offerings_uuid -> owcOffering.uuid.toString,
+              'owc_operations_uuid -> owcOperation.uuid.toString
+            ).executeUpdate()
+          }
+        }
+
+        rowCount match {
+          case 1 => Some(owcOffering)
+          case _ => None
+        }
+      }
+    }
+  }
+
+  /**
+    *
+    * @param owcOffering
+    * @return
+    */
+  def updateOwcOffering(owcOffering: OwcOffering): Option[OwcOffering] = ???
+
+  /**
+    * deletes an offering and its corresponding operations, tries to eliminate orphaned operations
+    *
+    * @param owcOffering
+    * @return
+    */
+  def deleteOwcOffering(owcOffering: OwcOffering): Boolean = {
+    val rowCount = db.withTransaction {
+      implicit connection => {
+
+        SQL(s"""delete from $tableOwcOfferingsHasOwcOperations where owc_offerings_uuid = {uuid}""").on(
+          'uuid -> owcOffering.uuid.toString
+        ).executeUpdate()
+
+        SQL(s"delete from $tableOwcOfferings where uuid = {uuid}").on(
+          'uuid -> owcOffering.uuid.toString
+        ).executeUpdate()
+
+      }
+    }
+
+    db.withConnection(
+      implicit connection => {
+        owcOffering.operations.filter {
+          operation => {
+            SQL(s"""select owc_operations_uuid from $tableOwcOfferingsHasOwcOperations where owc_operations_uuid = {uuid}""").on(
+              'uuid -> operation.uuid.toString
+            ).as(SqlParser.str("owc_operations_uuid") *).isEmpty
+          }
+        }.foreach(deleteOwcOperation(_))
+      }
+    )
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
 }

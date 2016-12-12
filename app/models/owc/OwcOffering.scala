@@ -19,6 +19,8 @@
 
 package models.owc
 
+import java.util.UUID
+
 import org.locationtech.spatial4j.shape.Rectangle
 
 /**
@@ -44,6 +46,7 @@ import org.locationtech.spatial4j.shape.Rectangle
   * trait OwcOffering
   */
 sealed trait OwcOffering {
+  val uuid: UUID
   val code: String
   val operations: List[OwcOperation]
   val content: List[String]
@@ -58,30 +61,35 @@ sealed trait OwcOffering {
 case class OwcPostRequestConfig(contentType: String, postData: String)
 
 /**
+  * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
+  * which should correspond to the offering type code (e.g. WMS, WFS ..)
   *
-  * @param code
-  * @param method
-  * @param contentType
-  * @param href
-  * @param request
-  * @param result
+  * @param code operation code, e.g. GetCapabilities
+  * @param method GET, POST ...
+  * @param contentType e.g. "application/xml", for expected return type (accept header?)
+  * @param href could be URL / URI type though
+  * @param request only need to hold data when method is POST
+  * @param result could hold inline result of the request, not sure if we need
   */
 case class OwcOperation(
-                         code: String, // e.g. GetCapabilities
-                         method: String, // GET, POST ...
-                         contentType: String, // e.g. "application/xml", for expected return type (accept header?)
-                         href: String, // could be URL / URI type though
-                         request: Option[OwcPostRequestConfig], // only need to hold data when method is POST
-                         result: Option[String] // could hold inline result of the request, not sure if we need
+                         uuid: UUID,
+                         code: String,
+                         method: String,
+                         contentType: String,
+                         href: String,
+                         request: Option[OwcPostRequestConfig],
+                         result: Option[String]
                        )
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class WmsOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -89,11 +97,13 @@ case class WmsOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class WmtsOffering(
+                         uuid: UUID,
                          code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
                          operations: List[OwcOperation],
                          content: List[String]
@@ -101,11 +111,13 @@ case class WmtsOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class WfsOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -113,11 +125,13 @@ case class WfsOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class WcsOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -125,11 +139,13 @@ case class WcsOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class CswOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -137,11 +153,13 @@ case class CswOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class WpsOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -149,11 +167,13 @@ case class WpsOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class GmlOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -161,11 +181,13 @@ case class GmlOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class KmlOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -173,11 +195,13 @@ case class KmlOffering(
 
 /**
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class GeoTiffOffering(
+                            uuid: UUID,
                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
                             operations: List[OwcOperation],
                             content: List[String]
@@ -188,11 +212,13 @@ case class GeoTiffOffering(
 /**
   * not in the spec, but we need them so I made up an extension
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class SosOffering(
+                        uuid: UUID,
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
                         operations: List[OwcOperation],
                         content: List[String]
@@ -201,11 +227,13 @@ case class SosOffering(
 /**
   * not in the spec, but we need them so I made up an extension
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class NetCdfOffering(
+                           uuid: UUID,
                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
                            operations: List[OwcOperation],
                            content: List[String]
@@ -214,11 +242,13 @@ case class NetCdfOffering(
 /**
   * not in the spec, but we need them so I made up an extension
   *
+  * @param uuid
   * @param code
   * @param operations
   * @param content
   */
 case class HttpLinkOffering(
+                             uuid: UUID,
                              code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
                              operations: List[OwcOperation],
                              content: List[String]

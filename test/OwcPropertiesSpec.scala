@@ -17,22 +17,15 @@
  * limitations under the License.
  */
 
-import java.net.InetAddress
 import java.time.{ZoneId, ZonedDateTime}
-
-import anorm.SQL
-import com.typesafe.config.ConfigFactory
-import org.locationtech.spatial4j.context.SpatialContext
-import org.locationtech.spatial4j.shape._
-import org.scalatest.{BeforeAndAfter, Ignore, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
-import play.api.libs.json._
-import models._
-import models.owc._
-import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
-import play.api.{Application, Configuration}
-import play.api.inject.guice.GuiceApplicationBuilder
 import java.util.UUID
+
+import com.typesafe.config.ConfigFactory
+import models.owc._
+import org.scalatest.{BeforeAndAfter, TestData}
+import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.{Application, Configuration}
 
 /**
   * Test Spec for [[OwcProperties]]
@@ -50,8 +43,6 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
   after {
 
   }
-
-  private lazy val ctx = SpatialContext.GEO
 
   "OwcProperties " can {
     lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
@@ -84,7 +75,6 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
         val author3_1 = OwcAuthor(author3.uuid, author3.name, author3.email, Some("https://www.gns.cri.nz"))
         owcPropsDao.updateOwcAuthor(author3_1).get mustEqual author3_1
         owcPropsDao.findOwcAuthorByName(author3_1.name).headOption.get.uri.get mustEqual "https://www.gns.cri.nz"
-
       }
     }
 
@@ -101,12 +91,12 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
         owcPropsDao.createOwcCategory(category2) mustEqual Some(category2)
         owcPropsDao.createOwcCategory(category3) mustEqual Some(category3)
 
-        val thrown = the[java.sql.SQLException] thrownBy  owcPropsDao.createOwcCategory(category3)
+        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcCategory(category3)
         thrown.getErrorCode mustEqual 23505
 
         owcPropsDao.findOwcCategoriesByScheme("view-groups").head mustEqual category1
         owcPropsDao.findOwcCategoriesBySchemeAndTerm("search-domain", "uncertainty").head mustEqual category2
-        // owcPropsDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
+        owcPropsDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
 
         val category3_1 = OwcCategory(category3.uuid, category3.scheme, category3.term, Some("Margin of Error of Measurements"))
         owcPropsDao.updateOwcCategory(category3_1) mustEqual Some(category3_1)
@@ -115,7 +105,6 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
 
         owcPropsDao.deleteOwcCategory(category3) mustBe true
         owcPropsDao.getAllOwcCategories.size mustEqual 2
-
       }
     }
 
@@ -212,9 +201,7 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
         owcPropsDao.getAllOwcAuthors.size mustBe 3
         owcPropsDao.getAllOwcCategories.size mustBe 1
         owcPropsDao.getAllOwcLinks.size mustBe 2
-
       }
     }
   }
-
 }

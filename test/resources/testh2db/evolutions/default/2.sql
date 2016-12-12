@@ -79,7 +79,7 @@ CREATE TABLE owc_properties_has_owc_authors (
 -- # has contributors: foreign key owc_properties -> owc_author n:n,
 CREATE TABLE owc_properties_has_owc_authors_as_contributors (
   owc_properties_uuid varchar(255) REFERENCES owc_properties(uuid),
-  owc_authors_uuid varchar(255) REFERENCES owc_authors(uuid)
+  owc_authors_as_contributors_uuid varchar(255) REFERENCES owc_authors(uuid)
 );
 
 -- # has categories: foreign key owc_properties -> owc_category n:n,

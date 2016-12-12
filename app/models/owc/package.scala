@@ -25,9 +25,9 @@ package object owc {
   implicit val tableOwcEntriesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
   implicit val tableOwcFeatureTypesHasOwcProperties = "owc_feature_types_has_owc_properties"
   implicit val tableOwcPropertiesHasOwcAuthors = "owc_properties_has_owc_authors"
-  implicit val tableOwcPropertiesHasContributors = "owc_properties_has_owc_authors_as_contributors"
+  implicit val tableOwcPropertiesHasOwcAuthorsAsContributors = "owc_properties_has_owc_authors_as_contributors"
   implicit val tableOwcPropertiesHasOwcCategories = "owc_properties_has_owc_categories"
-  implicit val tableOwcPropertiesHasLinks = "owc_properties_has_owc_links"
+  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
   implicit val tableOwcOfferingsHasOwcOperation = "owc_offerings_has_owc_operations"
 
   implicit val tableOwcOperations = "owc_operation"

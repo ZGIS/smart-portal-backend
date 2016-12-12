@@ -159,6 +159,8 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
 
         val author1 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
         val author2 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+        val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch 2nd", Some("b.kmoch@gns.cri.nz"), Some("http://gns.cri.nz/1234"))
+        val author4 = OwcAuthor(UUID.randomUUID(), "Alexander Kmoch", Some("c.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
 
         val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
 
@@ -170,25 +172,46 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           Some(testTime),
           None,
           Some("CC BY SA 4.0 NZ"),
-          List(author1, author2),
-          List(),
+          List(author1),
+          List(author2, author3),
           None,
           Some("GNS Science"),
-          List(), // List(category1, category2),
-          List() // List(link1, link2)
+          List(category1, category2),
+          List(link1, link2)
+        )
+
+        val featureProps2 = OwcProperties(
+          UUID.randomUUID(),
+          "en",
+          "NZ SAC Recharge",
+          Some("Some Bla Recharge"),
+          Some(testTime),
+          None,
+          Some("CC BY SA 4.0 NZ"),
+          List(author2),
+          List(author3, author4),
+          None,
+          Some("GNS Science"),
+          List(category2),
+          List(link1, link2)
         )
 
         owcPropsDao.createOwcProperties(featureProps1) mustEqual Some(featureProps1)
+        owcPropsDao.createOwcProperties(featureProps2) mustEqual Some(featureProps2)
 
         val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcProperties(featureProps1)
         thrown.getErrorCode mustEqual 23505
 
-        owcPropsDao.getAllOwcProperties.size mustBe 1
+        owcPropsDao.getAllOwcProperties.size mustBe 2
 
         owcPropsDao.findOwcPropertiesByUuid(featureProps1.uuid) mustEqual Some(featureProps1)
 
         owcPropsDao.deleteOwcProperties(featureProps1) mustEqual true
-        owcPropsDao.getAllOwcProperties.size mustBe 0
+
+        owcPropsDao.getAllOwcProperties.size mustBe 1
+        owcPropsDao.getAllOwcAuthors.size mustBe 3
+        owcPropsDao.getAllOwcCategories.size mustBe 1
+        owcPropsDao.getAllOwcLinks.size mustBe 2
 
       }
     }

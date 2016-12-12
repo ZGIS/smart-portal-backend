@@ -1,0 +1,3634 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcOfferingDAO.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.io.InvalidClassException
+</span>23 <span style=''>import java.util.UUID
+</span>24 <span style=''>import javax.inject.{Inject, Singleton}
+</span>25 <span style=''>
+</span>26 <span style=''>import anorm.SqlParser.{get, str}
+</span>27 <span style=''>import anorm.{RowParser, SQL, SqlParser, ~}
+</span>28 <span style=''>import org.locationtech.spatial4j.shape.Rectangle
+</span>29 <span style=''>import play.api.db.Database
+</span>30 <span style=''>import utils.ClassnameLogger
+</span>31 <span style=''>
+</span>32 <span style=''>/**
+</span>33 <span style=''>  * OwcOfferingDAO - store and retrieve OWS Context Documents
+</span>34 <span style=''>  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
+</span>35 <span style=''>  * about the things they provide the context for (i.e. other data sets, services, metadata records)
+</span>36 <span style=''>  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
+</span>37 <span style=''>  *
+</span>38 <span style=''>  * @param db
+</span>39 <span style=''>  */
+</span>40 <span style=''>@Singleton
+</span>41 <span style=''>class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
+</span>42 <span style=''>
+</span>43 <span style=''>  /** *********
+</span>44 <span style=''>    * OwcOperation
+</span>45 <span style=''>    * **********/
+</span>46 <span style=''>
+</span>47 <span style=''>  /**
+</span>48 <span style=''>    * Parse a OwcOperation from a ResultSet
+</span>49 <span style=''>    */
+</span>50 <span style=''>  val owcOperationParser = {
+</span>51 <span style=''>    </span><span style='background: #AEF1AE'>str("uuid") ~
+</span>52 <span style=''></span><span style='background: #AEF1AE'>      str("code") ~
+</span>53 <span style=''></span><span style='background: #AEF1AE'>      str("method") ~
+</span>54 <span style=''></span><span style='background: #AEF1AE'>      str("content_type") ~
+</span>55 <span style=''></span><span style='background: #AEF1AE'>      str("href") ~
+</span>56 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]]("request_content_type") ~
+</span>57 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]]("request_post_data") ~
+</span>58 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]]("result") map {
+</span>59 <span style=''></span><span style='background: #AEF1AE'>      case uuid ~ code ~ method ~ contentType ~ href ~ requestContentType ~ requestPostData ~ result =>
+</span>60 <span style=''></span><span style='background: #AEF1AE'>        OwcOperation(
+</span>61 <span style=''></span><span style='background: #AEF1AE'>          UUID.fromString(uuid),
+</span>62 <span style=''></span><span style='background: #AEF1AE'>          code,
+</span>63 <span style=''></span><span style='background: #AEF1AE'>          method,
+</span>64 <span style=''></span><span style='background: #AEF1AE'>          contentType,
+</span>65 <span style=''></span><span style='background: #AEF1AE'>          href,
+</span>66 <span style=''></span><span style='background: #AEF1AE'>          requestConfigParser(requestContentType, requestPostData),
+</span>67 <span style=''></span><span style='background: #AEF1AE'>          result)
+</span>68 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>69 <span style=''>  }
+</span>70 <span style=''>
+</span>71 <span style=''>  /**
+</span>72 <span style=''>    * build request config if both fields are defined
+</span>73 <span style=''>    *
+</span>74 <span style=''>    * @param contentTypeOpt
+</span>75 <span style=''>    * @param postDataOpt
+</span>76 <span style=''>    * @return
+</span>77 <span style=''>    */
+</span>78 <span style=''>  def requestConfigParser(
+</span>79 <span style=''>                           contentTypeOpt: Option[String],
+</span>80 <span style=''>                           postDataOpt: Option[String]
+</span>81 <span style=''>                         ): Option[OwcPostRequestConfig] = {
+</span>82 <span style=''>    (contentTypeOpt, postDataOpt) match {
+</span>83 <span style=''>      case (contentType, postData) if </span><span style='background: #AEF1AE'>contentType.isDefined && postData.isDefined</span><span style=''> => {
+</span>84 <span style=''>        </span><span style='background: #AEF1AE'>Some(OwcPostRequestConfig(contentType.get, postData.get))</span><span style=''>
+</span>85 <span style=''>      }
+</span>86 <span style=''>      case _ => </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>87 <span style=''>    }
+</span>88 <span style=''>  }
+</span>89 <span style=''>
+</span>90 <span style=''>  /**
+</span>91 <span style=''>    * Retrieve all OwcOperations.
+</span>92 <span style=''>    *
+</span>93 <span style=''>    * @return
+</span>94 <span style=''>    */
+</span>95 <span style=''>  def getAllOwcOperations: Seq[OwcOperation] = {
+</span>96 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>97 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"select * from $tableOwcOperations").as(owcOperationParser *)
+</span>98 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>99 <span style=''>  }
+</span>100 <span style=''>
+</span>101 <span style=''>  /**
+</span>102 <span style=''>    * Find specific OwcOperation.
+</span>103 <span style=''>    *
+</span>104 <span style=''>    * @param code
+</span>105 <span style=''>    * @return
+</span>106 <span style=''>    */
+</span>107 <span style=''>  def findOwcOperationByCode(code: String): Seq[OwcOperation] = {
+</span>108 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>109 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcOperations where code like '${code}'""").as(owcOperationParser *)
+</span>110 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>111 <span style=''>  }
+</span>112 <span style=''>
+</span>113 <span style=''>  /**
+</span>114 <span style=''>    * Find specific OwcOperation.
+</span>115 <span style=''>    *
+</span>116 <span style=''>    * @param uuid
+</span>117 <span style=''>    * @return
+</span>118 <span style=''>    */
+</span>119 <span style=''>  def findOwcOperationByUuid(uuid: UUID): Option[OwcOperation] = {
+</span>120 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>121 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcOperations where uuid = '${uuid.toString}'""").as(owcOperationParser.singleOpt)
+</span>122 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>123 <span style=''>  }
+</span>124 <span style=''>
+</span>125 <span style=''>  /**
+</span>126 <span style=''>    * finds owc operations from the offerings relation
+</span>127 <span style=''>    *
+</span>128 <span style=''>    * @param offeringsUuid
+</span>129 <span style=''>    * @return
+</span>130 <span style=''>    */
+</span>131 <span style=''>  def findOwcOperationsByOfferingsUUID(offeringsUuid: UUID): Seq[OwcOperation] = {
+</span>132 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>133 <span style=''></span><span style='background: #AEF1AE'>      SQL(
+</span>134 <span style=''></span><span style='background: #AEF1AE'>        s"""SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,
+</span>135 <span style=''></span><span style='background: #AEF1AE'>           | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result
+</span>136 <span style=''></span><span style='background: #AEF1AE'>           | FROM $tableOwcOperations op JOIN $tableOwcOfferingsHasOwcOperations ofop ON op.uuid=ofop.owc_operations_uuid
+</span>137 <span style=''></span><span style='background: #AEF1AE'>           | WHERE ofop.owc_offerings_uuid={uuid}""".stripMargin).on(
+</span>138 <span style=''></span><span style='background: #AEF1AE'>        'uuid -> offeringsUuid.toString
+</span>139 <span style=''></span><span style='background: #AEF1AE'>      )
+</span>140 <span style=''></span><span style='background: #AEF1AE'>        .as(owcOperationParser *)
+</span>141 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>142 <span style=''>  }
+</span>143 <span style=''>
+</span>144 <span style=''>  /**
+</span>145 <span style=''>    * Create an owcOperation.
+</span>146 <span style=''>    *
+</span>147 <span style=''>    * @param owcOperation
+</span>148 <span style=''>    * @return
+</span>149 <span style=''>    */
+</span>150 <span style=''>  def createOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
+</span>151 <span style=''>
+</span>152 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>153 <span style=''></span><span style='background: #AEF1AE'>      val rowCount = SQL(
+</span>154 <span style=''></span><span style='background: #AEF1AE'>        s"""
+</span>155 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcOperations values (
+</span>156 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result}
+</span>157 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>158 <span style=''></span><span style='background: #AEF1AE'>        """).on(
+</span>159 <span style=''></span><span style='background: #AEF1AE'>        'uuid -> owcOperation.uuid.toString,
+</span>160 <span style=''></span><span style='background: #AEF1AE'>        'code -> owcOperation.code,
+</span>161 <span style=''></span><span style='background: #AEF1AE'>        'method -> owcOperation.method,
+</span>162 <span style=''></span><span style='background: #AEF1AE'>        'content_type -> owcOperation.contentType,
+</span>163 <span style=''></span><span style='background: #AEF1AE'>        'href -> owcOperation.href,
+</span>164 <span style=''></span><span style='background: #AEF1AE'>        'request_content_type -> owcOperation.request.map(_.contentType),
+</span>165 <span style=''></span><span style='background: #AEF1AE'>        'request_post_data -> owcOperation.request.map(_.postData),
+</span>166 <span style=''></span><span style='background: #AEF1AE'>        'result -> owcOperation.result
+</span>167 <span style=''></span><span style='background: #AEF1AE'>      ).executeUpdate()
+</span>168 <span style=''></span><span style='background: #AEF1AE'>
+</span>169 <span style=''></span><span style='background: #AEF1AE'>      rowCount match {
+</span>170 <span style=''></span><span style='background: #AEF1AE'>        case 1 => Some(owcOperation)
+</span>171 <span style=''></span><span style='background: #AEF1AE'>        case _ => </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>172 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>173 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>174 <span style=''>  }
+</span>175 <span style=''>
+</span>176 <span style=''>  /**
+</span>177 <span style=''>    * Update single OwcOperation
+</span>178 <span style=''>    *
+</span>179 <span style=''>    * @param owcOperation
+</span>180 <span style=''>    * @return
+</span>181 <span style=''>    */
+</span>182 <span style=''>  def updateOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
+</span>183 <span style=''>
+</span>184 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>185 <span style=''></span><span style='background: #AEF1AE'>      val rowCount = SQL(
+</span>186 <span style=''></span><span style='background: #AEF1AE'>        s"""
+</span>187 <span style=''></span><span style='background: #AEF1AE'>           |update $tableOwcOperations set
+</span>188 <span style=''></span><span style='background: #AEF1AE'>           |code = {code},
+</span>189 <span style=''></span><span style='background: #AEF1AE'>           |method = {method},
+</span>190 <span style=''></span><span style='background: #AEF1AE'>           |content_type = {content_type},
+</span>191 <span style=''></span><span style='background: #AEF1AE'>           |href = {href},
+</span>192 <span style=''></span><span style='background: #AEF1AE'>           |request_content_type = {request_content_type},
+</span>193 <span style=''></span><span style='background: #AEF1AE'>           |request_post_data = {request_post_data},
+</span>194 <span style=''></span><span style='background: #AEF1AE'>           |result = {result} where uuid = {uuid}
+</span>195 <span style=''></span><span style='background: #AEF1AE'>        """.stripMargin).on(
+</span>196 <span style=''></span><span style='background: #AEF1AE'>        'code -> owcOperation.code,
+</span>197 <span style=''></span><span style='background: #AEF1AE'>        'method -> owcOperation.method,
+</span>198 <span style=''></span><span style='background: #AEF1AE'>        'content_type -> owcOperation.contentType,
+</span>199 <span style=''></span><span style='background: #AEF1AE'>        'href -> owcOperation.href,
+</span>200 <span style=''></span><span style='background: #AEF1AE'>        'request_content_type -> owcOperation.request.map(_.contentType),
+</span>201 <span style=''></span><span style='background: #AEF1AE'>        'request_post_data -> owcOperation.request.map(_.postData),
+</span>202 <span style=''></span><span style='background: #AEF1AE'>        'result -> owcOperation.result,
+</span>203 <span style=''></span><span style='background: #AEF1AE'>        'uuid -> owcOperation.uuid.toString
+</span>204 <span style=''></span><span style='background: #AEF1AE'>      ).executeUpdate()
+</span>205 <span style=''></span><span style='background: #AEF1AE'>
+</span>206 <span style=''></span><span style='background: #AEF1AE'>      rowCount match {
+</span>207 <span style=''></span><span style='background: #AEF1AE'>        case 1 => Some(owcOperation)
+</span>208 <span style=''></span><span style='background: #AEF1AE'>        case _ => </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>209 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>210 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>211 <span style=''>
+</span>212 <span style=''>  }
+</span>213 <span style=''>
+</span>214 <span style=''>  /**
+</span>215 <span style=''>    * delete an OwcOperation
+</span>216 <span style=''>    *
+</span>217 <span style=''>    * @param owcOperation
+</span>218 <span style=''>    * @return
+</span>219 <span style=''>    */
+</span>220 <span style=''>  def deleteOwcOperation(owcOperation: OwcOperation): Boolean = {
+</span>221 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>222 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"delete from $tableOwcOperations where uuid = {uuid}").on(
+</span>223 <span style=''></span><span style='background: #AEF1AE'>        'uuid -> owcOperation.uuid.toString
+</span>224 <span style=''></span><span style='background: #AEF1AE'>      ).executeUpdate()
+</span>225 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>226 <span style=''>
+</span>227 <span style=''>    rowCount match {
+</span>228 <span style=''>      case 1 => </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>229 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>230 <span style=''>    }
+</span>231 <span style=''>  }
+</span>232 <span style=''>
+</span>233 <span style=''>  /** *********
+</span>234 <span style=''>    * OwcOffering
+</span>235 <span style=''>    * **********/
+</span>236 <span style=''>
+</span>237 <span style=''>  /**
+</span>238 <span style=''>    * instantiates the concrete type of the offering,
+</span>239 <span style=''>    * I believe there is possibly also something from Ratiopharm, like Class.forName, reflection etc,
+</span>240 <span style=''>    * I am not even sure right now if we need the type
+</span>241 <span style=''>    *
+</span>242 <span style=''>    * @param uuid
+</span>243 <span style=''>    * @param offeringType
+</span>244 <span style=''>    * @param code
+</span>245 <span style=''>    * @param content
+</span>246 <span style=''>    * @return
+</span>247 <span style=''>    */
+</span>248 <span style=''>  def instantiateOffering(uuid: String, offeringType: String, code: String, content: Option[String]): OwcOffering = {
+</span>249 <span style=''>    val uuidObj = </span><span style='background: #AEF1AE'>UUID.fromString(uuid)</span><span style=''>
+</span>250 <span style=''>    val ops = </span><span style='background: #AEF1AE'>findOwcOperationsByOfferingsUUID(UUID.fromString(uuid)).toList</span><span style=''>
+</span>251 <span style=''>    val contentList = </span><span style='background: #AEF1AE'>content.map(text => </span><span style='background: #F0ADAD'>List(text)</span><span style='background: #AEF1AE'>).getOrElse(List())</span><span style=''>
+</span>252 <span style=''>
+</span>253 <span style=''>    offeringType match {
+</span>254 <span style=''>      case "WmsOffering" => </span><span style='background: #AEF1AE'>WmsOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>255 <span style=''>      case "WmtsOffering" => </span><span style='background: #F0ADAD'>WmtsOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>256 <span style=''>      case "WfsOffering" => </span><span style='background: #F0ADAD'>WfsOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>257 <span style=''>      case "WcsOffering" => </span><span style='background: #F0ADAD'>WcsOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>258 <span style=''>      case "CswOffering" => </span><span style='background: #AEF1AE'>CswOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>259 <span style=''>      case "WpsOffering" => </span><span style='background: #F0ADAD'>WpsOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>260 <span style=''>      case "GmlOffering" => </span><span style='background: #F0ADAD'>GmlOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>261 <span style=''>      case "KmlOffering" => </span><span style='background: #F0ADAD'>KmlOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>262 <span style=''>      case "GeoTiffOffering" => </span><span style='background: #F0ADAD'>GeoTiffOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>263 <span style=''>      case "SosOffering" => </span><span style='background: #F0ADAD'>SosOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>264 <span style=''>      case "NetCdfOffering" => </span><span style='background: #F0ADAD'>NetCdfOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>265 <span style=''>      case "HttpLinkOffering" => </span><span style='background: #F0ADAD'>HttpLinkOffering(uuidObj, code, ops, contentList)</span><span style=''>
+</span>266 <span style=''>      case _ => </span><span style='background: #F0ADAD'>throw new InvalidClassException(offeringType, s"Unknown Offering type $offeringType")</span><span style=''>
+</span>267 <span style=''>    }
+</span>268 <span style=''>  }
+</span>269 <span style=''>
+</span>270 <span style=''>  /**
+</span>271 <span style=''>    * Parse a OwcOperation from a ResultSet
+</span>272 <span style=''>    */
+</span>273 <span style=''>  val owcOfferingParser: RowParser[OwcOffering] = {
+</span>274 <span style=''>    </span><span style='background: #AEF1AE'>str("uuid") ~
+</span>275 <span style=''></span><span style='background: #AEF1AE'>      str("offering_type") ~
+</span>276 <span style=''></span><span style='background: #AEF1AE'>      str("code") ~
+</span>277 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]]("content") map {
+</span>278 <span style=''></span><span style='background: #AEF1AE'>      case uuid ~ offeringType ~ code ~ content =>
+</span>279 <span style=''></span><span style='background: #AEF1AE'>        instantiateOffering(uuid, offeringType, code, content)
+</span>280 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>281 <span style=''>  }
+</span>282 <span style=''>
+</span>283 <span style=''>  /**
+</span>284 <span style=''>    * get all the offerings
+</span>285 <span style=''>    *
+</span>286 <span style=''>    * @return
+</span>287 <span style=''>    */
+</span>288 <span style=''>  def getAllOwcOfferings: Seq[OwcOffering] = {
+</span>289 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>290 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"select * from $tableOwcOfferings").as(owcOfferingParser *)
+</span>291 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>292 <span style=''>  }
+</span>293 <span style=''>
+</span>294 <span style=''>  /**
+</span>295 <span style=''>    * finds the distinct offering by uuid
+</span>296 <span style=''>    *
+</span>297 <span style=''>    * @param uuid
+</span>298 <span style=''>    * @return
+</span>299 <span style=''>    */
+</span>300 <span style=''>  def findOwcOfferingByUuid(uuid: UUID): Option[OwcOffering] = {
+</span>301 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>302 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcOfferings where uuid = '${uuid.toString}'""").as(owcOfferingParser.singleOpt)
+</span>303 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>304 <span style=''>  }
+</span>305 <span style=''>
+</span>306 <span style=''>  /**
+</span>307 <span style=''>    * creates an offering and its corresponding child operations
+</span>308 <span style=''>    *
+</span>309 <span style=''>    * @param owcOffering
+</span>310 <span style=''>    * @return
+</span>311 <span style=''>    */
+</span>312 <span style=''>  def createOwcOffering(owcOffering: OwcOffering): Option[OwcOffering] = {
+</span>313 <span style=''>    </span><span style='background: #AEF1AE'>db.withTransaction {
+</span>314 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>315 <span style=''></span><span style='background: #AEF1AE'>
+</span>316 <span style=''></span><span style='background: #AEF1AE'>        val rowCount = SQL(
+</span>317 <span style=''></span><span style='background: #AEF1AE'>          s"""
+</span>318 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcOfferings values (
+</span>319 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {offering_type}, {code}, {content}
+</span>320 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>321 <span style=''></span><span style='background: #AEF1AE'>        """).on(
+</span>322 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcOffering.uuid.toString,
+</span>323 <span style=''></span><span style='background: #AEF1AE'>          'offering_type -> owcOffering.getClass.getSimpleName,
+</span>324 <span style=''></span><span style='background: #AEF1AE'>          'code -> owcOffering.code,
+</span>325 <span style=''></span><span style='background: #AEF1AE'>          'content -> owcOffering.content.headOption
+</span>326 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>327 <span style=''></span><span style='background: #AEF1AE'>
+</span>328 <span style=''></span><span style='background: #AEF1AE'>        owcOffering.operations.foreach {
+</span>329 <span style=''></span><span style='background: #AEF1AE'>          owcOperation => {
+</span>330 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcOperationByUuid(owcOperation.uuid).isEmpty) {
+</span>331 <span style=''></span><span style='background: #AEF1AE'>              createOwcOperation(owcOperation)
+</span>332 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>333 <span style=''></span><span style='background: #AEF1AE'>
+</span>334 <span style=''></span><span style='background: #AEF1AE'>            SQL(
+</span>335 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcOfferingsHasOwcOperations  values (
+</span>336 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_offerings_uuid}, {owc_operations_uuid}
+</span>337 <span style=''></span><span style='background: #AEF1AE'>                 |)
+</span>338 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
+</span>339 <span style=''></span><span style='background: #AEF1AE'>              'owc_offerings_uuid -> owcOffering.uuid.toString,
+</span>340 <span style=''></span><span style='background: #AEF1AE'>              'owc_operations_uuid -> owcOperation.uuid.toString
+</span>341 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
+</span>342 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>343 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>344 <span style=''></span><span style='background: #AEF1AE'>
+</span>345 <span style=''></span><span style='background: #AEF1AE'>        rowCount match {
+</span>346 <span style=''></span><span style='background: #AEF1AE'>          case 1 => Some(owcOffering)
+</span>347 <span style=''></span><span style='background: #AEF1AE'>          case _ => </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>348 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>349 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>350 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>351 <span style=''>  }
+</span>352 <span style=''>
+</span>353 <span style=''>  /**
+</span>354 <span style=''>    *
+</span>355 <span style=''>    * @param owcOffering
+</span>356 <span style=''>    * @return
+</span>357 <span style=''>    */
+</span>358 <span style=''>  def updateOwcOffering(owcOffering: OwcOffering): Option[OwcOffering] = </span><span style='background: #F0ADAD'>???</span><span style=''>
+</span>359 <span style=''>
+</span>360 <span style=''>  /**
+</span>361 <span style=''>    * deletes an offering and its corresponding operations, tries to eliminate orphaned operations
+</span>362 <span style=''>    *
+</span>363 <span style=''>    * @param owcOffering
+</span>364 <span style=''>    * @return
+</span>365 <span style=''>    */
+</span>366 <span style=''>  def deleteOwcOffering(owcOffering: OwcOffering): Boolean = {
+</span>367 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>db.withTransaction {
+</span>368 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>369 <span style=''></span><span style='background: #AEF1AE'>
+</span>370 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcOfferingsHasOwcOperations where owc_offerings_uuid = {uuid}""").on(
+</span>371 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcOffering.uuid.toString
+</span>372 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>373 <span style=''></span><span style='background: #AEF1AE'>
+</span>374 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"delete from $tableOwcOfferings where uuid = {uuid}").on(
+</span>375 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcOffering.uuid.toString
+</span>376 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>377 <span style=''></span><span style='background: #AEF1AE'>
+</span>378 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>379 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>380 <span style=''>
+</span>381 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection(
+</span>382 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>383 <span style=''></span><span style='background: #AEF1AE'>        owcOffering.operations.filter {
+</span>384 <span style=''></span><span style='background: #AEF1AE'>          operation => {
+</span>385 <span style=''></span><span style='background: #AEF1AE'>            SQL(s"""select owc_operations_uuid from $tableOwcOfferingsHasOwcOperations where owc_operations_uuid = {uuid}""").on(
+</span>386 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> operation.uuid.toString
+</span>387 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_operations_uuid") *).isEmpty
+</span>388 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>389 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcOperation(_))
+</span>390 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>391 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
+</span>392 <span style=''>
+</span>393 <span style=''>    rowCount match {
+</span>394 <span style=''>      case 1 => </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>395 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>396 <span style=''>    }
+</span>397 <span style=''>  }
+</span>398 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          51
+        </td>
+        <td>
+          985
+        </td>
+        <td>
+          1821
+          -
+          1821
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          51
+        </td>
+        <td>
+          984
+        </td>
+        <td>
+          1822
+          -
+          1828
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          52
+        </td>
+        <td>
+          986
+        </td>
+        <td>
+          1842
+          -
+          1848
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          52
+        </td>
+        <td>
+          988
+        </td>
+        <td>
+          1838
+          -
+          1849
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;code&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          52
+        </td>
+        <td>
+          987
+        </td>
+        <td>
+          1841
+          -
+          1841
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          53
+        </td>
+        <td>
+          989
+        </td>
+        <td>
+          1862
+          -
+          1870
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;method&quot;
+        </td>
+      </tr><tr>
+        <td>
+          53
+        </td>
+        <td>
+          991
+        </td>
+        <td>
+          1858
+          -
+          1871
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;method&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          53
+        </td>
+        <td>
+          990
+        </td>
+        <td>
+          1861
+          -
+          1861
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          992
+        </td>
+        <td>
+          1884
+          -
+          1898
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;content_type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          994
+        </td>
+        <td>
+          1880
+          -
+          1899
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;content_type&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          993
+        </td>
+        <td>
+          1883
+          -
+          1883
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          995
+        </td>
+        <td>
+          1912
+          -
+          1918
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          997
+        </td>
+        <td>
+          1908
+          -
+          1919
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;href&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          996
+        </td>
+        <td>
+          1911
+          -
+          1911
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          1001
+        </td>
+        <td>
+          1928
+          -
+          1971
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;request_content_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          998
+        </td>
+        <td>
+          1948
+          -
+          1970
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request_content_type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          1000
+        </td>
+        <td>
+          1947
+          -
+          1947
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          999
+        </td>
+        <td>
+          1947
+          -
+          1947
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          1004
+        </td>
+        <td>
+          1999
+          -
+          1999
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          1003
+        </td>
+        <td>
+          1999
+          -
+          1999
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          1005
+        </td>
+        <td>
+          1980
+          -
+          2020
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;request_post_data&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          1002
+        </td>
+        <td>
+          2000
+          -
+          2019
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request_post_data&quot;
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          1013
+        </td>
+        <td>
+          1818
+          -
+          2388
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;uuid&quot;)(anorm.this.Column.columnToString).~[String](anorm.SqlParser.str(&quot;code&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.str(&quot;method&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.str(&quot;content_type&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.str(&quot;href&quot;)(anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;request_content_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;request_post_data&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;result&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).map[models.owc.OwcOperation](((x0$1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]],Option[String]],Option[String]]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]],Option[String]],Option[String]]((_1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]],Option[String]]((_1: anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String],Option[String]]((_1: anorm.~[anorm.~[anorm.~[String,String],String],String], _2: String)anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],String]((_1: anorm.~[anorm.~[String,String],String], _2: String)anorm.~[anorm.~[anorm.~[String,String],String],String]((_1: anorm.~[String,String], _2: String)anorm.~[anorm.~[String,String],String]((_1: String, _2: String)anorm.~[String,String]((uuid @ _), (code @ _)), (method @ _)), (contentType @ _)), (href @ _)), (requestContentType @ _)), (requestPostData @ _)), (result @ _)) =&gt; OwcOperation.apply(java.util.UUID.fromString(uuid), code, method, contentType, href, OwcOfferingDAO.this.requestConfigParser(requestContentType, requestPostData), result)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          1007
+        </td>
+        <td>
+          2048
+          -
+          2048
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          1006
+        </td>
+        <td>
+          2049
+          -
+          2057
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          1009
+        </td>
+        <td>
+          2029
+          -
+          2058
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;result&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          1008
+        </td>
+        <td>
+          2048
+          -
+          2048
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          1012
+        </td>
+        <td>
+          2177
+          -
+          2382
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOperation.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperation.apply(java.util.UUID.fromString(uuid), code, method, contentType, href, OwcOfferingDAO.this.requestConfigParser(requestContentType, requestPostData), result)
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          1010
+        </td>
+        <td>
+          2201
+          -
+          2222
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          1011
+        </td>
+        <td>
+          2307
+          -
+          2363
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingDAO.requestConfigParser
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.requestConfigParser(requestContentType, requestPostData)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          1015
+        </td>
+        <td>
+          2816
+          -
+          2859
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td style="background: #AEF1AE">
+          contentType.isDefined.&amp;&amp;(postData.isDefined)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          1014
+        </td>
+        <td>
+          2841
+          -
+          2859
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          postData.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1019
+        </td>
+        <td>
+          2873
+          -
+          2930
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.owc.OwcPostRequestConfig](OwcPostRequestConfig.apply(contentType.get, postData.get))
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1016
+        </td>
+        <td>
+          2899
+          -
+          2914
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          contentType.get
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1018
+        </td>
+        <td>
+          2878
+          -
+          2929
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPostRequestConfig.apply(contentType.get, postData.get)
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1017
+        </td>
+        <td>
+          2916
+          -
+          2928
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          postData.get
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          1020
+        </td>
+        <td>
+          2955
+          -
+          2959
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1022
+        </td>
+        <td>
+          3091
+          -
+          3212
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[List[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcOperations))).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1021
+        </td>
+        <td>
+          3140
+          -
+          3206
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcOperations))).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          1024
+        </td>
+        <td>
+          3373
+          -
+          3524
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[List[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where code like \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOperations, code))).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1023
+        </td>
+        <td>
+          3422
+          -
+          3518
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where code like \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOperations, code))).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1026
+        </td>
+        <td>
+          3686
+          -
+          3851
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Option[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOperations, uuid.toString()))).as[Option[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.singleOpt)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1025
+        </td>
+        <td>
+          3735
+          -
+          3845
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOperations, uuid.toString()))).as[Option[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1028
+        </td>
+        <td>
+          4059
+          -
+          4642
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[List[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,\n           | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result\n           | FROM &quot;, &quot; op JOIN &quot;, &quot; ofop ON op.uuid=ofop.owc_operations_uuid\n           | WHERE ofop.owc_offerings_uuid={uuid}&quot;).s(owc.this.`package`.tableOwcOperations, owc.this.`package`.tableOwcOfferingsHasOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](offeringsUuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$9: String = a;
+    &lt;artifact&gt; val x$10: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$11: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$9);
+    anorm.this.ParameterValue.toParameterValue[String](x$9)(x$11, x$10)
+  })
+})).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1027
+        </td>
+        <td>
+          4108
+          -
+          4636
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,\n           | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result\n           | FROM &quot;, &quot; op JOIN &quot;, &quot; ofop ON op.uuid=ofop.owc_operations_uuid\n           | WHERE ofop.owc_offerings_uuid={uuid}&quot;).s(owc.this.`package`.tableOwcOperations, owc.this.`package`.tableOwcOfferingsHasOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](offeringsUuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$9: String = a;
+    &lt;artifact&gt; val x$10: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$11: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$9);
+    anorm.this.ParameterValue.toParameterValue[String](x$9)(x$11, x$10)
+  })
+})).as[List[models.owc.OwcOperation]](OwcOfferingDAO.this.owcOperationParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          1032
+        </td>
+        <td>
+          4821
+          -
+          5609
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Option[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; {
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result}\n          )\n        &quot;).s(owc.this.`package`.tableOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$15: String = a;
+    &lt;artifact&gt; val x$16: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$17: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$15);
+    anorm.this.ParameterValue.toParameterValue[String](x$15)(x$17, x$16)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOperation.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$21: String = a;
+    &lt;artifact&gt; val x$22: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$23: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$21);
+    anorm.this.ParameterValue.toParameterValue[String](x$21)(x$23, x$22)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;method&quot;)).-&gt;[String](owcOperation.method))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$27: String = a;
+    &lt;artifact&gt; val x$28: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$29: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$27);
+    anorm.this.ParameterValue.toParameterValue[String](x$27)(x$29, x$28)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content_type&quot;)).-&gt;[String](owcOperation.contentType))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$33: String = a;
+    &lt;artifact&gt; val x$34: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$35: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$33);
+    anorm.this.ParameterValue.toParameterValue[String](x$33)(x$35, x$34)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcOperation.href))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$39: String = a;
+    &lt;artifact&gt; val x$40: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$41: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$39);
+    anorm.this.ParameterValue.toParameterValue[String](x$39)(x$41, x$40)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_content_type&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$1: models.owc.OwcPostRequestConfig) =&gt; x$1.contentType))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$45: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$46: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$47: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$45);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$45)(x$47, x$46)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_post_data&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$2: models.owc.OwcPostRequestConfig) =&gt; x$2.postData))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$52: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$53: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$51);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$51)(x$53, x$52)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;result&quot;)).-&gt;[Option[String]](owcOperation.result))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$57: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$58: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$59: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$57);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$57)(x$59, x$58)
+  })
+})).executeUpdate()(connection);
+  rowCount match {
+    case 1 =&gt; scala.Some.apply[models.owc.OwcOperation](owcOperation)
+    case _ =&gt; scala.None
+  }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          1029
+        </td>
+        <td>
+          4885
+          -
+          5511
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result}\n          )\n        &quot;).s(owc.this.`package`.tableOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$15: String = a;
+    &lt;artifact&gt; val x$16: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$17: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$15);
+    anorm.this.ParameterValue.toParameterValue[String](x$15)(x$17, x$16)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOperation.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$21: String = a;
+    &lt;artifact&gt; val x$22: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$23: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$21);
+    anorm.this.ParameterValue.toParameterValue[String](x$21)(x$23, x$22)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;method&quot;)).-&gt;[String](owcOperation.method))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$27: String = a;
+    &lt;artifact&gt; val x$28: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$29: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$27);
+    anorm.this.ParameterValue.toParameterValue[String](x$27)(x$29, x$28)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content_type&quot;)).-&gt;[String](owcOperation.contentType))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$33: String = a;
+    &lt;artifact&gt; val x$34: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$35: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$33);
+    anorm.this.ParameterValue.toParameterValue[String](x$33)(x$35, x$34)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcOperation.href))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$39: String = a;
+    &lt;artifact&gt; val x$40: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$41: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$39);
+    anorm.this.ParameterValue.toParameterValue[String](x$39)(x$41, x$40)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_content_type&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$1: models.owc.OwcPostRequestConfig) =&gt; x$1.contentType))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$45: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$46: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$47: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$45);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$45)(x$47, x$46)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_post_data&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$2: models.owc.OwcPostRequestConfig) =&gt; x$2.postData))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$52: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$53: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$51);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$51)(x$53, x$52)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;result&quot;)).-&gt;[Option[String]](owcOperation.result))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$57: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$58: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$59: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$57);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$57)(x$59, x$58)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1030
+        </td>
+        <td>
+          5554
+          -
+          5572
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.owc.OwcOperation](owcOperation)
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1031
+        </td>
+        <td>
+          5591
+          -
+          5595
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          1036
+        </td>
+        <td>
+          5791
+          -
+          6745
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Option[models.owc.OwcOperation]](((implicit connection: java.sql.Connection) =&gt; {
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;\n           |update &quot;, &quot; set\n           |code = {code},\n           |method = {method},\n           |content_type = {content_type},\n           |href = {href},\n           |request_content_type = {request_content_type},\n           |request_post_data = {request_post_data},\n           |result = {result} where uuid = {uuid}\n        &quot;).s(owc.this.`package`.tableOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOperation.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$63: String = a;
+    &lt;artifact&gt; val x$64: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$65: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$63);
+    anorm.this.ParameterValue.toParameterValue[String](x$63)(x$65, x$64)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;method&quot;)).-&gt;[String](owcOperation.method))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$69: String = a;
+    &lt;artifact&gt; val x$70: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$71: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$69);
+    anorm.this.ParameterValue.toParameterValue[String](x$69)(x$71, x$70)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content_type&quot;)).-&gt;[String](owcOperation.contentType))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$75: String = a;
+    &lt;artifact&gt; val x$76: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$77: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$75);
+    anorm.this.ParameterValue.toParameterValue[String](x$75)(x$77, x$76)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcOperation.href))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$81: String = a;
+    &lt;artifact&gt; val x$82: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$83: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$81);
+    anorm.this.ParameterValue.toParameterValue[String](x$81)(x$83, x$82)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_content_type&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$3: models.owc.OwcPostRequestConfig) =&gt; x$3.contentType))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$87: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$88: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$89: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$87);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$87)(x$89, x$88)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_post_data&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$4: models.owc.OwcPostRequestConfig) =&gt; x$4.postData))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$93: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$94: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$95: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$93);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$93)(x$95, x$94)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;result&quot;)).-&gt;[Option[String]](owcOperation.result))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$99: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$100: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$101: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$99);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$99)(x$101, x$100)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$105: String = a;
+    &lt;artifact&gt; val x$106: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$107: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$105);
+    anorm.this.ParameterValue.toParameterValue[String](x$105)(x$107, x$106)
+  })
+})).executeUpdate()(connection);
+  rowCount match {
+    case 1 =&gt; scala.Some.apply[models.owc.OwcOperation](owcOperation)
+    case _ =&gt; scala.None
+  }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          204
+        </td>
+        <td>
+          1033
+        </td>
+        <td>
+          5855
+          -
+          6647
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;\n           |update &quot;, &quot; set\n           |code = {code},\n           |method = {method},\n           |content_type = {content_type},\n           |href = {href},\n           |request_content_type = {request_content_type},\n           |request_post_data = {request_post_data},\n           |result = {result} where uuid = {uuid}\n        &quot;).s(owc.this.`package`.tableOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOperation.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$63: String = a;
+    &lt;artifact&gt; val x$64: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$65: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$63);
+    anorm.this.ParameterValue.toParameterValue[String](x$63)(x$65, x$64)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;method&quot;)).-&gt;[String](owcOperation.method))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$69: String = a;
+    &lt;artifact&gt; val x$70: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$71: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$69);
+    anorm.this.ParameterValue.toParameterValue[String](x$69)(x$71, x$70)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content_type&quot;)).-&gt;[String](owcOperation.contentType))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$75: String = a;
+    &lt;artifact&gt; val x$76: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$77: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$75);
+    anorm.this.ParameterValue.toParameterValue[String](x$75)(x$77, x$76)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcOperation.href))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$81: String = a;
+    &lt;artifact&gt; val x$82: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$83: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$81);
+    anorm.this.ParameterValue.toParameterValue[String](x$81)(x$83, x$82)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_content_type&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$3: models.owc.OwcPostRequestConfig) =&gt; x$3.contentType))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$87: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$88: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$89: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$87);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$87)(x$89, x$88)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;request_post_data&quot;)).-&gt;[Option[String]](owcOperation.request.map[String](((x$4: models.owc.OwcPostRequestConfig) =&gt; x$4.postData))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$93: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$94: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$95: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$93);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$93)(x$95, x$94)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;result&quot;)).-&gt;[Option[String]](owcOperation.result))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$99: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$100: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$101: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$99);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$99)(x$101, x$100)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$105: String = a;
+    &lt;artifact&gt; val x$106: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$107: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$105);
+    anorm.this.ParameterValue.toParameterValue[String](x$105)(x$107, x$106)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          1034
+        </td>
+        <td>
+          6690
+          -
+          6708
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.owc.OwcOperation](owcOperation)
+        </td>
+      </tr><tr>
+        <td>
+          208
+        </td>
+        <td>
+          1035
+        </td>
+        <td>
+          6727
+          -
+          6731
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          221
+        </td>
+        <td>
+          1038
+        </td>
+        <td>
+          6925
+          -
+          7111
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Int](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$111: String = a;
+    &lt;artifact&gt; val x$112: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$113: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$111);
+    anorm.this.ParameterValue.toParameterValue[String](x$111)(x$113, x$112)
+  })
+})).executeUpdate()(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          224
+        </td>
+        <td>
+          1037
+        </td>
+        <td>
+          6974
+          -
+          7105
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$111: String = a;
+    &lt;artifact&gt; val x$112: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$113: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$111);
+    anorm.this.ParameterValue.toParameterValue[String](x$111)(x$113, x$112)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          228
+        </td>
+        <td>
+          1039
+        </td>
+        <td>
+          7150
+          -
+          7154
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          229
+        </td>
+        <td>
+          1040
+        </td>
+        <td>
+          7171
+          -
+          7176
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          249
+        </td>
+        <td>
+          1041
+        </td>
+        <td>
+          7704
+          -
+          7725
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          1043
+        </td>
+        <td>
+          7740
+          -
+          7802
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.TraversableOnce.toList
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.findOwcOperationsByOfferingsUUID(java.util.UUID.fromString(uuid)).toList
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          1042
+        </td>
+        <td>
+          7773
+          -
+          7794
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          1046
+        </td>
+        <td>
+          7825
+          -
+          7874
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          content.map[List[String]](((text: String) =&gt; immutable.this.List.apply[String](text))).getOrElse[List[String]](immutable.this.Nil)
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          1045
+        </td>
+        <td>
+          7867
+          -
+          7873
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #AEF1AE">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          1044
+        </td>
+        <td>
+          7845
+          -
+          7855
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.apply
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.List.apply[String](text)
+        </td>
+      </tr><tr>
+        <td>
+          254
+        </td>
+        <td>
+          1047
+        </td>
+        <td>
+          7929
+          -
+          7973
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WmsOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          WmsOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          1048
+        </td>
+        <td>
+          8003
+          -
+          8048
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WmtsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WmtsOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          1049
+        </td>
+        <td>
+          8077
+          -
+          8121
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WfsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WfsOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          257
+        </td>
+        <td>
+          1050
+        </td>
+        <td>
+          8150
+          -
+          8194
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WcsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WcsOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          1051
+        </td>
+        <td>
+          8223
+          -
+          8267
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.CswOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          CswOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          259
+        </td>
+        <td>
+          1052
+        </td>
+        <td>
+          8296
+          -
+          8340
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WpsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WpsOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          260
+        </td>
+        <td>
+          1053
+        </td>
+        <td>
+          8369
+          -
+          8413
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.GmlOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          GmlOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          1054
+        </td>
+        <td>
+          8442
+          -
+          8486
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.KmlOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          KmlOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          262
+        </td>
+        <td>
+          1055
+        </td>
+        <td>
+          8519
+          -
+          8567
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.GeoTiffOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          GeoTiffOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          263
+        </td>
+        <td>
+          1056
+        </td>
+        <td>
+          8596
+          -
+          8640
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.SosOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          SosOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          264
+        </td>
+        <td>
+          1057
+        </td>
+        <td>
+          8672
+          -
+          8719
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.NetCdfOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          NetCdfOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          265
+        </td>
+        <td>
+          1058
+        </td>
+        <td>
+          8753
+          -
+          8802
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.HttpLinkOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          HttpLinkOffering.apply(uuidObj, code, ops, contentList)
+        </td>
+      </tr><tr>
+        <td>
+          266
+        </td>
+        <td>
+          1059
+        </td>
+        <td>
+          8819
+          -
+          8904
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          throw new java.io.InvalidClassException(offeringType, scala.StringContext.apply(&quot;Unknown Offering type &quot;, &quot;&quot;).s(offeringType))
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1061
+        </td>
+        <td>
+          9032
+          -
+          9032
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1060
+        </td>
+        <td>
+          9033
+          -
+          9039
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1064
+        </td>
+        <td>
+          9049
+          -
+          9069
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;offering_type&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1063
+        </td>
+        <td>
+          9052
+          -
+          9052
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1062
+        </td>
+        <td>
+          9053
+          -
+          9068
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;offering_type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1067
+        </td>
+        <td>
+          9078
+          -
+          9089
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;code&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1066
+        </td>
+        <td>
+          9081
+          -
+          9081
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1065
+        </td>
+        <td>
+          9082
+          -
+          9088
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1070
+        </td>
+        <td>
+          9117
+          -
+          9117
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1073
+        </td>
+        <td>
+          9029
+          -
+          9254
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;uuid&quot;)(anorm.this.Column.columnToString).~[String](anorm.SqlParser.str(&quot;offering_type&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.str(&quot;code&quot;)(anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;content&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).map[models.owc.OwcOffering](((x0$2: anorm.~[anorm.~[anorm.~[String,String],String],Option[String]]) =&gt; x0$2 match {
+  case (_1: anorm.~[anorm.~[String,String],String], _2: Option[String])anorm.~[anorm.~[anorm.~[String,String],String],Option[String]]((_1: anorm.~[String,String], _2: String)anorm.~[anorm.~[String,String],String]((_1: String, _2: String)anorm.~[String,String]((uuid @ _), (offeringType @ _)), (code @ _)), (content @ _)) =&gt; OwcOfferingDAO.this.instantiateOffering(uuid, offeringType, code, content)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1069
+        </td>
+        <td>
+          9117
+          -
+          9117
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1068
+        </td>
+        <td>
+          9118
+          -
+          9127
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;content&quot;
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1071
+        </td>
+        <td>
+          9098
+          -
+          9128
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;content&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          279
+        </td>
+        <td>
+          1072
+        </td>
+        <td>
+          9194
+          -
+          9248
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingDAO.instantiateOffering
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.instantiateOffering(uuid, offeringType, code, content)
+        </td>
+      </tr><tr>
+        <td>
+          289
+        </td>
+        <td>
+          1075
+        </td>
+        <td>
+          9372
+          -
+          9491
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[List[models.owc.OwcOffering]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcOfferings))).as[List[models.owc.OwcOffering]](OwcOfferingDAO.this.owcOfferingParser.*)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          290
+        </td>
+        <td>
+          1074
+        </td>
+        <td>
+          9421
+          -
+          9485
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcOfferings))).as[List[models.owc.OwcOffering]](OwcOfferingDAO.this.owcOfferingParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          301
+        </td>
+        <td>
+          1077
+        </td>
+        <td>
+          9659
+          -
+          9822
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Option[models.owc.OwcOffering]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOfferings, uuid.toString()))).as[Option[models.owc.OwcOffering]](OwcOfferingDAO.this.owcOfferingParser.singleOpt)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          302
+        </td>
+        <td>
+          1076
+        </td>
+        <td>
+          9708
+          -
+          9816
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcOfferings, uuid.toString()))).as[Option[models.owc.OwcOffering]](OwcOfferingDAO.this.owcOfferingParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          313
+        </td>
+        <td>
+          1089
+        </td>
+        <td>
+          10030
+          -
+          11190
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withTransaction
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withTransaction[Option[models.owc.OwcOffering]](((implicit connection: java.sql.Connection) =&gt; {
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {offering_type}, {code}, {content}\n          )\n        &quot;).s(owc.this.`package`.tableOwcOfferings))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$117: String = a;
+    &lt;artifact&gt; val x$118: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$119: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$117);
+    anorm.this.ParameterValue.toParameterValue[String](x$117)(x$119, x$118)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;offering_type&quot;)).-&gt;[String](owcOffering.getClass().getSimpleName()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$123: String = a;
+    &lt;artifact&gt; val x$124: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$125: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$123);
+    anorm.this.ParameterValue.toParameterValue[String](x$123)(x$125, x$124)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOffering.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$129: String = a;
+    &lt;artifact&gt; val x$130: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$131: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$129);
+    anorm.this.ParameterValue.toParameterValue[String](x$129)(x$131, x$130)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcOffering.content.headOption))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$135: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$136: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$137: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$135);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$135)(x$137, x$136)
+  })
+})).executeUpdate()(connection);
+  owcOffering.operations.foreach[Int](((owcOperation: models.owc.OwcOperation) =&gt; {
+    if (OwcOfferingDAO.this.findOwcOperationByUuid(owcOperation.uuid).isEmpty)
+      OwcOfferingDAO.this.createOwcOperation(owcOperation)
+    else
+      ();
+    anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;insert into &quot;, &quot;  values (\n                 |{owc_offerings_uuid}, {owc_operations_uuid}\n                 |)\n               &quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_offerings_uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$141: String = a;
+    &lt;artifact&gt; val x$142: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$143: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$141);
+    anorm.this.ParameterValue.toParameterValue[String](x$141)(x$143, x$142)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_operations_uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$147: String = a;
+    &lt;artifact&gt; val x$148: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$149: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$147);
+    anorm.this.ParameterValue.toParameterValue[String](x$147)(x$149, x$148)
+  })
+})).executeUpdate()(connection)
+  }));
+  rowCount match {
+    case 1 =&gt; scala.Some.apply[models.owc.OwcOffering](owcOffering)
+    case _ =&gt; scala.None
+  }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          326
+        </td>
+        <td>
+          1078
+        </td>
+        <td>
+          10106
+          -
+          10485
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {offering_type}, {code}, {content}\n          )\n        &quot;).s(owc.this.`package`.tableOwcOfferings))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$117: String = a;
+    &lt;artifact&gt; val x$118: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$119: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$117);
+    anorm.this.ParameterValue.toParameterValue[String](x$117)(x$119, x$118)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;offering_type&quot;)).-&gt;[String](owcOffering.getClass().getSimpleName()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$123: String = a;
+    &lt;artifact&gt; val x$124: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$125: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$123);
+    anorm.this.ParameterValue.toParameterValue[String](x$123)(x$125, x$124)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;code&quot;)).-&gt;[String](owcOffering.code))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$129: String = a;
+    &lt;artifact&gt; val x$130: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$131: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$129);
+    anorm.this.ParameterValue.toParameterValue[String](x$129)(x$131, x$130)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcOffering.content.headOption))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$135: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$136: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$137: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$135);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$135)(x$137, x$136)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          328
+        </td>
+        <td>
+          1086
+        </td>
+        <td>
+          10495
+          -
+          11077
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.foreach
+        </td>
+        <td style="background: #AEF1AE">
+          owcOffering.operations.foreach[Int](((owcOperation: models.owc.OwcOperation) =&gt; {
+  if (OwcOfferingDAO.this.findOwcOperationByUuid(owcOperation.uuid).isEmpty)
+    OwcOfferingDAO.this.createOwcOperation(owcOperation)
+  else
+    ();
+  anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;insert into &quot;, &quot;  values (\n                 |{owc_offerings_uuid}, {owc_operations_uuid}\n                 |)\n               &quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_offerings_uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$141: String = a;
+    &lt;artifact&gt; val x$142: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$143: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$141);
+    anorm.this.ParameterValue.toParameterValue[String](x$141)(x$143, x$142)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_operations_uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$147: String = a;
+    &lt;artifact&gt; val x$148: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$149: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$147);
+    anorm.this.ParameterValue.toParameterValue[String](x$147)(x$149, x$148)
+  })
+})).executeUpdate()(connection)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          1079
+        </td>
+        <td>
+          10595
+          -
+          10612
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.uuid
+        </td>
+        <td style="background: #AEF1AE">
+          owcOperation.uuid
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          1084
+        </td>
+        <td>
+          10568
+          -
+          10568
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          1080
+        </td>
+        <td>
+          10572
+          -
+          10621
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.findOwcOperationByUuid(owcOperation.uuid).isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          330
+        </td>
+        <td>
+          1083
+        </td>
+        <td>
+          10568
+          -
+          10568
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          331
+        </td>
+        <td>
+          1082
+        </td>
+        <td>
+          10639
+          -
+          10671
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.owc.OwcOfferingDAO.createOwcOperation
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.createOwcOperation(owcOperation)
+        </td>
+      </tr><tr>
+        <td>
+          331
+        </td>
+        <td>
+          1081
+        </td>
+        <td>
+          10639
+          -
+          10671
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingDAO.createOwcOperation
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.createOwcOperation(owcOperation)
+        </td>
+      </tr><tr>
+        <td>
+          341
+        </td>
+        <td>
+          1085
+        </td>
+        <td>
+          10699
+          -
+          11055
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;insert into &quot;, &quot;  values (\n                 |{owc_offerings_uuid}, {owc_operations_uuid}\n                 |)\n               &quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_offerings_uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$141: String = a;
+    &lt;artifact&gt; val x$142: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$143: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$141);
+    anorm.this.ParameterValue.toParameterValue[String](x$141)(x$143, x$142)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_operations_uuid&quot;)).-&gt;[String](owcOperation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$147: String = a;
+    &lt;artifact&gt; val x$148: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$149: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$147);
+    anorm.this.ParameterValue.toParameterValue[String](x$147)(x$149, x$148)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          346
+        </td>
+        <td>
+          1087
+        </td>
+        <td>
+          11124
+          -
+          11141
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.owc.OwcOffering](owcOffering)
+        </td>
+      </tr><tr>
+        <td>
+          347
+        </td>
+        <td>
+          1088
+        </td>
+        <td>
+          11162
+          -
+          11166
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          358
+        </td>
+        <td>
+          1090
+        </td>
+        <td>
+          11327
+          -
+          11330
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Predef.???
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.???
+        </td>
+      </tr><tr>
+        <td>
+          367
+        </td>
+        <td>
+          1093
+        </td>
+        <td>
+          11571
+          -
+          11957
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withTransaction
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withTransaction[Int](((implicit connection: java.sql.Connection) =&gt; {
+  anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where owc_offerings_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$153: String = a;
+    &lt;artifact&gt; val x$154: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$155: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$153);
+    anorm.this.ParameterValue.toParameterValue[String](x$153)(x$155, x$154)
+  })
+})).executeUpdate()(connection);
+  anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferings))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$159: String = a;
+    &lt;artifact&gt; val x$160: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$161: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$159);
+    anorm.this.ParameterValue.toParameterValue[String](x$159)(x$161, x$160)
+  })
+})).executeUpdate()(connection)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          372
+        </td>
+        <td>
+          1091
+        </td>
+        <td>
+          11632
+          -
+          11799
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where owc_offerings_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$153: String = a;
+    &lt;artifact&gt; val x$154: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$155: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$153);
+    anorm.this.ParameterValue.toParameterValue[String](x$153)(x$155, x$154)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          376
+        </td>
+        <td>
+          1092
+        </td>
+        <td>
+          11809
+          -
+          11942
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferings))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcOffering.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$159: String = a;
+    &lt;artifact&gt; val x$160: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$161: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$159);
+    anorm.this.ParameterValue.toParameterValue[String](x$159)(x$161, x$160)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          381
+        </td>
+        <td>
+          1112
+        </td>
+        <td>
+          11963
+          -
+          12386
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.db.Database.withConnection
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.db.withConnection[Unit](((implicit connection: java.sql.Connection) =&gt; owcOffering.operations.filter(((operation: models.owc.OwcOperation) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_operations_uuid from &quot;, &quot; where owc_operations_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](operation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$165: String = a;
+    &lt;artifact&gt; val x$166: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$167: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$165);
+    anorm.this.ParameterValue.toParameterValue[String](x$165)(x$167, x$166)
+  })
+})).as[List[String]](anorm.SqlParser.str(&quot;owc_operations_uuid&quot;)(anorm.this.Column.columnToString).*)(connection).isEmpty)).foreach[Boolean](((x$5: models.owc.OwcOperation) =&gt; OwcOfferingDAO.this.deleteOwcOperation(x$5)))))
+        </td>
+      </tr><tr>
+        <td>
+          385
+        </td>
+        <td>
+          1097
+        </td>
+        <td>
+          12094
+          -
+          12202
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;select owc_operations_uuid from &quot;, &quot; where owc_operations_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations)
+        </td>
+      </tr><tr>
+        <td>
+          385
+        </td>
+        <td>
+          1094
+        </td>
+        <td>
+          12098
+          -
+          12131
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;select owc_operations_uuid from &quot;
+        </td>
+      </tr><tr>
+        <td>
+          385
+        </td>
+        <td>
+          1096
+        </td>
+        <td>
+          12131
+          -
+          12164
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.tableOwcOfferingsHasOwcOperations
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.tableOwcOfferingsHasOwcOperations
+        </td>
+      </tr><tr>
+        <td>
+          385
+        </td>
+        <td>
+          1098
+        </td>
+        <td>
+          12090
+          -
+          12203
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.SQL
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_operations_uuid from &quot;, &quot; where owc_operations_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))
+        </td>
+      </tr><tr>
+        <td>
+          385
+        </td>
+        <td>
+          1095
+        </td>
+        <td>
+          12164
+          -
+          12202
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot; where owc_operations_uuid = {uuid}&quot;
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1100
+        </td>
+        <td>
+          12231
+          -
+          12254
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          operation.uuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1102
+        </td>
+        <td>
+          12228
+          -
+          12228
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1105
+        </td>
+        <td>
+          12222
+          -
+          12254
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.symbol
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](operation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$165: String = a;
+    &lt;artifact&gt; val x$166: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$167: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$165);
+    anorm.this.ParameterValue.toParameterValue[String](x$165)(x$167, x$166)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1099
+        </td>
+        <td>
+          12222
+          -
+          12227
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Symbol.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Symbol.apply(&quot;uuid&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1101
+        </td>
+        <td>
+          12222
+          -
+          12254
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](operation.uuid.toString())
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1104
+        </td>
+        <td>
+          12228
+          -
+          12228
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$165)(x$167, x$166)
+        </td>
+      </tr><tr>
+        <td>
+          386
+        </td>
+        <td>
+          1103
+        </td>
+        <td>
+          12228
+          -
+          12228
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$165)
+        </td>
+      </tr><tr>
+        <td>
+          387
+        </td>
+        <td>
+          1106
+        </td>
+        <td>
+          12286
+          -
+          12307
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_operations_uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          387
+        </td>
+        <td>
+          1109
+        </td>
+        <td>
+          12090
+          -
+          12319
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.SeqLike.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_operations_uuid from &quot;, &quot; where owc_operations_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](operation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$165: String = a;
+    &lt;artifact&gt; val x$166: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$167: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$165);
+    anorm.this.ParameterValue.toParameterValue[String](x$165)(x$167, x$166)
+  })
+})).as[List[String]](anorm.SqlParser.str(&quot;owc_operations_uuid&quot;)(anorm.this.Column.columnToString).*)(connection).isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          387
+        </td>
+        <td>
+          1108
+        </td>
+        <td>
+          12272
+          -
+          12310
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.RowParser.*
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_operations_uuid&quot;)(anorm.this.Column.columnToString).*
+        </td>
+      </tr><tr>
+        <td>
+          387
+        </td>
+        <td>
+          1107
+        </td>
+        <td>
+          12285
+          -
+          12285
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          389
+        </td>
+        <td>
+          1111
+        </td>
+        <td>
+          12021
+          -
+          12372
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.foreach
+        </td>
+        <td style="background: #AEF1AE">
+          owcOffering.operations.filter(((operation: models.owc.OwcOperation) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_operations_uuid from &quot;, &quot; where owc_operations_uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcOfferingsHasOwcOperations))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](operation.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$165: String = a;
+    &lt;artifact&gt; val x$166: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$167: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$165);
+    anorm.this.ParameterValue.toParameterValue[String](x$165)(x$167, x$166)
+  })
+})).as[List[String]](anorm.SqlParser.str(&quot;owc_operations_uuid&quot;)(anorm.this.Column.columnToString).*)(connection).isEmpty)).foreach[Boolean](((x$5: models.owc.OwcOperation) =&gt; OwcOfferingDAO.this.deleteOwcOperation(x$5)))
+        </td>
+      </tr><tr>
+        <td>
+          389
+        </td>
+        <td>
+          1110
+        </td>
+        <td>
+          12350
+          -
+          12371
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingDAO.deleteOwcOperation
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingDAO.this.deleteOwcOperation(x$5)
+        </td>
+      </tr><tr>
+        <td>
+          394
+        </td>
+        <td>
+          1113
+        </td>
+        <td>
+          12425
+          -
+          12429
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          395
+        </td>
+        <td>
+          1114
+        </td>
+        <td>
+          12446
+          -
+          12451
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

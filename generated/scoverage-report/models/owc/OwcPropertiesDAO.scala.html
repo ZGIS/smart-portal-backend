@@ -611,241 +611,246 @@
 </span>587 <span style=''>  }
 </span>588 <span style=''>
 </span>589 <span style=''>  /**
-</span>590 <span style=''>    *
-</span>591 <span style=''>    * @return
-</span>592 <span style=''>    */
-</span>593 <span style=''>  def getAllOwcProperties: Seq[OwcProperties] = {
-</span>594 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
-</span>595 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcProperties""").as(owcPropertiesParser *)
-</span>596 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>597 <span style=''>  }
-</span>598 <span style=''>
-</span>599 <span style=''>  /**
-</span>600 <span style=''>    *
-</span>601 <span style=''>    * @param uuid
-</span>602 <span style=''>    * @return
-</span>603 <span style=''>    */
-</span>604 <span style=''>  def findOwcPropertiesByUuid(uuid: UUID): Option[OwcProperties] = {
-</span>605 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
-</span>606 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcProperties where uuid = '${uuid.toString}'""").as(owcPropertiesParser.singleOpt)
-</span>607 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>608 <span style=''>  }
-</span>609 <span style=''>
-</span>610 <span style=''>  /**
-</span>611 <span style=''>    * find owc properties by title, title has unique constraint, that's why wild card search is intended
-</span>612 <span style=''>    *
-</span>613 <span style=''>    * @param title
-</span>614 <span style=''>    * @return
-</span>615 <span style=''>    */
-</span>616 <span style=''>  def findOwcPropertiesByTitle(title: String): Seq[OwcProperties] = {
-</span>617 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
-</span>618 <span style=''></span><span style='background: #F0ADAD'>      SQL(s"""select * from $tableOwcProperties where title like '%${title}%'""").as(owcPropertiesParser *)
-</span>619 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>620 <span style=''>  }
-</span>621 <span style=''>
-</span>622 <span style=''>  /**
-</span>623 <span style=''>    * get properties for a featuretype (OwcEntry or OwcDocument)
-</span>624 <span style=''>    * @param featureTypeId
-</span>625 <span style=''>    * @return
-</span>626 <span style=''>    */
-</span>627 <span style=''>  def findOwcPropertiesForOwcFeatureType(featureTypeId: String) : Option[OwcProperties] = {
-</span>628 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
-</span>629 <span style=''></span><span style='background: #AEF1AE'>      SQL(
-</span>630 <span style=''></span><span style='background: #AEF1AE'>        s"""SELECT
-</span>631 <span style=''></span><span style='background: #AEF1AE'>           |p.uuid, p.language, p.title, p.subtitle, p.updated, p.generator, p.rights, p.creator, p.publisher
-</span>632 <span style=''></span><span style='background: #AEF1AE'>           |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
-</span>633 <span style=''></span><span style='background: #AEF1AE'>           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
-</span>634 <span style=''></span><span style='background: #AEF1AE'>        'owc_feature_types_id -> featureTypeId
-</span>635 <span style=''></span><span style='background: #AEF1AE'>      )
-</span>636 <span style=''></span><span style='background: #AEF1AE'>        .as(owcPropertiesParser.singleOpt)
-</span>637 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>638 <span style=''>  }
-</span>639 <span style=''>
-</span>640 <span style=''>  /**
-</span>641 <span style=''>    * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
-</span>642 <span style=''>    *
-</span>643 <span style=''>    * @param owcProperties
-</span>644 <span style=''>    * @return
-</span>645 <span style=''>    */
-</span>646 <span style=''>  def createOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = {
-</span>647 <span style=''>
-</span>648 <span style=''>    </span><span style='background: #AEF1AE'>db.withTransaction {
-</span>649 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
-</span>650 <span style=''></span><span style='background: #AEF1AE'>
-</span>651 <span style=''></span><span style='background: #AEF1AE'>        val rowCount = SQL(
-</span>652 <span style=''></span><span style='background: #AEF1AE'>          s"""
-</span>653 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcProperties values (
-</span>654 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {language}, {title}, {subtitle}, {updated}, {generator}, {rights}, {creator}, {publisher}
-</span>655 <span style=''></span><span style='background: #AEF1AE'>          )
-</span>656 <span style=''></span><span style='background: #AEF1AE'>        """).on(
-</span>657 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString,
-</span>658 <span style=''></span><span style='background: #AEF1AE'>          'language -> owcProperties.language,
-</span>659 <span style=''></span><span style='background: #AEF1AE'>          'title -> owcProperties.title,
-</span>660 <span style=''></span><span style='background: #AEF1AE'>          'subtitle -> owcProperties.subtitle,
-</span>661 <span style=''></span><span style='background: #AEF1AE'>          'updated -> owcProperties.updated,
-</span>662 <span style=''></span><span style='background: #AEF1AE'>          'generator -> owcProperties.generator,
-</span>663 <span style=''></span><span style='background: #AEF1AE'>          'rights -> owcProperties.rights,
-</span>664 <span style=''></span><span style='background: #AEF1AE'>          'creator -> owcProperties.creator,
-</span>665 <span style=''></span><span style='background: #AEF1AE'>          'publisher -> owcProperties.publisher
-</span>666 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>667 <span style=''></span><span style='background: #AEF1AE'>
-</span>668 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.authors.foreach {
-</span>669 <span style=''></span><span style='background: #AEF1AE'>          author => {
-</span>670 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcAuthorByUuid(author.uuid).isEmpty) {
-</span>671 <span style=''></span><span style='background: #AEF1AE'>              createOwcAuthor(author)
-</span>672 <span style=''></span><span style='background: #AEF1AE'>            }
-</span>673 <span style=''></span><span style='background: #AEF1AE'>
-</span>674 <span style=''></span><span style='background: #AEF1AE'>            SQL(
-</span>675 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcAuthors values (
-</span>676 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_authors_uuid}
-</span>677 <span style=''></span><span style='background: #AEF1AE'>                 |)
-</span>678 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
-</span>679 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
-</span>680 <span style=''></span><span style='background: #AEF1AE'>              'owc_authors_uuid -> author.uuid.toString
-</span>681 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
-</span>682 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>683 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>684 <span style=''></span><span style='background: #AEF1AE'>
-</span>685 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.contributors.foreach {
-</span>686 <span style=''></span><span style='background: #AEF1AE'>          authorAsContributor => {
-</span>687 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcAuthorByUuid(authorAsContributor.uuid).isEmpty) {
-</span>688 <span style=''></span><span style='background: #AEF1AE'>              createOwcAuthor(authorAsContributor)
-</span>689 <span style=''></span><span style='background: #AEF1AE'>            }
-</span>690 <span style=''></span><span style='background: #AEF1AE'>
-</span>691 <span style=''></span><span style='background: #AEF1AE'>            SQL(
-</span>692 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcAuthorsAsContributors values (
-</span>693 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_authors_as_contributors_uuid}
-</span>694 <span style=''></span><span style='background: #AEF1AE'>                 |)
-</span>695 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
-</span>696 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
-</span>697 <span style=''></span><span style='background: #AEF1AE'>              'owc_authors_as_contributors_uuid -> authorAsContributor.uuid.toString
-</span>698 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
-</span>699 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>700 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>701 <span style=''></span><span style='background: #AEF1AE'>
-</span>702 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.categories.foreach {
-</span>703 <span style=''></span><span style='background: #AEF1AE'>          category => {
-</span>704 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcCategoriesByUuid(category.uuid).isEmpty) {
-</span>705 <span style=''></span><span style='background: #AEF1AE'>              createOwcCategory(category)
-</span>706 <span style=''></span><span style='background: #AEF1AE'>            }
-</span>707 <span style=''></span><span style='background: #AEF1AE'>
-</span>708 <span style=''></span><span style='background: #AEF1AE'>            SQL(
-</span>709 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcCategories  values (
-</span>710 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_categories_uuid}
-</span>711 <span style=''></span><span style='background: #AEF1AE'>                 |)
-</span>712 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
-</span>713 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
-</span>714 <span style=''></span><span style='background: #AEF1AE'>              'owc_categories_uuid -> category.uuid.toString
-</span>715 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
-</span>716 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>717 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>718 <span style=''></span><span style='background: #AEF1AE'>
-</span>719 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.links.foreach {
-</span>720 <span style=''></span><span style='background: #AEF1AE'>          owcLink => {
-</span>721 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcLinksByUuid(owcLink.uuid).isEmpty) {
-</span>722 <span style=''></span><span style='background: #AEF1AE'>              createOwcLink(owcLink)
-</span>723 <span style=''></span><span style='background: #AEF1AE'>            }
-</span>724 <span style=''></span><span style='background: #AEF1AE'>
-</span>725 <span style=''></span><span style='background: #AEF1AE'>            SQL(
-</span>726 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcLinks  values (
-</span>727 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_links_uuid}
-</span>728 <span style=''></span><span style='background: #AEF1AE'>                 |)
-</span>729 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
-</span>730 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
-</span>731 <span style=''></span><span style='background: #AEF1AE'>              'owc_links_uuid -> owcLink.uuid.toString
-</span>732 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
-</span>733 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>734 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>735 <span style=''></span><span style='background: #AEF1AE'>
-</span>736 <span style=''></span><span style='background: #AEF1AE'>        rowCount match {
-</span>737 <span style=''></span><span style='background: #AEF1AE'>          case 1 => Some(owcProperties)
-</span>738 <span style=''></span><span style='background: #AEF1AE'>          case _ => </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
-</span>739 <span style=''></span><span style='background: #AEF1AE'>        }
-</span>740 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>741 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>742 <span style=''>  }
-</span>743 <span style=''>
-</span>744 <span style=''>  /**
-</span>745 <span style=''>    *
-</span>746 <span style=''>    * @param owcProperties
-</span>747 <span style=''>    * @return
-</span>748 <span style=''>    */
-</span>749 <span style=''>  def updateOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = </span><span style='background: #F0ADAD'>???</span><span style=''>
-</span>750 <span style=''>
-</span>751 <span style=''>  /**
-</span>752 <span style=''>    *
-</span>753 <span style=''>    * @param owcProperties
-</span>754 <span style=''>    * @return
-</span>755 <span style=''>    */
-</span>756 <span style=''>  def deleteOwcProperties(owcProperties: OwcProperties): Boolean = {
-</span>757 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>db.withTransaction {
-</span>758 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
-</span>759 <span style=''></span><span style='background: #AEF1AE'>
-</span>760 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthors where owc_properties_uuid = {uuid}""").on(
-</span>761 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
-</span>762 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>763 <span style=''></span><span style='background: #AEF1AE'>
-</span>764 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthorsAsContributors where owc_properties_uuid = {uuid}""").on(
-</span>765 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
-</span>766 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>767 <span style=''></span><span style='background: #AEF1AE'>
-</span>768 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcCategories where owc_properties_uuid = {uuid}""").on(
-</span>769 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
-</span>770 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>771 <span style=''></span><span style='background: #AEF1AE'>
-</span>772 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcLinks where owc_properties_uuid = {uuid}""").on(
-</span>773 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
-</span>774 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>775 <span style=''></span><span style='background: #AEF1AE'>
-</span>776 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"delete from $tableOwcProperties where uuid = {uuid}").on(
-</span>777 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
-</span>778 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
-</span>779 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>780 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>781 <span style=''>
-</span>782 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection(
-</span>783 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
-</span>784 <span style=''></span><span style='background: #AEF1AE'>        (owcProperties.authors ++ owcProperties.contributors).distinct.filter {
-</span>785 <span style=''></span><span style='background: #AEF1AE'>          author => {
-</span>786 <span style=''></span><span style='background: #AEF1AE'>            val authorsEmpty = SQL(s"""select owc_authors_uuid from $tableOwcPropertiesHasOwcAuthors where owc_authors_uuid = {uuid}""").on(
-</span>787 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> author.uuid.toString
-</span>788 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_authors_uuid") *).isEmpty
-</span>789 <span style=''></span><span style='background: #AEF1AE'>
-</span>790 <span style=''></span><span style='background: #AEF1AE'>            val authorsAsContributorsEmpty = SQL(
-</span>791 <span style=''></span><span style='background: #AEF1AE'>              s"""select owc_authors_as_contributors_uuid from $tableOwcPropertiesHasOwcAuthorsAsContributors
-</span>792 <span style=''></span><span style='background: #AEF1AE'>                 |where owc_authors_as_contributors_uuid = {uuid}""".stripMargin).on(
-</span>793 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> author.uuid.toString
-</span>794 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_authors_as_contributors_uuid") *).isEmpty
-</span>795 <span style=''></span><span style='background: #AEF1AE'>
-</span>796 <span style=''></span><span style='background: #AEF1AE'>            authorsEmpty && authorsAsContributorsEmpty
-</span>797 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>798 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcAuthor(_))
-</span>799 <span style=''></span><span style='background: #AEF1AE'>
-</span>800 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.categories.filter {
-</span>801 <span style=''></span><span style='background: #AEF1AE'>          category => {
-</span>802 <span style=''></span><span style='background: #AEF1AE'>            SQL(s"""select owc_categories_uuid from $tableOwcPropertiesHasOwcCategories where owc_categories_uuid = {uuid}""").on(
-</span>803 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> category.uuid.toString
-</span>804 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_categories_uuid") *).isEmpty
-</span>805 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>806 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcCategory(_))
-</span>807 <span style=''></span><span style='background: #AEF1AE'>
-</span>808 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.links.filter {
-</span>809 <span style=''></span><span style='background: #AEF1AE'>          owcLink => {
-</span>810 <span style=''></span><span style='background: #AEF1AE'>            SQL(s"""select owc_links_uuid from $tableOwcPropertiesHasOwcLinks where owc_links_uuid = {uuid}""").on(
-</span>811 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> owcLink.uuid.toString
-</span>812 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_links_uuid") *).isEmpty
-</span>813 <span style=''></span><span style='background: #AEF1AE'>          }
-</span>814 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(</span><span style='background: #F0ADAD'>deleteOwcLink(_)</span><span style='background: #AEF1AE'>)
-</span>815 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>816 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
-</span>817 <span style=''>
-</span>818 <span style=''>    rowCount match {
-</span>819 <span style=''>      case 1 => </span><span style='background: #AEF1AE'>true</span><span style=''>
-</span>820 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
-</span>821 <span style=''>    }
-</span>822 <span style=''>  }
-</span>823 <span style=''>
-</span>824 <span style=''>}
+</span>590 <span style=''>    * get all the owc properties objects
+</span>591 <span style=''>    *
+</span>592 <span style=''>    * @return
+</span>593 <span style=''>    */
+</span>594 <span style=''>  def getAllOwcProperties: Seq[OwcProperties] = {
+</span>595 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>596 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcProperties""").as(owcPropertiesParser *)
+</span>597 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>598 <span style=''>  }
+</span>599 <span style=''>
+</span>600 <span style=''>  /**
+</span>601 <span style=''>    * find a distinct owc properties by its uuid
+</span>602 <span style=''>    *
+</span>603 <span style=''>    * @param uuid
+</span>604 <span style=''>    * @return
+</span>605 <span style=''>    */
+</span>606 <span style=''>  def findOwcPropertiesByUuid(uuid: UUID): Option[OwcProperties] = {
+</span>607 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>608 <span style=''></span><span style='background: #AEF1AE'>      SQL(s"""select * from $tableOwcProperties where uuid = '${uuid.toString}'""").as(owcPropertiesParser.singleOpt)
+</span>609 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>610 <span style=''>  }
+</span>611 <span style=''>
+</span>612 <span style=''>  /**
+</span>613 <span style=''>    * find owc properties by title, title has unique constraint, that's why wild card search is intended
+</span>614 <span style=''>    *
+</span>615 <span style=''>    * @param title
+</span>616 <span style=''>    * @return
+</span>617 <span style=''>    */
+</span>618 <span style=''>  def findOwcPropertiesByTitle(title: String): Seq[OwcProperties] = {
+</span>619 <span style=''>    </span><span style='background: #F0ADAD'>db.withConnection { implicit connection =>
+</span>620 <span style=''></span><span style='background: #F0ADAD'>      SQL(s"""select * from $tableOwcProperties where title like '%${title}%'""").as(owcPropertiesParser *)
+</span>621 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>622 <span style=''>  }
+</span>623 <span style=''>
+</span>624 <span style=''>  /**
+</span>625 <span style=''>    * get properties for a featuretype (OwcEntry or OwcDocument)
+</span>626 <span style=''>    * @param featureTypeId
+</span>627 <span style=''>    * @return
+</span>628 <span style=''>    */
+</span>629 <span style=''>  def findOwcPropertiesForOwcFeatureType(featureTypeId: String) : Option[OwcProperties] = {
+</span>630 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection { implicit connection =>
+</span>631 <span style=''></span><span style='background: #AEF1AE'>      SQL(
+</span>632 <span style=''></span><span style='background: #AEF1AE'>        s"""SELECT
+</span>633 <span style=''></span><span style='background: #AEF1AE'>           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,
+</span>634 <span style=''></span><span style='background: #AEF1AE'>           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher
+</span>635 <span style=''></span><span style='background: #AEF1AE'>           |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
+</span>636 <span style=''></span><span style='background: #AEF1AE'>           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
+</span>637 <span style=''></span><span style='background: #AEF1AE'>        'owc_feature_types_id -> featureTypeId
+</span>638 <span style=''></span><span style='background: #AEF1AE'>      )
+</span>639 <span style=''></span><span style='background: #AEF1AE'>        .as(owcPropertiesParser.singleOpt)
+</span>640 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>641 <span style=''>  }
+</span>642 <span style=''>
+</span>643 <span style=''>  /**
+</span>644 <span style=''>    * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
+</span>645 <span style=''>    *
+</span>646 <span style=''>    * @param owcProperties
+</span>647 <span style=''>    * @return
+</span>648 <span style=''>    */
+</span>649 <span style=''>  def createOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = {
+</span>650 <span style=''>
+</span>651 <span style=''>    </span><span style='background: #AEF1AE'>db.withTransaction {
+</span>652 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>653 <span style=''></span><span style='background: #AEF1AE'>
+</span>654 <span style=''></span><span style='background: #AEF1AE'>        val rowCount = SQL(
+</span>655 <span style=''></span><span style='background: #AEF1AE'>          s"""
+</span>656 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcProperties values (
+</span>657 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {language}, {title}, {subtitle}, {updated}, {generator}, {rights}, {creator}, {publisher}
+</span>658 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>659 <span style=''></span><span style='background: #AEF1AE'>        """).on(
+</span>660 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString,
+</span>661 <span style=''></span><span style='background: #AEF1AE'>          'language -> owcProperties.language,
+</span>662 <span style=''></span><span style='background: #AEF1AE'>          'title -> owcProperties.title,
+</span>663 <span style=''></span><span style='background: #AEF1AE'>          'subtitle -> owcProperties.subtitle,
+</span>664 <span style=''></span><span style='background: #AEF1AE'>          'updated -> owcProperties.updated,
+</span>665 <span style=''></span><span style='background: #AEF1AE'>          'generator -> owcProperties.generator,
+</span>666 <span style=''></span><span style='background: #AEF1AE'>          'rights -> owcProperties.rights,
+</span>667 <span style=''></span><span style='background: #AEF1AE'>          'creator -> owcProperties.creator,
+</span>668 <span style=''></span><span style='background: #AEF1AE'>          'publisher -> owcProperties.publisher
+</span>669 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>670 <span style=''></span><span style='background: #AEF1AE'>
+</span>671 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.authors.foreach {
+</span>672 <span style=''></span><span style='background: #AEF1AE'>          author => {
+</span>673 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcAuthorByUuid(author.uuid).isEmpty) {
+</span>674 <span style=''></span><span style='background: #AEF1AE'>              createOwcAuthor(author)
+</span>675 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>676 <span style=''></span><span style='background: #AEF1AE'>
+</span>677 <span style=''></span><span style='background: #AEF1AE'>            SQL(
+</span>678 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcAuthors values (
+</span>679 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_authors_uuid}
+</span>680 <span style=''></span><span style='background: #AEF1AE'>                 |)
+</span>681 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
+</span>682 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
+</span>683 <span style=''></span><span style='background: #AEF1AE'>              'owc_authors_uuid -> author.uuid.toString
+</span>684 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
+</span>685 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>686 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>687 <span style=''></span><span style='background: #AEF1AE'>
+</span>688 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.contributors.foreach {
+</span>689 <span style=''></span><span style='background: #AEF1AE'>          authorAsContributor => {
+</span>690 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcAuthorByUuid(authorAsContributor.uuid).isEmpty) {
+</span>691 <span style=''></span><span style='background: #AEF1AE'>              createOwcAuthor(authorAsContributor)
+</span>692 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>693 <span style=''></span><span style='background: #AEF1AE'>
+</span>694 <span style=''></span><span style='background: #AEF1AE'>            SQL(
+</span>695 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcAuthorsAsContributors values (
+</span>696 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_authors_as_contributors_uuid}
+</span>697 <span style=''></span><span style='background: #AEF1AE'>                 |)
+</span>698 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
+</span>699 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
+</span>700 <span style=''></span><span style='background: #AEF1AE'>              'owc_authors_as_contributors_uuid -> authorAsContributor.uuid.toString
+</span>701 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
+</span>702 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>703 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>704 <span style=''></span><span style='background: #AEF1AE'>
+</span>705 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.categories.foreach {
+</span>706 <span style=''></span><span style='background: #AEF1AE'>          category => {
+</span>707 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcCategoriesByUuid(category.uuid).isEmpty) {
+</span>708 <span style=''></span><span style='background: #AEF1AE'>              createOwcCategory(category)
+</span>709 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>710 <span style=''></span><span style='background: #AEF1AE'>
+</span>711 <span style=''></span><span style='background: #AEF1AE'>            SQL(
+</span>712 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcCategories  values (
+</span>713 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_categories_uuid}
+</span>714 <span style=''></span><span style='background: #AEF1AE'>                 |)
+</span>715 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
+</span>716 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
+</span>717 <span style=''></span><span style='background: #AEF1AE'>              'owc_categories_uuid -> category.uuid.toString
+</span>718 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
+</span>719 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>720 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>721 <span style=''></span><span style='background: #AEF1AE'>
+</span>722 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.links.foreach {
+</span>723 <span style=''></span><span style='background: #AEF1AE'>          owcLink => {
+</span>724 <span style=''></span><span style='background: #AEF1AE'>            if (findOwcLinksByUuid(owcLink.uuid).isEmpty) {
+</span>725 <span style=''></span><span style='background: #AEF1AE'>              createOwcLink(owcLink)
+</span>726 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>727 <span style=''></span><span style='background: #AEF1AE'>
+</span>728 <span style=''></span><span style='background: #AEF1AE'>            SQL(
+</span>729 <span style=''></span><span style='background: #AEF1AE'>              s"""insert into $tableOwcPropertiesHasOwcLinks  values (
+</span>730 <span style=''></span><span style='background: #AEF1AE'>                 |{owc_properties_uuid}, {owc_links_uuid}
+</span>731 <span style=''></span><span style='background: #AEF1AE'>                 |)
+</span>732 <span style=''></span><span style='background: #AEF1AE'>               """.stripMargin).on(
+</span>733 <span style=''></span><span style='background: #AEF1AE'>              'owc_properties_uuid -> owcProperties.uuid.toString,
+</span>734 <span style=''></span><span style='background: #AEF1AE'>              'owc_links_uuid -> owcLink.uuid.toString
+</span>735 <span style=''></span><span style='background: #AEF1AE'>            ).executeUpdate()
+</span>736 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>737 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>738 <span style=''></span><span style='background: #AEF1AE'>
+</span>739 <span style=''></span><span style='background: #AEF1AE'>        rowCount match {
+</span>740 <span style=''></span><span style='background: #AEF1AE'>          case 1 => Some(owcProperties)
+</span>741 <span style=''></span><span style='background: #AEF1AE'>          case _ => </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>742 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>743 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>744 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>745 <span style=''>  }
+</span>746 <span style=''>
+</span>747 <span style=''>  /**
+</span>748 <span style=''>    * Not yet implemented, update OwcProperties object and hierarchical dependents
+</span>749 <span style=''>    *
+</span>750 <span style=''>    * @param owcProperties
+</span>751 <span style=''>    * @return
+</span>752 <span style=''>    */
+</span>753 <span style=''>  def updateOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = </span><span style='background: #F0ADAD'>???</span><span style=''>
+</span>754 <span style=''>
+</span>755 <span style=''>  /**
+</span>756 <span style=''>    * delete an OwcProperties object and its dependents
+</span>757 <span style=''>    *
+</span>758 <span style=''>    * @param owcProperties
+</span>759 <span style=''>    * @return
+</span>760 <span style=''>    */
+</span>761 <span style=''>  def deleteOwcProperties(owcProperties: OwcProperties): Boolean = {
+</span>762 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>db.withTransaction {
+</span>763 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>764 <span style=''></span><span style='background: #AEF1AE'>
+</span>765 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthors where owc_properties_uuid = {uuid}""").on(
+</span>766 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
+</span>767 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>768 <span style=''></span><span style='background: #AEF1AE'>
+</span>769 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthorsAsContributors where owc_properties_uuid = {uuid}""").on(
+</span>770 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
+</span>771 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>772 <span style=''></span><span style='background: #AEF1AE'>
+</span>773 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcCategories where owc_properties_uuid = {uuid}""").on(
+</span>774 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
+</span>775 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>776 <span style=''></span><span style='background: #AEF1AE'>
+</span>777 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"""delete from $tableOwcPropertiesHasOwcLinks where owc_properties_uuid = {uuid}""").on(
+</span>778 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
+</span>779 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>780 <span style=''></span><span style='background: #AEF1AE'>
+</span>781 <span style=''></span><span style='background: #AEF1AE'>        SQL(s"delete from $tableOwcProperties where uuid = {uuid}").on(
+</span>782 <span style=''></span><span style='background: #AEF1AE'>          'uuid -> owcProperties.uuid.toString
+</span>783 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>784 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>785 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>786 <span style=''>
+</span>787 <span style=''>    </span><span style='background: #AEF1AE'>db.withConnection(
+</span>788 <span style=''></span><span style='background: #AEF1AE'>      implicit connection => {
+</span>789 <span style=''></span><span style='background: #AEF1AE'>        (owcProperties.authors ++ owcProperties.contributors).distinct.filter {
+</span>790 <span style=''></span><span style='background: #AEF1AE'>          author => {
+</span>791 <span style=''></span><span style='background: #AEF1AE'>            val authorsEmpty = SQL(s"""select owc_authors_uuid from $tableOwcPropertiesHasOwcAuthors where owc_authors_uuid = {uuid}""").on(
+</span>792 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> author.uuid.toString
+</span>793 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_authors_uuid") *).isEmpty
+</span>794 <span style=''></span><span style='background: #AEF1AE'>
+</span>795 <span style=''></span><span style='background: #AEF1AE'>            val authorsAsContributorsEmpty = SQL(
+</span>796 <span style=''></span><span style='background: #AEF1AE'>              s"""select owc_authors_as_contributors_uuid from $tableOwcPropertiesHasOwcAuthorsAsContributors
+</span>797 <span style=''></span><span style='background: #AEF1AE'>                 |where owc_authors_as_contributors_uuid = {uuid}""".stripMargin).on(
+</span>798 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> author.uuid.toString
+</span>799 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_authors_as_contributors_uuid") *).isEmpty
+</span>800 <span style=''></span><span style='background: #AEF1AE'>
+</span>801 <span style=''></span><span style='background: #AEF1AE'>            authorsEmpty && authorsAsContributorsEmpty
+</span>802 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>803 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcAuthor(_))
+</span>804 <span style=''></span><span style='background: #AEF1AE'>
+</span>805 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.categories.filter {
+</span>806 <span style=''></span><span style='background: #AEF1AE'>          category => {
+</span>807 <span style=''></span><span style='background: #AEF1AE'>            SQL(s"""select owc_categories_uuid from $tableOwcPropertiesHasOwcCategories where owc_categories_uuid = {uuid}""").on(
+</span>808 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> category.uuid.toString
+</span>809 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_categories_uuid") *).isEmpty
+</span>810 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>811 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcCategory(_))
+</span>812 <span style=''></span><span style='background: #AEF1AE'>
+</span>813 <span style=''></span><span style='background: #AEF1AE'>        owcProperties.links.filter {
+</span>814 <span style=''></span><span style='background: #AEF1AE'>          owcLink => {
+</span>815 <span style=''></span><span style='background: #AEF1AE'>            SQL(s"""select owc_links_uuid from $tableOwcPropertiesHasOwcLinks where owc_links_uuid = {uuid}""").on(
+</span>816 <span style=''></span><span style='background: #AEF1AE'>              'uuid -> owcLink.uuid.toString
+</span>817 <span style=''></span><span style='background: #AEF1AE'>            ).as(SqlParser.str("owc_links_uuid") *).isEmpty
+</span>818 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>819 <span style=''></span><span style='background: #AEF1AE'>        }.foreach(deleteOwcLink(_))
+</span>820 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>821 <span style=''></span><span style='background: #AEF1AE'>    )</span><span style=''>
+</span>822 <span style=''>
+</span>823 <span style=''>    rowCount match {
+</span>824 <span style=''>      case 1 => </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>825 <span style=''>      case _ => </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>826 <span style=''>    }
+</span>827 <span style=''>  }
+</span>828 <span style=''>
+</span>829 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -862,28 +867,7 @@
           50
         </td>
         <td>
-          1345
-        </td>
-        <td>
-          1715
-          -
-          1715
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          50
-        </td>
-        <td>
-          1344
+          1390
         </td>
         <td>
           1716
@@ -901,31 +885,31 @@
         </td>
       </tr><tr>
         <td>
-          51
+          50
         </td>
         <td>
-          1348
+          1391
         </td>
         <td>
-          1732
+          1715
           -
-          1743
+          1715
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          anorm.SqlParser.str
+          anorm.Column.columnToString
         </td>
         <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;name&quot;)(anorm.this.Column.columnToString)
+          anorm.this.Column.columnToString
         </td>
       </tr><tr>
         <td>
           51
         </td>
         <td>
-          1347
+          1393
         </td>
         <td>
           1735
@@ -946,7 +930,7 @@
           51
         </td>
         <td>
-          1346
+          1392
         </td>
         <td>
           1736
@@ -964,31 +948,31 @@
         </td>
       </tr><tr>
         <td>
-          52
+          51
         </td>
         <td>
-          1351
+          1394
         </td>
         <td>
-          1771
+          1732
           -
-          1771
+          1743
         </td>
         <td>
           ApplyToImplicitArgs
         </td>
         <td>
-          anorm.Column.columnToOption
+          anorm.SqlParser.str
         </td>
         <td style="background: #AEF1AE">
-          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+          anorm.SqlParser.str(&quot;name&quot;)(anorm.this.Column.columnToString)
         </td>
       </tr><tr>
         <td>
           52
         </td>
         <td>
-          1350
+          1396
         </td>
         <td>
           1771
@@ -1009,7 +993,7 @@
           52
         </td>
         <td>
-          1352
+          1398
         </td>
         <td>
           1752
@@ -1030,7 +1014,7 @@
           52
         </td>
         <td>
-          1349
+          1395
         </td>
         <td>
           1772
@@ -1048,31 +1032,31 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
-          1354
+          1397
         </td>
         <td>
-          1808
+          1771
           -
-          1808
+          1771
         </td>
         <td>
-          Select
+          ApplyToImplicitArgs
         </td>
         <td>
-          anorm.Column.columnToString
+          anorm.Column.columnToOption
         </td>
         <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
         </td>
       </tr><tr>
         <td>
           53
         </td>
         <td>
-          1356
+          1402
         </td>
         <td>
           1789
@@ -1093,7 +1077,7 @@
           53
         </td>
         <td>
-          1359
+          1405
         </td>
         <td>
           1712
@@ -1116,7 +1100,7 @@
           53
         </td>
         <td>
-          1353
+          1399
         </td>
         <td>
           1809
@@ -1137,7 +1121,7 @@
           53
         </td>
         <td>
-          1355
+          1401
         </td>
         <td>
           1808
@@ -1155,31 +1139,31 @@
         </td>
       </tr><tr>
         <td>
-          55
+          53
         </td>
         <td>
-          1357
+          1400
         </td>
         <td>
-          1880
+          1808
           -
-          1901
+          1808
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          java.util.UUID.fromString
+          anorm.Column.columnToString
         </td>
         <td style="background: #AEF1AE">
-          java.util.UUID.fromString(uuid)
+          anorm.this.Column.columnToString
         </td>
       </tr><tr>
         <td>
           55
         </td>
         <td>
-          1358
+          1404
         </td>
         <td>
           1870
@@ -1197,10 +1181,31 @@
         </td>
       </tr><tr>
         <td>
+          55
+        </td>
+        <td>
+          1403
+        </td>
+        <td>
+          1880
+          -
+          1901
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
           65
         </td>
         <td>
-          1361
+          1407
         </td>
         <td>
           2043
@@ -1221,7 +1226,7 @@
           66
         </td>
         <td>
-          1360
+          1406
         </td>
         <td>
           2092
@@ -1242,7 +1247,7 @@
           77
         </td>
         <td>
-          1363
+          1409
         </td>
         <td>
           2313
@@ -1263,7 +1268,7 @@
           78
         </td>
         <td>
-          1362
+          1408
         </td>
         <td>
           2362
@@ -1284,7 +1289,7 @@
           89
         </td>
         <td>
-          1365
+          1411
         </td>
         <td>
           2619
@@ -1305,7 +1310,7 @@
           90
         </td>
         <td>
-          1364
+          1410
         </td>
         <td>
           2668
@@ -1326,7 +1331,7 @@
           101
         </td>
         <td>
-          1367
+          1413
         </td>
         <td>
           2981
@@ -1354,7 +1359,7 @@
           108
         </td>
         <td>
-          1366
+          1412
         </td>
         <td>
           3030
@@ -1382,7 +1387,7 @@
           119
         </td>
         <td>
-          1369
+          1415
         </td>
         <td>
           3612
@@ -1410,7 +1415,7 @@
           126
         </td>
         <td>
-          1368
+          1414
         </td>
         <td>
           3661
@@ -1438,7 +1443,7 @@
           138
         </td>
         <td>
-          1373
+          1419
         </td>
         <td>
           4206
@@ -1493,7 +1498,7 @@
           149
         </td>
         <td>
-          1370
+          1416
         </td>
         <td>
           4270
@@ -1542,7 +1547,7 @@
           152
         </td>
         <td>
-          1371
+          1417
         </td>
         <td>
           4614
@@ -1563,7 +1568,7 @@
           153
         </td>
         <td>
-          1372
+          1418
         </td>
         <td>
           4648
@@ -1584,7 +1589,7 @@
           166
         </td>
         <td>
-          1377
+          1423
         </td>
         <td>
           4830
@@ -1639,7 +1644,7 @@
           178
         </td>
         <td>
-          1374
+          1420
         </td>
         <td>
           4894
@@ -1688,7 +1693,7 @@
           181
         </td>
         <td>
-          1375
+          1421
         </td>
         <td>
           5273
@@ -1709,7 +1714,7 @@
           182
         </td>
         <td>
-          1376
+          1422
         </td>
         <td>
           5307
@@ -1730,7 +1735,7 @@
           195
         </td>
         <td>
-          1379
+          1425
         </td>
         <td>
           5490
@@ -1758,7 +1763,7 @@
           198
         </td>
         <td>
-          1378
+          1424
         </td>
         <td>
           5539
@@ -1786,7 +1791,7 @@
           202
         </td>
         <td>
-          1380
+          1426
         </td>
         <td>
           5709
@@ -1807,7 +1812,7 @@
           203
         </td>
         <td>
-          1381
+          1427
         </td>
         <td>
           5730
@@ -1828,7 +1833,7 @@
           215
         </td>
         <td>
-          1383
+          1429
         </td>
         <td>
           5896
@@ -1849,7 +1854,7 @@
           215
         </td>
         <td>
-          1382
+          1428
         </td>
         <td>
           5897
@@ -1870,28 +1875,7 @@
           216
         </td>
         <td>
-          1384
-        </td>
-        <td>
-          5917
-          -
-          5925
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          &quot;scheme&quot;
-        </td>
-      </tr><tr>
-        <td>
-          216
-        </td>
-        <td>
-          1386
+          1432
         </td>
         <td>
           5913
@@ -1912,7 +1896,7 @@
           216
         </td>
         <td>
-          1385
+          1431
         </td>
         <td>
           5916
@@ -1930,10 +1914,52 @@
         </td>
       </tr><tr>
         <td>
+          216
+        </td>
+        <td>
+          1430
+        </td>
+        <td>
+          5917
+          -
+          5925
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;scheme&quot;
+        </td>
+      </tr><tr>
+        <td>
           217
         </td>
         <td>
-          1387
+          1434
+        </td>
+        <td>
+          5938
+          -
+          5938
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          217
+        </td>
+        <td>
+          1433
         </td>
         <td>
           5939
@@ -1954,7 +1980,7 @@
           217
         </td>
         <td>
-          1389
+          1435
         </td>
         <td>
           5935
@@ -1972,15 +1998,36 @@
         </td>
       </tr><tr>
         <td>
-          217
+          218
         </td>
         <td>
-          1388
+          1438
         </td>
         <td>
-          5938
+          5974
           -
-          5938
+          5974
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          1437
+        </td>
+        <td>
+          5974
+          -
+          5974
         </td>
         <td>
           Select
@@ -1996,7 +2043,7 @@
           218
         </td>
         <td>
-          1393
+          1439
         </td>
         <td>
           5955
@@ -2017,7 +2064,7 @@
           218
         </td>
         <td>
-          1396
+          1442
         </td>
         <td>
           5893
@@ -2040,7 +2087,7 @@
           218
         </td>
         <td>
-          1390
+          1436
         </td>
         <td>
           5975
@@ -2058,52 +2105,10 @@
         </td>
       </tr><tr>
         <td>
-          218
-        </td>
-        <td>
-          1392
-        </td>
-        <td>
-          5974
-          -
-          5974
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.Column.columnToOption
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          1391
-        </td>
-        <td>
-          5974
-          -
-          5974
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
           220
         </td>
         <td>
-          1395
+          1441
         </td>
         <td>
           6041
@@ -2124,7 +2129,7 @@
           220
         </td>
         <td>
-          1394
+          1440
         </td>
         <td>
           6053
@@ -2145,7 +2150,7 @@
           230
         </td>
         <td>
-          1398
+          1444
         </td>
         <td>
           6225
@@ -2166,7 +2171,7 @@
           231
         </td>
         <td>
-          1397
+          1443
         </td>
         <td>
           6274
@@ -2187,7 +2192,7 @@
           242
         </td>
         <td>
-          1400
+          1446
         </td>
         <td>
           6543
@@ -2208,7 +2213,7 @@
           243
         </td>
         <td>
-          1399
+          1445
         </td>
         <td>
           6592
@@ -2229,7 +2234,7 @@
           254
         </td>
         <td>
-          1402
+          1448
         </td>
         <td>
           6868
@@ -2250,7 +2255,7 @@
           255
         </td>
         <td>
-          1401
+          1447
         </td>
         <td>
           6917
@@ -2271,7 +2276,7 @@
           266
         </td>
         <td>
-          1404
+          1450
         </td>
         <td>
           7183
@@ -2292,7 +2297,7 @@
           267
         </td>
         <td>
-          1403
+          1449
         </td>
         <td>
           7232
@@ -2313,7 +2318,7 @@
           279
         </td>
         <td>
-          1406
+          1452
         </td>
         <td>
           7566
@@ -2334,7 +2339,7 @@
           284
         </td>
         <td>
-          1405
+          1451
         </td>
         <td>
           7615
@@ -2355,7 +2360,7 @@
           295
         </td>
         <td>
-          1408
+          1454
         </td>
         <td>
           8017
@@ -2383,7 +2388,7 @@
           302
         </td>
         <td>
-          1407
+          1453
         </td>
         <td>
           8066
@@ -2411,7 +2416,7 @@
           314
         </td>
         <td>
-          1412
+          1458
         </td>
         <td>
           8603
@@ -2466,7 +2471,7 @@
           325
         </td>
         <td>
-          1409
+          1455
         </td>
         <td>
           8667
@@ -2515,7 +2520,7 @@
           328
         </td>
         <td>
-          1410
+          1456
         </td>
         <td>
           9031
@@ -2536,7 +2541,7 @@
           329
         </td>
         <td>
-          1411
+          1457
         </td>
         <td>
           9067
@@ -2557,7 +2562,7 @@
           342
         </td>
         <td>
-          1416
+          1462
         </td>
         <td>
           9295
@@ -2612,7 +2617,7 @@
           354
         </td>
         <td>
-          1413
+          1459
         </td>
         <td>
           9359
@@ -2661,7 +2666,7 @@
           357
         </td>
         <td>
-          1414
+          1460
         </td>
         <td>
           9761
@@ -2682,7 +2687,7 @@
           358
         </td>
         <td>
-          1415
+          1461
         </td>
         <td>
           9797
@@ -2703,7 +2708,7 @@
           371
         </td>
         <td>
-          1418
+          1464
         </td>
         <td>
           9990
@@ -2731,7 +2736,7 @@
           374
         </td>
         <td>
-          1417
+          1463
         </td>
         <td>
           10039
@@ -2759,7 +2764,7 @@
           378
         </td>
         <td>
-          1419
+          1465
         </td>
         <td>
           10214
@@ -2780,7 +2785,7 @@
           379
         </td>
         <td>
-          1420
+          1466
         </td>
         <td>
           10235
@@ -2801,7 +2806,7 @@
           391
         </td>
         <td>
-          1422
+          1468
         </td>
         <td>
           10389
@@ -2822,7 +2827,7 @@
           391
         </td>
         <td>
-          1421
+          1467
         </td>
         <td>
           10390
@@ -2843,7 +2848,28 @@
           392
         </td>
         <td>
-          1423
+          1470
+        </td>
+        <td>
+          10409
+          -
+          10409
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          392
+        </td>
+        <td>
+          1469
         </td>
         <td>
           10410
@@ -2864,7 +2890,7 @@
           392
         </td>
         <td>
-          1425
+          1471
         </td>
         <td>
           10406
@@ -2882,52 +2908,10 @@
         </td>
       </tr><tr>
         <td>
-          392
-        </td>
-        <td>
-          1424
-        </td>
-        <td>
-          10409
-          -
-          10409
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
           393
         </td>
         <td>
-          1429
-        </td>
-        <td>
-          10425
-          -
-          10457
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.SqlParser.get
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.get[Option[String]](&quot;mime_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
-        </td>
-      </tr><tr>
-        <td>
-          393
-        </td>
-        <td>
-          1428
+          1474
         </td>
         <td>
           10444
@@ -2948,7 +2932,7 @@
           393
         </td>
         <td>
-          1427
+          1473
         </td>
         <td>
           10444
@@ -2969,7 +2953,7 @@
           393
         </td>
         <td>
-          1426
+          1472
         </td>
         <td>
           10445
@@ -2987,10 +2971,52 @@
         </td>
       </tr><tr>
         <td>
+          393
+        </td>
+        <td>
+          1475
+        </td>
+        <td>
+          10425
+          -
+          10457
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;mime_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
           394
         </td>
         <td>
-          1432
+          1476
+        </td>
+        <td>
+          10470
+          -
+          10476
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          394
+        </td>
+        <td>
+          1478
         </td>
         <td>
           10466
@@ -3011,7 +3037,7 @@
           394
         </td>
         <td>
-          1431
+          1477
         </td>
         <td>
           10469
@@ -3029,52 +3055,10 @@
         </td>
       </tr><tr>
         <td>
-          394
-        </td>
-        <td>
-          1430
-        </td>
-        <td>
-          10470
-          -
-          10476
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          &quot;href&quot;
-        </td>
-      </tr><tr>
-        <td>
           395
         </td>
         <td>
-          1434
-        </td>
-        <td>
-          10505
-          -
-          10505
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          395
-        </td>
-        <td>
-          1439
+          1485
         </td>
         <td>
           10386
@@ -3097,7 +3081,7 @@
           395
         </td>
         <td>
-          1433
+          1479
         </td>
         <td>
           10506
@@ -3118,7 +3102,7 @@
           395
         </td>
         <td>
-          1436
+          1482
         </td>
         <td>
           10486
@@ -3139,7 +3123,7 @@
           395
         </td>
         <td>
-          1435
+          1481
         </td>
         <td>
           10505
@@ -3157,31 +3141,31 @@
         </td>
       </tr><tr>
         <td>
-          397
+          395
         </td>
         <td>
-          1438
+          1480
         </td>
         <td>
-          10580
+          10505
           -
-          10638
+          10505
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          models.owc.OwcLink.apply
+          anorm.Column.columnToString
         </td>
         <td style="background: #AEF1AE">
-          OwcLink.apply(java.util.UUID.fromString(uuid), rel, mimeType, href, title)
+          anorm.this.Column.columnToString
         </td>
       </tr><tr>
         <td>
           397
         </td>
         <td>
-          1437
+          1483
         </td>
         <td>
           10588
@@ -3199,10 +3183,31 @@
         </td>
       </tr><tr>
         <td>
+          397
+        </td>
+        <td>
+          1484
+        </td>
+        <td>
+          10580
+          -
+          10638
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcLink.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcLink.apply(java.util.UUID.fromString(uuid), rel, mimeType, href, title)
+        </td>
+      </tr><tr>
+        <td>
           407
         </td>
         <td>
-          1441
+          1487
         </td>
         <td>
           10754
@@ -3223,7 +3228,7 @@
           408
         </td>
         <td>
-          1440
+          1486
         </td>
         <td>
           10803
@@ -3244,7 +3249,7 @@
           419
         </td>
         <td>
-          1443
+          1489
         </td>
         <td>
           11012
@@ -3265,7 +3270,7 @@
           420
         </td>
         <td>
-          1442
+          1488
         </td>
         <td>
           11061
@@ -3286,7 +3291,7 @@
           431
         </td>
         <td>
-          1445
+          1491
         </td>
         <td>
           11313
@@ -3307,7 +3312,7 @@
           432
         </td>
         <td>
-          1444
+          1490
         </td>
         <td>
           11362
@@ -3328,7 +3333,7 @@
           444
         </td>
         <td>
-          1447
+          1493
         </td>
         <td>
           11646
@@ -3349,7 +3354,7 @@
           449
         </td>
         <td>
-          1446
+          1492
         </td>
         <td>
           11695
@@ -3370,7 +3375,7 @@
           460
         </td>
         <td>
-          1449
+          1495
         </td>
         <td>
           12069
@@ -3398,7 +3403,7 @@
           467
         </td>
         <td>
-          1448
+          1494
         </td>
         <td>
           12118
@@ -3426,7 +3431,7 @@
           479
         </td>
         <td>
-          1453
+          1499
         </td>
         <td>
           12632
@@ -3488,7 +3493,7 @@
           491
         </td>
         <td>
-          1450
+          1496
         </td>
         <td>
           12696
@@ -3544,7 +3549,7 @@
           494
         </td>
         <td>
-          1451
+          1497
         </td>
         <td>
           13081
@@ -3565,7 +3570,7 @@
           495
         </td>
         <td>
-          1452
+          1498
         </td>
         <td>
           13113
@@ -3586,7 +3591,7 @@
           508
         </td>
         <td>
-          1457
+          1503
         </td>
         <td>
           13283
@@ -3648,7 +3653,7 @@
           522
         </td>
         <td>
-          1454
+          1500
         </td>
         <td>
           13347
@@ -3704,7 +3709,7 @@
           525
         </td>
         <td>
-          1455
+          1501
         </td>
         <td>
           13791
@@ -3725,7 +3730,7 @@
           526
         </td>
         <td>
-          1456
+          1502
         </td>
         <td>
           13823
@@ -3746,7 +3751,7 @@
           539
         </td>
         <td>
-          1459
+          1505
         </td>
         <td>
           14004
@@ -3774,7 +3779,7 @@
           543
         </td>
         <td>
-          1458
+          1504
         </td>
         <td>
           14055
@@ -3802,7 +3807,7 @@
           547
         </td>
         <td>
-          1460
+          1506
         </td>
         <td>
           14221
@@ -3823,7 +3828,7 @@
           548
         </td>
         <td>
-          1461
+          1507
         </td>
         <td>
           14242
@@ -3844,7 +3849,7 @@
           560
         </td>
         <td>
-          1463
+          1509
         </td>
         <td>
           14414
@@ -3865,7 +3870,7 @@
           560
         </td>
         <td>
-          1462
+          1508
         </td>
         <td>
           14415
@@ -3886,28 +3891,7 @@
           561
         </td>
         <td>
-          1465
-        </td>
-        <td>
-          14434
-          -
-          14434
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          561
-        </td>
-        <td>
-          1464
+          1510
         </td>
         <td>
           14435
@@ -3928,7 +3912,7 @@
           561
         </td>
         <td>
-          1466
+          1512
         </td>
         <td>
           14431
@@ -3946,10 +3930,52 @@
         </td>
       </tr><tr>
         <td>
+          561
+        </td>
+        <td>
+          1511
+        </td>
+        <td>
+          14434
+          -
+          14434
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
           562
         </td>
         <td>
-          1468
+          1515
+        </td>
+        <td>
+          14455
+          -
+          14467
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;title&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          562
+        </td>
+        <td>
+          1514
         </td>
         <td>
           14458
@@ -3970,7 +3996,7 @@
           562
         </td>
         <td>
-          1467
+          1513
         </td>
         <td>
           14459
@@ -3988,52 +4014,10 @@
         </td>
       </tr><tr>
         <td>
-          562
-        </td>
-        <td>
-          1469
-        </td>
-        <td>
-          14455
-          -
-          14467
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.SqlParser.str
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;title&quot;)(anorm.this.Column.columnToString)
-        </td>
-      </tr><tr>
-        <td>
           563
         </td>
         <td>
-          1470
-        </td>
-        <td>
-          14496
-          -
-          14506
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          &quot;subtitle&quot;
-        </td>
-      </tr><tr>
-        <td>
-          563
-        </td>
-        <td>
-          1473
+          1519
         </td>
         <td>
           14476
@@ -4054,7 +4038,7 @@
           563
         </td>
         <td>
-          1472
+          1518
         </td>
         <td>
           14495
@@ -4075,7 +4059,7 @@
           563
         </td>
         <td>
-          1471
+          1517
         </td>
         <td>
           14495
@@ -4093,15 +4077,15 @@
         </td>
       </tr><tr>
         <td>
-          564
+          563
         </td>
         <td>
-          1474
+          1516
         </td>
         <td>
-          14543
+          14496
           -
-          14552
+          14506
         </td>
         <td>
           Literal
@@ -4110,35 +4094,14 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #AEF1AE">
-          &quot;updated&quot;
+          &quot;subtitle&quot;
         </td>
       </tr><tr>
         <td>
           564
         </td>
         <td>
-          1476
-        </td>
-        <td>
-          14542
-          -
-          14542
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.Column.columnToOption
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToOption[java.time.ZonedDateTime](anorm.this.Column.columnToZonedDateTime)
-        </td>
-      </tr><tr>
-        <td>
-          564
-        </td>
-        <td>
-          1475
+          1521
         </td>
         <td>
           14542
@@ -4159,7 +4122,7 @@
           564
         </td>
         <td>
-          1477
+          1523
         </td>
         <td>
           14516
@@ -4177,31 +4140,52 @@
         </td>
       </tr><tr>
         <td>
-          565
+          564
         </td>
         <td>
-          1479
+          1520
         </td>
         <td>
-          14581
+          14543
           -
-          14581
+          14552
         </td>
         <td>
-          Select
+          Literal
         </td>
         <td>
-          anorm.Column.columnToString
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
+          &quot;updated&quot;
+        </td>
+      </tr><tr>
+        <td>
+          564
+        </td>
+        <td>
+          1522
+        </td>
+        <td>
+          14542
+          -
+          14542
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[java.time.ZonedDateTime](anorm.this.Column.columnToZonedDateTime)
         </td>
       </tr><tr>
         <td>
           565
         </td>
         <td>
-          1481
+          1527
         </td>
         <td>
           14562
@@ -4222,7 +4206,7 @@
           565
         </td>
         <td>
-          1478
+          1524
         </td>
         <td>
           14582
@@ -4243,7 +4227,7 @@
           565
         </td>
         <td>
-          1480
+          1526
         </td>
         <td>
           14581
@@ -4261,15 +4245,15 @@
         </td>
       </tr><tr>
         <td>
-          566
+          565
         </td>
         <td>
-          1483
+          1525
         </td>
         <td>
-          14622
+          14581
           -
-          14622
+          14581
         </td>
         <td>
           Select
@@ -4285,28 +4269,7 @@
           566
         </td>
         <td>
-          1485
-        </td>
-        <td>
-          14603
-          -
-          14632
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.SqlParser.get
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.get[Option[String]](&quot;rights&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1482
+          1528
         </td>
         <td>
           14623
@@ -4327,7 +4290,7 @@
           566
         </td>
         <td>
-          1484
+          1530
         </td>
         <td>
           14622
@@ -4345,31 +4308,52 @@
         </td>
       </tr><tr>
         <td>
-          567
+          566
         </td>
         <td>
-          1488
+          1529
         </td>
         <td>
-          14660
+          14622
           -
-          14660
+          14622
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1531
+        </td>
+        <td>
+          14603
+          -
+          14632
         </td>
         <td>
           ApplyToImplicitArgs
         </td>
         <td>
-          anorm.Column.columnToOption
+          anorm.SqlParser.get
         </td>
         <td style="background: #AEF1AE">
-          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+          anorm.SqlParser.get[Option[String]](&quot;rights&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
         </td>
       </tr><tr>
         <td>
           567
         </td>
         <td>
-          1487
+          1533
         </td>
         <td>
           14660
@@ -4390,7 +4374,7 @@
           567
         </td>
         <td>
-          1486
+          1532
         </td>
         <td>
           14661
@@ -4411,7 +4395,7 @@
           567
         </td>
         <td>
-          1489
+          1535
         </td>
         <td>
           14641
@@ -4429,15 +4413,15 @@
         </td>
       </tr><tr>
         <td>
-          568
+          567
         </td>
         <td>
-          1492
+          1534
         </td>
         <td>
-          14699
+          14660
           -
-          14699
+          14660
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4453,28 +4437,7 @@
           568
         </td>
         <td>
-          1491
-        </td>
-        <td>
-          14699
-          -
-          14699
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          568
-        </td>
-        <td>
-          1490
+          1536
         </td>
         <td>
           14700
@@ -4495,7 +4458,7 @@
           568
         </td>
         <td>
-          1493
+          1539
         </td>
         <td>
           14680
@@ -4516,7 +4479,7 @@
           568
         </td>
         <td>
-          1504
+          1550
         </td>
         <td>
           14411
@@ -4536,10 +4499,52 @@
         </td>
       </tr><tr>
         <td>
+          568
+        </td>
+        <td>
+          1538
+        </td>
+        <td>
+          14699
+          -
+          14699
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          568
+        </td>
+        <td>
+          1537
+        </td>
+        <td>
+          14699
+          -
+          14699
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
           571
         </td>
         <td>
-          1503
+          1549
         </td>
         <td>
           14830
@@ -4560,7 +4565,7 @@
           572
         </td>
         <td>
-          1494
+          1540
         </td>
         <td>
           14855
@@ -4581,7 +4586,7 @@
           579
         </td>
         <td>
-          1496
+          1542
         </td>
         <td>
           15003
@@ -4602,7 +4607,7 @@
           579
         </td>
         <td>
-          1495
+          1541
         </td>
         <td>
           15034
@@ -4623,28 +4628,7 @@
           580
         </td>
         <td>
-          1497
-        </td>
-        <td>
-          15120
-          -
-          15141
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.fromString
-        </td>
-        <td style="background: #AEF1AE">
-          java.util.UUID.fromString(uuid)
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1498
+          1544
         </td>
         <td>
           15075
@@ -4662,31 +4646,31 @@
         </td>
       </tr><tr>
         <td>
-          583
+          580
         </td>
         <td>
-          1500
+          1543
         </td>
         <td>
-          15201
+          15120
           -
-          15264
+          15141
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          scala.collection.TraversableOnce.toList
+          java.util.UUID.fromString
         </td>
         <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.findOwcCategoriesByPropertiesUUID(java.util.UUID.fromString(uuid)).toList
+          java.util.UUID.fromString(uuid)
         </td>
       </tr><tr>
         <td>
           583
         </td>
         <td>
-          1499
+          1545
         </td>
         <td>
           15235
@@ -4704,31 +4688,31 @@
         </td>
       </tr><tr>
         <td>
-          584
+          583
         </td>
         <td>
-          1501
+          1546
         </td>
         <td>
-          15305
+          15201
           -
-          15326
+          15264
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          java.util.UUID.fromString
+          scala.collection.TraversableOnce.toList
         </td>
         <td style="background: #AEF1AE">
-          java.util.UUID.fromString(uuid)
+          OwcPropertiesDAO.this.findOwcCategoriesByPropertiesUUID(java.util.UUID.fromString(uuid)).toList
         </td>
       </tr><tr>
         <td>
           584
         </td>
         <td>
-          1502
+          1548
         </td>
         <td>
           15276
@@ -4746,15 +4730,36 @@
         </td>
       </tr><tr>
         <td>
-          594
+          584
         </td>
         <td>
-          1506
+          1547
         </td>
         <td>
-          15443
+          15305
           -
-          15569
+          15326
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          595
+        </td>
+        <td>
+          1552
+        </td>
+        <td>
+          15484
+          -
+          15610
         </td>
         <td>
           Apply
@@ -4767,15 +4772,15 @@
         </td>
       </tr><tr>
         <td>
-          595
+          596
         </td>
         <td>
-          1505
+          1551
         </td>
         <td>
-          15492
+          15533
           -
-          15563
+          15604
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4788,15 +4793,15 @@
         </td>
       </tr><tr>
         <td>
-          605
+          607
         </td>
         <td>
-          1508
+          1554
         </td>
         <td>
-          15699
+          15789
           -
-          15865
+          15955
         </td>
         <td>
           Apply
@@ -4809,15 +4814,15 @@
         </td>
       </tr><tr>
         <td>
-          606
+          608
         </td>
         <td>
-          1507
+          1553
         </td>
         <td>
-          15748
+          15838
           -
-          15859
+          15949
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4830,15 +4835,15 @@
         </td>
       </tr><tr>
         <td>
-          617
+          619
         </td>
         <td>
-          1510
+          1556
         </td>
         <td>
-          16102
+          16192
           -
-          16258
+          16348
         </td>
         <td>
           Apply
@@ -4851,15 +4856,15 @@
         </td>
       </tr><tr>
         <td>
-          618
+          620
         </td>
         <td>
-          1509
+          1555
         </td>
         <td>
-          16151
+          16241
           -
-          16252
+          16342
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4872,15 +4877,15 @@
         </td>
       </tr><tr>
         <td>
-          628
+          630
         </td>
         <td>
-          1512
+          1558
         </td>
         <td>
-          16479
+          16569
           -
-          16971
+          17172
         </td>
         <td>
           Apply
@@ -4889,7 +4894,7 @@
           play.api.db.Database.withConnection
         </td>
         <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.db.withConnection[Option[models.owc.OwcProperties]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT\n           |p.uuid, p.language, p.title, p.subtitle, p.updated, p.generator, p.rights, p.creator, p.publisher\n           |FROM &quot;, &quot; p JOIN &quot;, &quot; ftp ON p.uuid=ftp.owc_properties_uuid\n           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}&quot;).s(owc.this.`package`.tableOwcProperties, owc.this.`package`.tableOwcFeatureTypesHasOwcProperties)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_feature_types_id&quot;)).-&gt;[String](featureTypeId))({
+          OwcPropertiesDAO.this.db.withConnection[Option[models.owc.OwcProperties]](((implicit connection: java.sql.Connection) =&gt; anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT\n           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,\n           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher\n           |FROM &quot;, &quot; p JOIN &quot;, &quot; ftp ON p.uuid=ftp.owc_properties_uuid\n           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}&quot;).s(owc.this.`package`.tableOwcProperties, owc.this.`package`.tableOwcFeatureTypesHasOwcProperties)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_feature_types_id&quot;)).-&gt;[String](featureTypeId))({
   ((a: String) =&gt; {
     &lt;artifact&gt; val x$205: String = a;
     &lt;artifact&gt; val x$206: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
@@ -4900,15 +4905,15 @@
         </td>
       </tr><tr>
         <td>
-          636
+          639
         </td>
         <td>
-          1511
+          1557
         </td>
         <td>
-          16528
+          16618
           -
-          16965
+          17166
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4917,7 +4922,7 @@
           anorm.WithResult.as
         </td>
         <td style="background: #AEF1AE">
-          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT\n           |p.uuid, p.language, p.title, p.subtitle, p.updated, p.generator, p.rights, p.creator, p.publisher\n           |FROM &quot;, &quot; p JOIN &quot;, &quot; ftp ON p.uuid=ftp.owc_properties_uuid\n           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}&quot;).s(owc.this.`package`.tableOwcProperties, owc.this.`package`.tableOwcFeatureTypesHasOwcProperties)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_feature_types_id&quot;)).-&gt;[String](featureTypeId))({
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;SELECT\n           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,\n           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher\n           |FROM &quot;, &quot; p JOIN &quot;, &quot; ftp ON p.uuid=ftp.owc_properties_uuid\n           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}&quot;).s(owc.this.`package`.tableOwcProperties, owc.this.`package`.tableOwcFeatureTypesHasOwcProperties)).stripMargin)).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;owc_feature_types_id&quot;)).-&gt;[String](featureTypeId))({
   ((a: String) =&gt; {
     &lt;artifact&gt; val x$205: String = a;
     &lt;artifact&gt; val x$206: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
@@ -4928,15 +4933,15 @@
         </td>
       </tr><tr>
         <td>
-          648
+          651
         </td>
         <td>
-          1548
+          1594
         </td>
         <td>
-          17248
+          17449
           -
-          20435
+          20636
         </td>
         <td>
           Apply
@@ -5102,15 +5107,15 @@
         </td>
       </tr><tr>
         <td>
-          666
+          669
         </td>
         <td>
-          1513
+          1559
         </td>
         <td>
-          17324
+          17525
           -
-          17972
+          18173
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5186,15 +5191,15 @@
         </td>
       </tr><tr>
         <td>
-          668
+          671
         </td>
         <td>
-          1521
+          1567
         </td>
         <td>
-          17982
+          18183
           -
-          18528
+          18729
         </td>
         <td>
           Apply
@@ -5227,78 +5232,15 @@
         </td>
       </tr><tr>
         <td>
-          670
+          673
         </td>
         <td>
-          1519
+          1560
         </td>
         <td>
-          18048
+          18273
           -
-          18048
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          670
-        </td>
-        <td>
-          1518
-        </td>
-        <td>
-          18048
-          -
-          18048
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          670
-        </td>
-        <td>
-          1515
-        </td>
-        <td>
-          18052
-          -
-          18092
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.Option.isEmpty
-        </td>
-        <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.findOwcAuthorByUuid(author.uuid).isEmpty
-        </td>
-      </tr><tr>
-        <td>
-          670
-        </td>
-        <td>
-          1514
-        </td>
-        <td>
-          18072
-          -
-          18083
+          18284
         </td>
         <td>
           Select
@@ -5311,15 +5253,78 @@
         </td>
       </tr><tr>
         <td>
-          671
+          673
         </td>
         <td>
-          1517
+          1565
         </td>
         <td>
-          18110
+          18249
           -
-          18133
+          18249
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          673
+        </td>
+        <td>
+          1564
+        </td>
+        <td>
+          18249
+          -
+          18249
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          673
+        </td>
+        <td>
+          1561
+        </td>
+        <td>
+          18253
+          -
+          18293
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.findOwcAuthorByUuid(author.uuid).isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          674
+        </td>
+        <td>
+          1563
+        </td>
+        <td>
+          18311
+          -
+          18334
         </td>
         <td>
           Block
@@ -5332,15 +5337,15 @@
         </td>
       </tr><tr>
         <td>
-          671
+          674
         </td>
         <td>
-          1516
+          1562
         </td>
         <td>
-          18110
+          18311
           -
-          18133
+          18334
         </td>
         <td>
           Apply
@@ -5353,15 +5358,15 @@
         </td>
       </tr><tr>
         <td>
-          681
+          684
         </td>
         <td>
-          1520
+          1566
         </td>
         <td>
-          18161
+          18362
           -
-          18506
+          18707
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5388,15 +5393,15 @@
         </td>
       </tr><tr>
         <td>
-          685
+          688
         </td>
         <td>
-          1529
+          1575
         </td>
         <td>
-          18538
+          18739
           -
-          19187
+          19388
         </td>
         <td>
           Apply
@@ -5429,36 +5434,15 @@
         </td>
       </tr><tr>
         <td>
-          687
+          690
         </td>
         <td>
-          1527
+          1569
         </td>
         <td>
-          18622
+          18827
           -
-          18622
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          687
-        </td>
-        <td>
-          1523
-        </td>
-        <td>
-          18626
-          -
-          18679
+          18880
         </td>
         <td>
           Select
@@ -5471,15 +5455,15 @@
         </td>
       </tr><tr>
         <td>
-          687
+          690
         </td>
         <td>
-          1526
+          1572
         </td>
         <td>
-          18622
+          18823
           -
-          18622
+          18823
         </td>
         <td>
           Literal
@@ -5492,15 +5476,15 @@
         </td>
       </tr><tr>
         <td>
-          687
+          690
         </td>
         <td>
-          1522
+          1568
         </td>
         <td>
-          18646
+          18847
           -
-          18670
+          18871
         </td>
         <td>
           Select
@@ -5513,36 +5497,36 @@
         </td>
       </tr><tr>
         <td>
-          688
+          690
         </td>
         <td>
-          1524
+          1573
         </td>
         <td>
-          18697
+          18823
           -
-          18733
+          18823
         </td>
         <td>
-          Apply
+          Block
         </td>
         <td>
-          models.owc.OwcPropertiesDAO.createOwcAuthor
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.createOwcAuthor(authorAsContributor)
+          ()
         </td>
       </tr><tr>
         <td>
-          688
+          691
         </td>
         <td>
-          1525
+          1571
         </td>
         <td>
-          18697
+          18898
           -
-          18733
+          18934
         </td>
         <td>
           Block
@@ -5555,15 +5539,36 @@
         </td>
       </tr><tr>
         <td>
-          698
+          691
         </td>
         <td>
-          1528
+          1570
         </td>
         <td>
-          18761
+          18898
           -
-          19165
+          18934
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPropertiesDAO.createOwcAuthor
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.createOwcAuthor(authorAsContributor)
+        </td>
+      </tr><tr>
+        <td>
+          701
+        </td>
+        <td>
+          1574
+        </td>
+        <td>
+          18962
+          -
+          19366
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5590,15 +5595,15 @@
         </td>
       </tr><tr>
         <td>
-          702
+          705
         </td>
         <td>
-          1537
+          1583
         </td>
         <td>
-          19197
+          19398
           -
-          19770
+          19971
         </td>
         <td>
           Apply
@@ -5631,36 +5636,15 @@
         </td>
       </tr><tr>
         <td>
-          704
+          707
         </td>
         <td>
-          1530
+          1581
         </td>
         <td>
-          19296
+          19469
           -
-          19309
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.OwcCategory.uuid
-        </td>
-        <td style="background: #AEF1AE">
-          category.uuid
-        </td>
-      </tr><tr>
-        <td>
-          704
-        </td>
-        <td>
-          1535
-        </td>
-        <td>
-          19268
-          -
-          19268
+          19469
         </td>
         <td>
           Block
@@ -5673,15 +5657,15 @@
         </td>
       </tr><tr>
         <td>
-          704
+          707
         </td>
         <td>
-          1531
+          1577
         </td>
         <td>
-          19272
+          19473
           -
-          19318
+          19519
         </td>
         <td>
           Select
@@ -5694,15 +5678,15 @@
         </td>
       </tr><tr>
         <td>
-          704
+          707
         </td>
         <td>
-          1534
+          1580
         </td>
         <td>
-          19268
+          19469
           -
-          19268
+          19469
         </td>
         <td>
           Literal
@@ -5715,36 +5699,36 @@
         </td>
       </tr><tr>
         <td>
-          705
+          707
         </td>
         <td>
-          1533
+          1576
         </td>
         <td>
-          19336
+          19497
           -
-          19363
+          19510
         </td>
         <td>
-          Block
+          Select
         </td>
         <td>
-          models.owc.OwcPropertiesDAO.createOwcCategory
+          models.owc.OwcCategory.uuid
         </td>
         <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.createOwcCategory(category)
+          category.uuid
         </td>
       </tr><tr>
         <td>
-          705
+          708
         </td>
         <td>
-          1532
+          1578
         </td>
         <td>
-          19336
+          19537
           -
-          19363
+          19564
         </td>
         <td>
           Apply
@@ -5757,15 +5741,36 @@
         </td>
       </tr><tr>
         <td>
-          715
+          708
         </td>
         <td>
-          1536
+          1579
         </td>
         <td>
-          19391
+          19537
           -
-          19748
+          19564
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.owc.OwcPropertiesDAO.createOwcCategory
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.createOwcCategory(category)
+        </td>
+      </tr><tr>
+        <td>
+          718
+        </td>
+        <td>
+          1582
+        </td>
+        <td>
+          19592
+          -
+          19949
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5792,15 +5797,15 @@
         </td>
       </tr><tr>
         <td>
-          719
+          722
         </td>
         <td>
-          1545
+          1591
         </td>
         <td>
-          19780
+          19981
           -
-          20320
+          20521
         </td>
         <td>
           Apply
@@ -5833,57 +5838,15 @@
         </td>
       </tr><tr>
         <td>
-          721
+          724
         </td>
         <td>
-          1539
+          1584
         </td>
         <td>
-          19849
+          20069
           -
-          19889
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.Option.isEmpty
-        </td>
-        <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.findOwcLinksByUuid(owcLink.uuid).isEmpty
-        </td>
-      </tr><tr>
-        <td>
-          721
-        </td>
-        <td>
-          1542
-        </td>
-        <td>
-          19845
-          -
-          19845
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          721
-        </td>
-        <td>
-          1538
-        </td>
-        <td>
-          19868
-          -
-          19880
+          20081
         </td>
         <td>
           Select
@@ -5896,15 +5859,15 @@
         </td>
       </tr><tr>
         <td>
-          721
+          724
         </td>
         <td>
-          1543
+          1589
         </td>
         <td>
-          19845
+          20046
           -
-          19845
+          20046
         </td>
         <td>
           Block
@@ -5917,15 +5880,57 @@
         </td>
       </tr><tr>
         <td>
-          722
+          724
         </td>
         <td>
-          1541
+          1585
         </td>
         <td>
-          19907
+          20050
           -
-          19929
+          20090
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.findOwcLinksByUuid(owcLink.uuid).isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          724
+        </td>
+        <td>
+          1588
+        </td>
+        <td>
+          20046
+          -
+          20046
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          725
+        </td>
+        <td>
+          1587
+        </td>
+        <td>
+          20108
+          -
+          20130
         </td>
         <td>
           Block
@@ -5938,15 +5943,15 @@
         </td>
       </tr><tr>
         <td>
-          722
+          725
         </td>
         <td>
-          1540
+          1586
         </td>
         <td>
-          19907
+          20108
           -
-          19929
+          20130
         </td>
         <td>
           Apply
@@ -5959,15 +5964,15 @@
         </td>
       </tr><tr>
         <td>
-          732
+          735
         </td>
         <td>
-          1544
+          1590
         </td>
         <td>
-          19957
+          20158
           -
-          20298
+          20499
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5994,15 +5999,15 @@
         </td>
       </tr><tr>
         <td>
-          737
+          740
         </td>
         <td>
-          1546
+          1592
         </td>
         <td>
-          20367
+          20568
           -
-          20386
+          20587
         </td>
         <td>
           Apply
@@ -6015,15 +6020,15 @@
         </td>
       </tr><tr>
         <td>
-          738
+          741
         </td>
         <td>
-          1547
+          1593
         </td>
         <td>
-          20407
+          20608
           -
-          20411
+          20612
         </td>
         <td>
           Select
@@ -6036,15 +6041,15 @@
         </td>
       </tr><tr>
         <td>
-          749
+          753
         </td>
         <td>
-          1549
+          1595
         </td>
         <td>
-          20582
+          20866
           -
-          20585
+          20869
         </td>
         <td>
           Select
@@ -6057,15 +6062,15 @@
         </td>
       </tr><tr>
         <td>
-          757
+          762
         </td>
         <td>
-          1555
+          1601
         </td>
         <td>
-          20735
+          21075
           -
-          21673
+          22013
         </td>
         <td>
           Apply
@@ -6119,15 +6124,15 @@
         </td>
       </tr><tr>
         <td>
-          762
+          767
         </td>
         <td>
-          1550
+          1596
         </td>
         <td>
-          20796
+          21136
           -
-          20964
+          21304
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6147,15 +6152,15 @@
         </td>
       </tr><tr>
         <td>
-          766
+          771
         </td>
         <td>
-          1551
+          1597
         </td>
         <td>
-          20974
+          21314
           -
-          21156
+          21496
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6175,15 +6180,15 @@
         </td>
       </tr><tr>
         <td>
-          770
+          775
         </td>
         <td>
-          1552
+          1598
         </td>
         <td>
-          21166
+          21506
           -
-          21337
+          21677
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6203,15 +6208,15 @@
         </td>
       </tr><tr>
         <td>
-          774
+          779
         </td>
         <td>
-          1553
+          1599
         </td>
         <td>
-          21347
+          21687
           -
-          21513
+          21853
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6231,15 +6236,15 @@
         </td>
       </tr><tr>
         <td>
-          778
+          783
         </td>
         <td>
-          1554
+          1600
         </td>
         <td>
-          21523
+          21863
           -
-          21659
+          21999
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6259,15 +6264,15 @@
         </td>
       </tr><tr>
         <td>
-          782
+          787
         </td>
         <td>
-          1630
+          1676
         </td>
         <td>
-          21679
+          22019
           -
-          23257
+          23597
         </td>
         <td>
           Apply
@@ -6316,36 +6321,15 @@
         </td>
       </tr><tr>
         <td>
-          784
+          789
         </td>
         <td>
-          1557
+          1602
         </td>
         <td>
-          21760
+          22103
           -
-          21760
-        </td>
-        <td>
-          TypeApply
-        </td>
-        <td>
-          scala.collection.immutable.List.canBuildFrom
-        </td>
-        <td style="background: #AEF1AE">
-          immutable.this.List.canBuildFrom[models.owc.OwcAuthor]
-        </td>
-      </tr><tr>
-        <td>
-          784
-        </td>
-        <td>
-          1556
-        </td>
-        <td>
-          21763
-          -
-          21789
+          22129
         </td>
         <td>
           Select
@@ -6358,36 +6342,36 @@
         </td>
       </tr><tr>
         <td>
-          786
+          789
         </td>
         <td>
-          1560
+          1603
         </td>
         <td>
-          21900
+          22100
           -
-          21931
+          22100
         </td>
         <td>
-          Select
+          TypeApply
         </td>
         <td>
-          models.owc.tableOwcPropertiesHasOwcAuthors
+          scala.collection.immutable.List.canBuildFrom
         </td>
         <td style="background: #AEF1AE">
-          owc.this.`package`.tableOwcPropertiesHasOwcAuthors
+          immutable.this.List.canBuildFrom[models.owc.OwcAuthor]
         </td>
       </tr><tr>
         <td>
-          786
+          791
         </td>
         <td>
-          1559
+          1605
         </td>
         <td>
-          21931
+          22271
           -
-          21966
+          22306
         </td>
         <td>
           Literal
@@ -6400,15 +6384,15 @@
         </td>
       </tr><tr>
         <td>
-          786
+          791
         </td>
         <td>
-          1562
+          1608
         </td>
         <td>
-          21862
+          22202
           -
-          21967
+          22307
         </td>
         <td>
           Apply
@@ -6421,15 +6405,15 @@
         </td>
       </tr><tr>
         <td>
-          786
+          791
         </td>
         <td>
-          1558
+          1604
         </td>
         <td>
-          21870
+          22210
           -
-          21900
+          22240
         </td>
         <td>
           Literal
@@ -6442,15 +6426,15 @@
         </td>
       </tr><tr>
         <td>
-          786
+          791
         </td>
         <td>
-          1561
+          1607
         </td>
         <td>
-          21866
+          22206
           -
-          21966
+          22306
         </td>
         <td>
           Apply
@@ -6463,15 +6447,120 @@
         </td>
       </tr><tr>
         <td>
-          787
+          791
         </td>
         <td>
-          1569
+          1606
         </td>
         <td>
-          21986
+          22240
           -
-          22015
+          22271
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.tableOwcPropertiesHasOwcAuthors
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.tableOwcPropertiesHasOwcAuthors
+        </td>
+      </tr><tr>
+        <td>
+          792
+        </td>
+        <td>
+          1614
+        </td>
+        <td>
+          22332
+          -
+          22332
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$343)(x$345, x$344)
+        </td>
+      </tr><tr>
+        <td>
+          792
+        </td>
+        <td>
+          1611
+        </td>
+        <td>
+          22326
+          -
+          22355
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](author.uuid.toString())
+        </td>
+      </tr><tr>
+        <td>
+          792
+        </td>
+        <td>
+          1610
+        </td>
+        <td>
+          22335
+          -
+          22355
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          author.uuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          792
+        </td>
+        <td>
+          1613
+        </td>
+        <td>
+          22332
+          -
+          22332
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$343)
+        </td>
+      </tr><tr>
+        <td>
+          792
+        </td>
+        <td>
+          1615
+        </td>
+        <td>
+          22326
+          -
+          22355
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6491,15 +6580,15 @@
         </td>
       </tr><tr>
         <td>
-          787
+          792
         </td>
         <td>
-          1563
+          1609
         </td>
         <td>
-          21986
+          22326
           -
-          21991
+          22331
         </td>
         <td>
           Apply
@@ -6512,15 +6601,15 @@
         </td>
       </tr><tr>
         <td>
-          787
+          792
         </td>
         <td>
-          1566
+          1612
         </td>
         <td>
-          21992
+          22332
           -
-          21992
+          22332
         </td>
         <td>
           Select
@@ -6533,120 +6622,15 @@
         </td>
       </tr><tr>
         <td>
-          787
+          793
         </td>
         <td>
-          1568
+          1617
         </td>
         <td>
-          21992
+          22386
           -
-          21992
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue[String](x$343)(x$345, x$344)
-        </td>
-      </tr><tr>
-        <td>
-          787
-        </td>
-        <td>
-          1565
-        </td>
-        <td>
-          21986
-          -
-          22015
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](author.uuid.toString())
-        </td>
-      </tr><tr>
-        <td>
-          787
-        </td>
-        <td>
-          1564
-        </td>
-        <td>
-          21995
-          -
-          22015
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #AEF1AE">
-          author.uuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          787
-        </td>
-        <td>
-          1567
-        </td>
-        <td>
-          21992
-          -
-          21992
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$343)
-        </td>
-      </tr><tr>
-        <td>
-          788
-        </td>
-        <td>
-          1572
-        </td>
-        <td>
-          22033
-          -
-          22068
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.RowParser.*
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;owc_authors_uuid&quot;)(anorm.this.Column.columnToString).*
-        </td>
-      </tr><tr>
-        <td>
-          788
-        </td>
-        <td>
-          1571
-        </td>
-        <td>
-          22046
-          -
-          22046
+          22386
         </td>
         <td>
           Select
@@ -6659,15 +6643,15 @@
         </td>
       </tr><tr>
         <td>
-          788
+          793
         </td>
         <td>
-          1573
+          1619
         </td>
         <td>
-          21862
+          22202
           -
-          22077
+          22417
         </td>
         <td>
           Select
@@ -6687,15 +6671,15 @@
         </td>
       </tr><tr>
         <td>
-          788
+          793
         </td>
         <td>
-          1570
+          1616
         </td>
         <td>
-          22047
+          22387
           -
-          22065
+          22405
         </td>
         <td>
           Literal
@@ -6708,15 +6692,36 @@
         </td>
       </tr><tr>
         <td>
-          790
+          793
         </td>
         <td>
-          1579
+          1618
         </td>
         <td>
-          22124
+          22373
           -
-          22320
+          22408
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.RowParser.*
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_authors_uuid&quot;)(anorm.this.Column.columnToString).*
+        </td>
+      </tr><tr>
+        <td>
+          795
+        </td>
+        <td>
+          1625
+        </td>
+        <td>
+          22464
+          -
+          22660
         </td>
         <td>
           Apply
@@ -6729,36 +6734,15 @@
         </td>
       </tr><tr>
         <td>
-          791
+          796
         </td>
         <td>
-          1575
+          1620
         </td>
         <td>
-          22238
+          22487
           -
-          22307
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          &quot;\n                 |where owc_authors_as_contributors_uuid = {uuid}&quot;
-        </td>
-      </tr><tr>
-        <td>
-          791
-        </td>
-        <td>
-          1574
-        </td>
-        <td>
-          22147
-          -
-          22193
+          22533
         </td>
         <td>
           Literal
@@ -6771,15 +6755,15 @@
         </td>
       </tr><tr>
         <td>
-          791
+          796
         </td>
         <td>
-          1577
+          1623
         </td>
         <td>
-          22143
+          22483
           -
-          22307
+          22647
         </td>
         <td>
           Apply
@@ -6792,15 +6776,15 @@
         </td>
       </tr><tr>
         <td>
-          791
+          796
         </td>
         <td>
-          1576
+          1622
         </td>
         <td>
-          22193
+          22533
           -
-          22238
+          22578
         </td>
         <td>
           Select
@@ -6813,15 +6797,36 @@
         </td>
       </tr><tr>
         <td>
-          792
+          796
         </td>
         <td>
-          1578
+          1621
         </td>
         <td>
-          22143
+          22578
           -
-          22319
+          22647
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;\n                 |where owc_authors_as_contributors_uuid = {uuid}&quot;
+        </td>
+      </tr><tr>
+        <td>
+          797
+        </td>
+        <td>
+          1624
+        </td>
+        <td>
+          22483
+          -
+          22659
         </td>
         <td>
           Select
@@ -6834,57 +6839,15 @@
         </td>
       </tr><tr>
         <td>
-          793
+          798
         </td>
         <td>
-          1581
+          1629
         </td>
         <td>
-          22348
+          22685
           -
-          22368
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #AEF1AE">
-          author.uuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          793
-        </td>
-        <td>
-          1584
-        </td>
-        <td>
-          22345
-          -
-          22345
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$349)
-        </td>
-      </tr><tr>
-        <td>
-          793
-        </td>
-        <td>
-          1583
-        </td>
-        <td>
-          22345
-          -
-          22345
+          22685
         </td>
         <td>
           Select
@@ -6897,15 +6860,15 @@
         </td>
       </tr><tr>
         <td>
-          793
+          798
         </td>
         <td>
-          1586
+          1632
         </td>
         <td>
-          22339
+          22679
           -
-          22368
+          22708
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6925,15 +6888,15 @@
         </td>
       </tr><tr>
         <td>
-          793
+          798
         </td>
         <td>
-          1580
+          1626
         </td>
         <td>
-          22339
+          22679
           -
-          22344
+          22684
         </td>
         <td>
           Apply
@@ -6946,15 +6909,15 @@
         </td>
       </tr><tr>
         <td>
-          793
+          798
         </td>
         <td>
-          1582
+          1628
         </td>
         <td>
-          22339
+          22679
           -
-          22368
+          22708
         </td>
         <td>
           Apply
@@ -6967,15 +6930,15 @@
         </td>
       </tr><tr>
         <td>
-          793
+          798
         </td>
         <td>
-          1585
+          1631
         </td>
         <td>
-          22345
+          22685
           -
-          22345
+          22685
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6988,15 +6951,99 @@
         </td>
       </tr><tr>
         <td>
-          794
+          798
         </td>
         <td>
-          1587
+          1627
         </td>
         <td>
-          22400
+          22688
           -
-          22434
+          22708
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          author.uuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          798
+        </td>
+        <td>
+          1630
+        </td>
+        <td>
+          22685
+          -
+          22685
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$349)
+        </td>
+      </tr><tr>
+        <td>
+          799
+        </td>
+        <td>
+          1635
+        </td>
+        <td>
+          22726
+          -
+          22777
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.RowParser.*
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_authors_as_contributors_uuid&quot;)(anorm.this.Column.columnToString).*
+        </td>
+      </tr><tr>
+        <td>
+          799
+        </td>
+        <td>
+          1634
+        </td>
+        <td>
+          22739
+          -
+          22739
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          799
+        </td>
+        <td>
+          1633
+        </td>
+        <td>
+          22740
+          -
+          22774
         </td>
         <td>
           Literal
@@ -7009,15 +7056,15 @@
         </td>
       </tr><tr>
         <td>
-          794
+          799
         </td>
         <td>
-          1590
+          1636
         </td>
         <td>
-          22124
+          22464
           -
-          22446
+          22786
         </td>
         <td>
           Select
@@ -7037,57 +7084,15 @@
         </td>
       </tr><tr>
         <td>
-          794
+          801
         </td>
         <td>
-          1589
+          1637
         </td>
         <td>
-          22386
+          22800
           -
-          22437
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.RowParser.*
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;owc_authors_as_contributors_uuid&quot;)(anorm.this.Column.columnToString).*
-        </td>
-      </tr><tr>
-        <td>
-          794
-        </td>
-        <td>
-          1588
-        </td>
-        <td>
-          22399
-          -
-          22399
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.Column.columnToString
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.Column.columnToString
-        </td>
-      </tr><tr>
-        <td>
-          796
-        </td>
-        <td>
-          1591
-        </td>
-        <td>
-          22460
-          -
-          22502
+          22842
         </td>
         <td>
           Apply
@@ -7100,15 +7105,36 @@
         </td>
       </tr><tr>
         <td>
-          798
+          803
         </td>
         <td>
-          1593
+          1638
         </td>
         <td>
-          21738
+          22873
           -
-          22552
+          22891
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPropertiesDAO.deleteOwcAuthor
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.deleteOwcAuthor(x$1)
+        </td>
+      </tr><tr>
+        <td>
+          803
+        </td>
+        <td>
+          1639
+        </td>
+        <td>
+          22078
+          -
+          22892
         </td>
         <td>
           Apply
@@ -7139,57 +7165,15 @@
         </td>
       </tr><tr>
         <td>
-          798
+          807
         </td>
         <td>
-          1592
+          1641
         </td>
         <td>
-          22533
+          23047
           -
-          22551
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.owc.OwcPropertiesDAO.deleteOwcAuthor
-        </td>
-        <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.deleteOwcAuthor(x$1)
-        </td>
-      </tr><tr>
-        <td>
-          802
-        </td>
-        <td>
-          1596
-        </td>
-        <td>
-          22673
-          -
-          22707
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.tableOwcPropertiesHasOwcCategories
-        </td>
-        <td style="background: #AEF1AE">
-          owc.this.`package`.tableOwcPropertiesHasOwcCategories
-        </td>
-      </tr><tr>
-        <td>
-          802
-        </td>
-        <td>
-          1595
-        </td>
-        <td>
-          22707
-          -
-          22745
+          23085
         </td>
         <td>
           Literal
@@ -7202,15 +7186,15 @@
         </td>
       </tr><tr>
         <td>
-          802
+          807
         </td>
         <td>
-          1598
+          1644
         </td>
         <td>
-          22632
+          22972
           -
-          22746
+          23086
         </td>
         <td>
           Apply
@@ -7223,15 +7207,15 @@
         </td>
       </tr><tr>
         <td>
-          802
+          807
         </td>
         <td>
-          1597
+          1643
         </td>
         <td>
-          22636
+          22976
           -
-          22745
+          23085
         </td>
         <td>
           Apply
@@ -7244,15 +7228,15 @@
         </td>
       </tr><tr>
         <td>
-          802
+          807
         </td>
         <td>
-          1594
+          1640
         </td>
         <td>
-          22640
+          22980
           -
-          22673
+          23013
         </td>
         <td>
           Literal
@@ -7265,15 +7249,120 @@
         </td>
       </tr><tr>
         <td>
-          803
+          807
         </td>
         <td>
-          1605
+          1642
         </td>
         <td>
-          22765
+          23013
           -
-          22796
+          23047
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.tableOwcPropertiesHasOwcCategories
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.tableOwcPropertiesHasOwcCategories
+        </td>
+      </tr><tr>
+        <td>
+          808
+        </td>
+        <td>
+          1647
+        </td>
+        <td>
+          23105
+          -
+          23136
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](category.uuid.toString())
+        </td>
+      </tr><tr>
+        <td>
+          808
+        </td>
+        <td>
+          1650
+        </td>
+        <td>
+          23111
+          -
+          23111
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$355)(x$357, x$356)
+        </td>
+      </tr><tr>
+        <td>
+          808
+        </td>
+        <td>
+          1646
+        </td>
+        <td>
+          23114
+          -
+          23136
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          category.uuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          808
+        </td>
+        <td>
+          1649
+        </td>
+        <td>
+          23111
+          -
+          23111
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$355)
+        </td>
+      </tr><tr>
+        <td>
+          808
+        </td>
+        <td>
+          1651
+        </td>
+        <td>
+          23105
+          -
+          23136
         </td>
         <td>
           ApplyToImplicitArgs
@@ -7293,15 +7382,15 @@
         </td>
       </tr><tr>
         <td>
-          803
+          808
         </td>
         <td>
-          1599
+          1645
         </td>
         <td>
-          22765
+          23105
           -
-          22770
+          23110
         </td>
         <td>
           Apply
@@ -7314,15 +7403,15 @@
         </td>
       </tr><tr>
         <td>
-          803
+          808
         </td>
         <td>
-          1602
+          1648
         </td>
         <td>
-          22771
+          23111
           -
-          22771
+          23111
         </td>
         <td>
           Select
@@ -7335,120 +7424,15 @@
         </td>
       </tr><tr>
         <td>
-          803
+          809
         </td>
         <td>
-          1601
+          1653
         </td>
         <td>
-          22765
+          23167
           -
-          22796
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](category.uuid.toString())
-        </td>
-      </tr><tr>
-        <td>
-          803
-        </td>
-        <td>
-          1604
-        </td>
-        <td>
-          22771
-          -
-          22771
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue[String](x$355)(x$357, x$356)
-        </td>
-      </tr><tr>
-        <td>
-          803
-        </td>
-        <td>
-          1600
-        </td>
-        <td>
-          22774
-          -
-          22796
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #AEF1AE">
-          category.uuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          803
-        </td>
-        <td>
-          1603
-        </td>
-        <td>
-          22771
-          -
-          22771
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$355)
-        </td>
-      </tr><tr>
-        <td>
-          804
-        </td>
-        <td>
-          1608
-        </td>
-        <td>
-          22814
-          -
-          22852
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.RowParser.*
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;owc_categories_uuid&quot;)(anorm.this.Column.columnToString).*
-        </td>
-      </tr><tr>
-        <td>
-          804
-        </td>
-        <td>
-          1607
-        </td>
-        <td>
-          22827
-          -
-          22827
+          23167
         </td>
         <td>
           Select
@@ -7461,15 +7445,15 @@
         </td>
       </tr><tr>
         <td>
-          804
+          809
         </td>
         <td>
-          1606
+          1652
         </td>
         <td>
-          22828
+          23168
           -
-          22849
+          23189
         </td>
         <td>
           Literal
@@ -7482,15 +7466,15 @@
         </td>
       </tr><tr>
         <td>
-          804
+          809
         </td>
         <td>
-          1609
+          1655
         </td>
         <td>
-          22632
+          22972
           -
-          22861
+          23201
         </td>
         <td>
           Select
@@ -7510,15 +7494,57 @@
         </td>
       </tr><tr>
         <td>
-          806
+          809
         </td>
         <td>
-          1611
+          1654
         </td>
         <td>
-          22562
+          23154
           -
-          22913
+          23192
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.RowParser.*
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_categories_uuid&quot;)(anorm.this.Column.columnToString).*
+        </td>
+      </tr><tr>
+        <td>
+          811
+        </td>
+        <td>
+          1656
+        </td>
+        <td>
+          23232
+          -
+          23252
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPropertiesDAO.deleteOwcCategory
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.deleteOwcCategory(x$2)
+        </td>
+      </tr><tr>
+        <td>
+          811
+        </td>
+        <td>
+          1657
+        </td>
+        <td>
+          22902
+          -
+          23253
         </td>
         <td>
           Apply
@@ -7538,57 +7564,15 @@
         </td>
       </tr><tr>
         <td>
-          806
+          815
         </td>
         <td>
-          1610
+          1659
         </td>
         <td>
-          22892
+          23392
           -
-          22912
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.owc.OwcPropertiesDAO.deleteOwcCategory
-        </td>
-        <td style="background: #AEF1AE">
-          OwcPropertiesDAO.this.deleteOwcCategory(x$2)
-        </td>
-      </tr><tr>
-        <td>
-          810
-        </td>
-        <td>
-          1614
-        </td>
-        <td>
-          23023
-          -
-          23052
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.tableOwcPropertiesHasOwcLinks
-        </td>
-        <td style="background: #AEF1AE">
-          owc.this.`package`.tableOwcPropertiesHasOwcLinks
-        </td>
-      </tr><tr>
-        <td>
-          810
-        </td>
-        <td>
-          1613
-        </td>
-        <td>
-          23052
-          -
-          23085
+          23425
         </td>
         <td>
           Literal
@@ -7601,15 +7585,15 @@
         </td>
       </tr><tr>
         <td>
-          810
+          815
         </td>
         <td>
-          1616
+          1662
         </td>
         <td>
-          22987
+          23327
           -
-          23086
+          23426
         </td>
         <td>
           Apply
@@ -7622,15 +7606,15 @@
         </td>
       </tr><tr>
         <td>
-          810
+          815
         </td>
         <td>
-          1615
+          1661
         </td>
         <td>
-          22991
+          23331
           -
-          23085
+          23425
         </td>
         <td>
           Apply
@@ -7643,15 +7627,15 @@
         </td>
       </tr><tr>
         <td>
-          810
+          815
         </td>
         <td>
-          1612
+          1658
         </td>
         <td>
-          22995
+          23335
           -
-          23023
+          23363
         </td>
         <td>
           Literal
@@ -7664,15 +7648,120 @@
         </td>
       </tr><tr>
         <td>
-          811
+          815
         </td>
         <td>
-          1620
+          1660
         </td>
         <td>
-          23111
+          23363
           -
-          23111
+          23392
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.tableOwcPropertiesHasOwcLinks
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.tableOwcPropertiesHasOwcLinks
+        </td>
+      </tr><tr>
+        <td>
+          816
+        </td>
+        <td>
+          1665
+        </td>
+        <td>
+          23445
+          -
+          23475
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcLink.uuid.toString())
+        </td>
+      </tr><tr>
+        <td>
+          816
+        </td>
+        <td>
+          1668
+        </td>
+        <td>
+          23451
+          -
+          23451
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$361)(x$363, x$362)
+        </td>
+      </tr><tr>
+        <td>
+          816
+        </td>
+        <td>
+          1664
+        </td>
+        <td>
+          23454
+          -
+          23475
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          owcLink.uuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          816
+        </td>
+        <td>
+          1667
+        </td>
+        <td>
+          23451
+          -
+          23451
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$361)
+        </td>
+      </tr><tr>
+        <td>
+          816
+        </td>
+        <td>
+          1666
+        </td>
+        <td>
+          23451
+          -
+          23451
         </td>
         <td>
           Select
@@ -7685,15 +7774,15 @@
         </td>
       </tr><tr>
         <td>
-          811
+          816
         </td>
         <td>
-          1623
+          1669
         </td>
         <td>
-          23105
+          23445
           -
-          23135
+          23475
         </td>
         <td>
           ApplyToImplicitArgs
@@ -7713,15 +7802,15 @@
         </td>
       </tr><tr>
         <td>
-          811
+          816
         </td>
         <td>
-          1617
+          1663
         </td>
         <td>
-          23105
+          23445
           -
-          23110
+          23450
         </td>
         <td>
           Apply
@@ -7734,120 +7823,15 @@
         </td>
       </tr><tr>
         <td>
-          811
+          817
         </td>
         <td>
-          1619
+          1671
         </td>
         <td>
-          23105
+          23506
           -
-          23135
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #AEF1AE">
-          scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcLink.uuid.toString())
-        </td>
-      </tr><tr>
-        <td>
-          811
-        </td>
-        <td>
-          1622
-        </td>
-        <td>
-          23111
-          -
-          23111
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue[String](x$361)(x$363, x$362)
-        </td>
-      </tr><tr>
-        <td>
-          811
-        </td>
-        <td>
-          1618
-        </td>
-        <td>
-          23114
-          -
-          23135
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #AEF1AE">
-          owcLink.uuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          811
-        </td>
-        <td>
-          1621
-        </td>
-        <td>
-          23111
-          -
-          23111
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          anorm.ParameterValue.toParameterValue$default$2
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.this.ParameterValue.toParameterValue$default$2[String](x$361)
-        </td>
-      </tr><tr>
-        <td>
-          812
-        </td>
-        <td>
-          1626
-        </td>
-        <td>
-          23153
-          -
-          23186
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          anorm.RowParser.*
-        </td>
-        <td style="background: #AEF1AE">
-          anorm.SqlParser.str(&quot;owc_links_uuid&quot;)(anorm.this.Column.columnToString).*
-        </td>
-      </tr><tr>
-        <td>
-          812
-        </td>
-        <td>
-          1625
-        </td>
-        <td>
-          23166
-          -
-          23166
+          23506
         </td>
         <td>
           Select
@@ -7860,15 +7844,15 @@
         </td>
       </tr><tr>
         <td>
-          812
+          817
         </td>
         <td>
-          1624
+          1670
         </td>
         <td>
-          23167
+          23507
           -
-          23183
+          23523
         </td>
         <td>
           Literal
@@ -7881,15 +7865,15 @@
         </td>
       </tr><tr>
         <td>
-          812
+          817
         </td>
         <td>
-          1627
+          1673
         </td>
         <td>
-          22987
+          23327
           -
-          23195
+          23535
         </td>
         <td>
           Select
@@ -7909,15 +7893,57 @@
         </td>
       </tr><tr>
         <td>
-          814
+          817
         </td>
         <td>
-          1629
+          1672
         </td>
         <td>
-          22923
+          23493
           -
-          23243
+          23526
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.RowParser.*
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_links_uuid&quot;)(anorm.this.Column.columnToString).*
+        </td>
+      </tr><tr>
+        <td>
+          819
+        </td>
+        <td>
+          1674
+        </td>
+        <td>
+          23566
+          -
+          23582
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPropertiesDAO.deleteOwcLink
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPropertiesDAO.this.deleteOwcLink(x$3)
+        </td>
+      </tr><tr>
+        <td>
+          819
+        </td>
+        <td>
+          1675
+        </td>
+        <td>
+          23263
+          -
+          23583
         </td>
         <td>
           Apply
@@ -7937,36 +7963,15 @@
         </td>
       </tr><tr>
         <td>
-          814
+          824
         </td>
         <td>
-          1628
+          1677
         </td>
         <td>
-          23226
+          23636
           -
-          23242
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.owc.OwcPropertiesDAO.deleteOwcLink
-        </td>
-        <td style="background: #F0ADAD">
-          OwcPropertiesDAO.this.deleteOwcLink(x$3)
-        </td>
-      </tr><tr>
-        <td>
-          819
-        </td>
-        <td>
-          1631
-        </td>
-        <td>
-          23296
-          -
-          23300
+          23640
         </td>
         <td>
           Literal
@@ -7979,15 +7984,15 @@
         </td>
       </tr><tr>
         <td>
-          820
+          825
         </td>
         <td>
-          1632
+          1678
         </td>
         <td>
-          23317
+          23657
           -
-          23322
+          23662
         </td>
         <td>
           Literal

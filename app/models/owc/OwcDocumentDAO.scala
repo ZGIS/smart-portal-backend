@@ -185,7 +185,24 @@ class OwcDocumentDAO @Inject()(db: Database,
     }
   }
 
-  def findOwcEntriesForOwcDocument(documentId: String): Seq[OwcEntry] = ???
+  /**
+    * find an OwcEntries for an OwcDocument (both being FeatureTypes though)
+    *
+    * @param documentId
+    * @return
+    */
+  def findOwcEntriesForOwcDocument(documentId: String): Seq[OwcEntry] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""SELECT
+           |ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           |FROM $tableOwcFeatureTypes ft JOIN $tableOwcDocumentsHasOwcEntries doen ON ft.id=doen.owc_feature_types_as_entry_id
+           |WHERE doen.owc_feature_types_as_document_id={owc_feature_types_as_document_id}""".stripMargin).on(
+        'owc_feature_types_as_document_id -> documentId
+      )
+        .as(owcEntryParser *)
+    }
+  }
 
   /**
     * create an owc entry with dependent offerings and properties
@@ -252,6 +269,12 @@ class OwcDocumentDAO @Inject()(db: Database,
     }
   }
 
+  /**
+    * Not yet implemented, update OwcEntry and hierarchical dependents
+    *
+    * @param owcEntry
+    * @return
+    */
   def updateOwcEntry(owcEntry: OwcEntry): Option[OwcEntry] = ???
 
   /**
@@ -337,8 +360,20 @@ class OwcDocumentDAO @Inject()(db: Database,
     }
   }
 
+  /**
+    * Not yet implemented, might be useful to be able to search for owc collections (OwcDocument) based on spatial query
+    *
+    * @param bbox
+    * @param operation
+    * @return
+    */
   def findOwcDocumentsByBbox(bbox: Rectangle, operation: String = "Intersect") = ???
 
+  /**
+    *
+    * @param owcDocument
+    * @return
+    */
   def createOwcDocument(owcDocument: OwcDocument): Option[OwcDocument] = {
     db.withTransaction {
       implicit connection => {
@@ -393,7 +428,60 @@ class OwcDocumentDAO @Inject()(db: Database,
     }
   }
 
+  /**
+    * Not yet implemented, update OwcDocument and hierarchical dependents
+    *
+    * @param owcDocument
+    * @return
+    */
   def updateOwcDocument(owcDocument: OwcDocument): Option[OwcDocument] = ???
 
-  def deleteOwcDocument(owcDocument: OwcDocument): Option[OwcDocument] = ???
+  /**
+    * delete a full owc document hierarchically
+    *
+    * @param owcDocument
+    * @return
+    */
+  def deleteOwcDocument(owcDocument: OwcDocument): Boolean = {
+
+    val rowCount = db.withTransaction {
+      implicit connection => {
+        SQL(s"""delete from $tableOwcDocumentsHasOwcEntries where owc_feature_types_as_document_id = {id}""").on(
+          'id -> owcDocument.id
+        ).executeUpdate()
+
+        SQL(s"""delete from $tableOwcFeatureTypesHasOwcProperties where owc_feature_types_id = {id}""").on(
+          'id -> owcDocument.id
+        ).executeUpdate()
+
+        SQL(s"delete from $tableOwcFeatureTypes where id = {id}").on(
+          'id -> owcDocument.id
+        ).executeUpdate()
+      }
+    }
+
+    db.withConnection(
+      implicit connection => {
+
+        owcDocument.features.filter {
+          owcEntry => {
+            SQL(s"""select owc_feature_types_as_entry_id from $tableOwcDocumentsHasOwcEntries where owc_feature_types_as_entry_id = {id}""").on(
+              'id -> owcEntry.id
+            ).as(SqlParser.str("owc_feature_types_as_entry_id") *).isEmpty
+          }
+        }.foreach(deleteOwcEntry(_))
+
+        if (SQL(s"""select owc_properties_uuid from $tableOwcFeatureTypesHasOwcProperties where owc_properties_uuid = {uuid}""").on(
+          'uuid -> owcDocument.properties.uuid.toString
+        ).as(SqlParser.str("owc_properties_uuid") *).isEmpty) {
+          owcPropertiesDAO.deleteOwcProperties(owcDocument.properties)
+        }
+      }
+    )
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
 }

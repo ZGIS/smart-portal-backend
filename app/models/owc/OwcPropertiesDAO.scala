@@ -587,6 +587,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * get all the owc properties objects
     *
     * @return
     */
@@ -597,6 +598,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * find a distinct owc properties by its uuid
     *
     * @param uuid
     * @return
@@ -628,7 +630,8 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     db.withConnection { implicit connection =>
       SQL(
         s"""SELECT
-           |p.uuid, p.language, p.title, p.subtitle, p.updated, p.generator, p.rights, p.creator, p.publisher
+           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,
+           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher
            |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
            |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
         'owc_feature_types_id -> featureTypeId
@@ -742,6 +745,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * Not yet implemented, update OwcProperties object and hierarchical dependents
     *
     * @param owcProperties
     * @return
@@ -749,6 +753,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   def updateOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = ???
 
   /**
+    * delete an OwcProperties object and its dependents
     *
     * @param owcProperties
     * @return

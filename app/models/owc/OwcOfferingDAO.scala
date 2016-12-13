@@ -311,7 +311,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
     db.withConnection { implicit connection =>
       SQL(
         s"""SELECT
-           |o.uuid, o.offering_type, o.code, o.content
+           |o.uuid as uuid, o.offering_type as offering_type, o.code as code, o.content as content
            |FROM $tableOwcOfferings o JOIN $tableOwcEntriesHasOwcOfferings eof ON o.uuid=eof.owc_offerings_uuid
            |WHERE eof.owc_feature_types_as_entry_id={owc_feature_types_as_entry_id}""".stripMargin).on(
         'owc_feature_types_as_entry_id -> featureTypeId
@@ -370,6 +370,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
   }
 
   /**
+    * Not yet implemented, update OwcOffering and hierarchical dependents
     *
     * @param owcOffering
     * @return

@@ -28,11 +28,12 @@ import play.api.test._
 import play.api.{Application, Configuration}
 import play.api.libs.json._
 import org.scalatest.Ignore
+import utils.ClassnameLogger
 
 /**
   *
   */
-trait WithTestDatabase {
+trait WithTestDatabase extends ClassnameLogger {
 
   /**
     *
@@ -49,6 +50,8 @@ trait WithTestDatabase {
     val username = config.getString("db.default.username").get
     val password = config.getString("db.default.password").get
     val logSql = config.getBoolean("db.default.logSql").get
+
+    logger.info(s"logSql: $logSql")
 
     Databases.withDatabase(
       driver = driver,

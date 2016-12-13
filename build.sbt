@@ -90,6 +90,8 @@ scalacOptions in ThisBuild ++= Seq(
 
 fork in run := true
 
+javaOptions in Test +="-Dlogger.resource=logback-stdout-test.xml"
+
 // -----------------
 // coverage, style and dependency checks
 

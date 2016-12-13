@@ -108,6 +108,26 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       None
     )
 
+    val operation5 = OwcOperation(
+      UUID.randomUUID(),
+      "GetCapabilities",
+      "GET",
+      "application/xml",
+      "http://portal.smart-project.info/gs-smart/wfs?service=wfs&AcceptVersions=2.0.0&REQUEST=GetCapabilities",
+      None,
+      None
+    )
+
+    val operation6 = OwcOperation(
+      UUID.randomUUID(),
+      "GetFeature",
+      "GET",
+      "application/xml",
+      "http://portal.smart-project.info/gs-smart/wfs?service=wfs&version=2.0.0&request=GetFeature&typename=gwml2:GW_ManagementArea&count=1",
+      None,
+      None
+    )
+
     val offering1 = WmsOffering(
       UUID.randomUUID(),
       "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
@@ -116,6 +136,20 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
     )
 
     val offering2 = CswOffering(
+      UUID.randomUUID(),
+      "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
+      List(operation3, operation4),
+      List()
+    )
+
+    val offering3 = WfsOffering(
+      UUID.randomUUID(),
+      "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
+      List(operation5, operation6),
+      List()
+    )
+
+    val offering4 = CswOffering(
       UUID.randomUUID(),
       "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
       List(operation3, operation4),
@@ -165,7 +199,7 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       None,
       Some("GNS Science"),
       List(category2),
-      List(link1, link2)
+      List(link1)
     )
 
     "handle OwcEntries with DB" in {
@@ -176,29 +210,29 @@ class OwcDocumentSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
         val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
         val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac", Some(world), featureProps1, List(offering1, offering2))
-        val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac-demo", Some(world), featureProps2, List(offering1, offering2))
+        val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac-demo", Some(world), featureProps2, List(offering3, offering4))
 
         owcDocumentDAO.getAllOwcEntries.size mustEqual 0
 
         owcDocumentDAO.createOwcEntry(owcEntry1) mustEqual Some(owcEntry1)
         owcDocumentDAO.createOwcEntry(owcEntry2) mustEqual Some(owcEntry2)
-        // owcDocumentDAO.getAllOwcEntries.size mustEqual 2
+        owcDocumentDAO.getAllOwcEntries.size mustEqual 2
 
         val thrown = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcEntry(owcEntry2)
         thrown.getErrorCode mustEqual 23505
 
         val entries = owcDocumentDAO.findOwcEntriesById(owcEntry1.id)
-        // entries.size mustEqual 1
-        // entries.headOption.get.id mustEqual "http://portal.smart-project.info/context/smart-sac"
+        entries.size mustEqual 1
+        entries.headOption.get.id mustEqual "http://portal.smart-project.info/context/smart-sac"
 
-        owcOfferingDAO.findOwcOperationByCode("GetCapabilities").size mustBe 2
+        owcOfferingDAO.findOwcOperationByCode("GetCapabilities").size mustBe 3
         owcPropertiesDAO.getAllOwcProperties.size mustBe 2
         owcPropertiesDAO.getAllOwcCategories.size mustBe 2
 
-        // owcDocumentDAO.deleteOwcEntry(owcEntry2) mustEqual true
-        // owcDocumentDAO.getAllOwcEntries.size mustEqual 1
+        owcDocumentDAO.deleteOwcEntry(owcEntry2) mustEqual true
+        owcDocumentDAO.getAllOwcEntries.size mustEqual 1
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 2
-        owcPropertiesDAO.getAllOwcProperties.size mustBe 2
+        owcPropertiesDAO.getAllOwcProperties.size mustBe 1
 
       }
     }

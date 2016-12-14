@@ -117,6 +117,7 @@ CREATE TABLE owc_operations (
   href varchar(255) NOT NULL,
   request_content_type varchar(255),
   request_post_data text,
+  result_content_type varchar(255),
   result text,
   PRIMARY KEY (uuid)
 );

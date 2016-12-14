@@ -30,7 +30,7 @@ import play.api.{Application, Configuration}
 /**
   * Test Spec for [[OwcPropertiesDAO]] with [[OwcProperties]], [[OwcAuthor]], [[OwcCategory]] and [[OwcLink]]
   */
-class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
@@ -45,7 +45,6 @@ class OwcPropertiesSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
   }
 
   "OwcProperties " can {
-    lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
 
     "handle OwcAuthor with DB" in {
       withTestDatabase { database =>

@@ -22,6 +22,8 @@ package models.owc
 import java.util.UUID
 
 import org.locationtech.spatial4j.shape.Rectangle
+import play.api.libs.json._
+import utils.ClassnameLogger
 
 /**
   * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
@@ -50,6 +52,8 @@ sealed trait OwcOffering {
   val code: String
   val operations: List[OwcOperation]
   val content: List[String]
+
+  def toJson
 }
 
 /**
@@ -58,7 +62,41 @@ sealed trait OwcOffering {
   * @param contentType
   * @param postData
   */
-case class OwcPostRequestConfig(contentType: String, postData: String)
+case class OwcPostRequestConfig(contentType: String, postData: String)extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcPostRequestConfig]]
+  */
+object OwcPostRequestConfig extends ClassnameLogger {
+}
+
+/**
+  * object for result contentType and POST data
+  *
+  * @param contentType
+  * @param resultData
+  */
+case class OwcRequestResult(contentType: Option[String], resultData: String) extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcRequestResult]]
+  */
+object OwcRequestResult extends ClassnameLogger {
+}
 
 /**
   * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
@@ -71,15 +109,45 @@ case class OwcPostRequestConfig(contentType: String, postData: String)
   * @param request only need to hold data when method is POST
   * @param result could hold inline result of the request, not sure if we need
   */
-case class OwcOperation(
-                         uuid: UUID,
-                         code: String,
-                         method: String,
-                         contentType: String,
-                         href: String,
-                         request: Option[OwcPostRequestConfig],
-                         result: Option[String]
-                       )
+case class OwcOperation(uuid: UUID,
+                        code: String,
+                        method: String,
+                        contentType: String,
+                        href: String, request:
+                        Option[OwcPostRequestConfig],
+                        result: Option[OwcRequestResult]) extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcOperation]]
+  */
+object OwcOperation extends ClassnameLogger {
+  /**
+    *
+    * @param jsonString
+    * @return
+    */
+  def parseJson(jsonString: String) : Option[OwcOperation] = parseJson(Json.parse(jsonString))
+
+  /**
+    *
+    * @param json
+    * @return
+    */
+  def parseJson(json: JsValue) : Option[OwcOperation] = {
+    val resultFromJson: JsResult[OwcOperation] = Json.fromJson[OwcOperation](json)
+    resultFromJson match {
+      case JsSuccess(r: OwcOperation, path: JsPath) => Some(r)
+      case e: JsError => None
+    }
+  }
+}
 
 /**
   *
@@ -93,7 +161,14 @@ case class WmsOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -107,7 +182,14 @@ case class WmtsOffering(
                          code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
                          operations: List[OwcOperation],
                          content: List[String]
-                       ) extends OwcOffering
+                       ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -121,7 +203,14 @@ case class WfsOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -135,7 +224,14 @@ case class WcsOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -149,7 +245,14 @@ case class CswOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -163,7 +266,14 @@ case class WpsOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -177,7 +287,14 @@ case class GmlOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -191,7 +308,14 @@ case class KmlOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   *
@@ -205,7 +329,14 @@ case class GeoTiffOffering(
                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
                             operations: List[OwcOperation],
                             content: List[String]
-                          ) extends OwcOffering
+                          ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 // the following two are not in the spec, but we need them so I made up an extension
 
@@ -222,7 +353,14 @@ case class SosOffering(
                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
                         operations: List[OwcOperation],
                         content: List[String]
-                      ) extends OwcOffering
+                      ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   * not in the spec, but we need them so I made up an extension
@@ -237,7 +375,14 @@ case class NetCdfOffering(
                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
                            operations: List[OwcOperation],
                            content: List[String]
-                         ) extends OwcOffering
+                         ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 /**
   * not in the spec, but we need them so I made up an extension
@@ -252,6 +397,13 @@ case class HttpLinkOffering(
                              code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
                              operations: List[OwcOperation],
                              content: List[String]
-                           ) extends OwcOffering
+                           ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
 
 

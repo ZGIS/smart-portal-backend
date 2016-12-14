@@ -29,7 +29,7 @@ import play.api.{Application, Configuration}
 /**
   * Test Spec for [[OwcOfferingDAO]] with [[OwcOffering]] and [[OwcOperation]]
   */
-class OwcOfferingSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
@@ -44,58 +44,25 @@ class OwcOfferingSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
   }
 
   "OwcOffering " can {
-    lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
 
-    val operation1 = OwcOperation(
-      UUID.randomUUID(),
-      "GetCapabilities",
-      "GET",
-      "application/xml",
-      "https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3.0&REQUEST=GetCapabilities",
-      None,
-      None
-    )
+    val operation1 = OwcOperation(UUID.randomUUID(), "GetCapabilities", "GET", "application/xml", "https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3.0&REQUEST=GetCapabilities", None, None)
 
-    val operation2 = OwcOperation(
-      UUID.randomUUID(),
-      "GetMap",
-      "GET",
-      "image/png",
-      "https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3&REQUEST=GetMap&SRS=EPSG:4326&BBOX=168,-45,182,-33&WIDTH=800&HEIGHT=600&LAYERS=layer-767&FORMAT=image/png&TRANSPARENT=TRUE&EXCEPTIONS=application/vnd.ogc.se_xml",
-      None,
-      None
-    )
+    val operation2 = OwcOperation(UUID.randomUUID(), "GetMap", "GET", "image/png", "https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3&REQUEST=GetMap&SRS=EPSG:4326&BBOX=168,-45,182,-33&WIDTH=800&HEIGHT=600&LAYERS=layer-767&FORMAT=image/png&TRANSPARENT=TRUE&EXCEPTIONS=application/vnd.ogc.se_xml", None, None)
 
-    val operation3 = OwcOperation(
-      UUID.randomUUID(),
-      "GetCapabilities",
-      "GET",
-      "application/xml",
-      "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
-      None,
-      None
-    )
+    val operation3 = OwcOperation(UUID.randomUUID(), "GetCapabilities", "GET", "application/xml", "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities", None, None)
 
-    val operation4 = OwcOperation(
-      UUID.randomUUID(),
-      "GetRecordsById",
-      "POST",
-      "application/xml",
-      "http://portal.smart-project.info/pycsw/csw",
-      Some(OwcPostRequestConfig(
-        "application/xml",
-        """<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
-          |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
-          |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
-          |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
-          |service="CSW" version="2.0.2">
-          |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
-          |<csw:ElementSetName>full</csw:ElementSetName>
-          |</csw:GetRecordById>""".stripMargin
-      )),
-      None
-    )
+    val operation4 = OwcOperation(UUID.randomUUID(), "GetRecordsById", "POST", "application/xml", "http://portal.smart-project.info/pycsw/csw", Some(OwcPostRequestConfig(
+            "application/xml",
+            """<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
+              |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
+              |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
+              |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
+              |service="CSW" version="2.0.2">
+              |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
+              |<csw:ElementSetName>full</csw:ElementSetName>
+              |</csw:GetRecordById>""".stripMargin
+          )), None)
 
     "handle OwcOperation with DB" in {
       withTestDatabase { database =>
@@ -120,15 +87,7 @@ class OwcOfferingSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
         owcOfferingDAO.deleteOwcOperation(operation2) mustEqual true
 
-        val operation3_1 = OwcOperation(
-          operation3.uuid,
-          operation3.code,
-          operation3.method,
-          operation3.contentType,
-          "https://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
-          None,
-          None
-        )
+        val operation3_1 = OwcOperation(operation3.uuid, operation3.code, operation3.method, operation3.contentType, "https://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities", None, None)
 
         owcOfferingDAO.updateOwcOperation(operation3_1).get mustEqual operation3_1
         owcOfferingDAO.findOwcOperationByUuid(operation3_1.uuid).headOption.get.href mustEqual

@@ -19,7 +19,6 @@
 
 import java.time.ZonedDateTime
 
-import models._
 import models.users._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
@@ -29,7 +28,7 @@ import play.api.libs.json._
 package object controllers {
 
   /**
-    *  JSON reader for [[models.LoginCredentials]].
+    *  JSON reader for [[LoginCredentials]].
     *  github.com/mariussoutier/play-angular-require-seed
     */
   implicit val LoginCredentialsFromJson = (

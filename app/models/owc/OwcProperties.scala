@@ -22,7 +22,8 @@ package models.owc
 import java.time.ZonedDateTime
 import java.util.UUID
 
-import org.locationtech.spatial4j.shape.Rectangle
+import play.api.libs.json.{Json, _}
+import utils.ClassnameLogger
 
 /**
   * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
@@ -51,7 +52,21 @@ import org.locationtech.spatial4j.shape.Rectangle
   * @param email
   * @param uri
   */
-case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Option[String])
+case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Option[String]) extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcAuthor]]
+  */
+object OwcAuthor extends ClassnameLogger {
+}
+
 
 /**
   * reusable pattern of tagging things in the entry lists for declaration in subsequent processes,
@@ -62,7 +77,20 @@ case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Optio
   * @param term   identifier of a view group: nz-overview
   * @param label  human readable name of the term: New Zealand Overview, National Scale models..
   */
-case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[String])
+case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[String]) extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcCategory]]
+  */
+object OwcCategory extends ClassnameLogger {
+}
 
 /**
   *
@@ -72,7 +100,20 @@ case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[S
   * @param href
   * @param title
   */
-case class OwcLink(uuid: UUID, rel: String, mimeType: Option[String], href: String, title: Option[String])
+case class OwcLink(uuid: UUID, rel: String, mimeType: Option[String], href: String, title: Option[String]) extends ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcLink]]
+  */
+object OwcLink extends ClassnameLogger {
+}
 
 /**
   *
@@ -101,5 +142,37 @@ case class OwcProperties(
                           creator: Option[String],
                           publisher: Option[String],
                           categories: List[OwcCategory],
-                          links: List[OwcLink])
+                          links: List[OwcLink]) extends ClassnameLogger {
 
+  /**
+    *
+    * @return
+    */
+  def toJson = Json.toJson(this)
+}
+
+/**
+  * companion object for [[OwcProperties]]
+  */
+object OwcProperties extends ClassnameLogger {
+
+  /**
+    *
+    * @param jsonString
+    * @return
+    */
+  def parseJson(jsonString: String) : Option[OwcProperties] = parseJson(Json.parse(jsonString))
+
+  /**
+    *
+    * @param json
+    * @return
+    */
+  def parseJson(json: JsValue) : Option[OwcProperties] = {
+    val resultFromJson: JsResult[OwcProperties] = Json.fromJson[OwcProperties](json)
+    resultFromJson match {
+      case JsSuccess(r: OwcProperties, path: JsPath) => Some(r)
+      case e: JsError => None
+    }
+  }
+}

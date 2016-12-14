@@ -57,8 +57,8 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
     val operation3 = OwcOperation(UUID.randomUUID(), "GetCapabilities", "GET", "application/xml", "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities", None, None)
 
     val operation4 = OwcOperation(UUID.randomUUID(), "GetRecordsById", "POST", "application/xml", "http://portal.smart-project.info/pycsw/csw", Some(OwcPostRequestConfig(
-            "application/xml",
-            """<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
+            Some("application/xml"),
+            Some("""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
               |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
               |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
               |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -66,7 +66,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
               |service="CSW" version="2.0.2">
               |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
               |<csw:ElementSetName>full</csw:ElementSetName>
-              |</csw:GetRecordById>""".stripMargin
+              |</csw:GetRecordById>""".stripMargin)
           )), None)
 
     val operation5 = OwcOperation(UUID.randomUUID(), "GetCapabilities", "GET", "application/xml", "http://portal.smart-project.info/gs-smart/wfs?service=wfs&AcceptVersions=2.0.0&REQUEST=GetCapabilities", None, None)

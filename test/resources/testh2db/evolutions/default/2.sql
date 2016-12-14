@@ -118,7 +118,7 @@ CREATE TABLE owc_operations (
   request_content_type varchar(255),
   request_post_data text,
   result_content_type varchar(255),
-  result text,
+  result_data text,
   PRIMARY KEY (uuid)
 );
 -- # belongs to owc_offering_has_owc_operation: foreign key owc_operation -> owc_offering n:n,

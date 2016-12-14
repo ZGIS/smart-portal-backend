@@ -55,9 +55,9 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
       get[Option[String]]("request_content_type") ~
       get[Option[String]]("request_post_data") ~
       get[Option[String]]("result_content_type") ~
-      get[Option[String]]("result") map {
-      case uuid ~ code ~ method ~ contentType ~ href ~ requestContentType ~ requestPostData ~ resultContentType ~ result =>
-        OwcOperation(UUID.fromString(uuid), code, method, contentType, href, requestConfigParser(requestContentType, requestPostData), requestResultParser(resultContentType, result))
+      get[Option[String]]("result_data") map {
+      case uuid ~ code ~ method ~ contentType ~ href ~ requestContentType ~ requestPostData ~ resultContentType ~ resultData =>
+        OwcOperation(UUID.fromString(uuid), code, method, contentType, href, requestConfigParser(requestContentType, requestPostData), requestResultParser(resultContentType, resultData))
     }
   }
 
@@ -74,7 +74,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
                          ): Option[OwcPostRequestConfig] = {
     (contentTypeOpt, postDataOpt) match {
       case (contentType, postData) if contentType.isDefined && postData.isDefined => {
-        Some(OwcPostRequestConfig(contentType.get, postData.get))
+        Some(OwcPostRequestConfig(contentType, postData))
       }
       case _ => None
     }
@@ -93,7 +93,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
                          ): Option[OwcRequestResult] = {
     (contentTypeOpt, resultDataOpt) match {
       case (contentType, resultData) if resultData.isDefined => {
-        Some(OwcRequestResult(contentType, resultData.get))
+        Some(OwcRequestResult(contentType, resultData))
       }
       case _ => None
     }
@@ -144,7 +144,8 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
     db.withConnection { implicit connection =>
       SQL(
         s"""SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,
-           | op.href as href, op. request_content_type as request_content_type, op.request_post_data as request_post_data, op.result as result
+           | op.href as href, op.request_content_type as request_content_type, op.request_post_data as request_post_data,
+           | op.result_content_type as result_content_type, op.result_data as result_data
            | FROM $tableOwcOperations op JOIN $tableOwcOfferingsHasOwcOperations ofop ON op.uuid=ofop.owc_operations_uuid
            | WHERE ofop.owc_offerings_uuid={uuid}""".stripMargin).on(
         'uuid -> offeringUuid.toString
@@ -165,7 +166,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
       val rowCount = SQL(
         s"""
           insert into $tableOwcOperations values (
-            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result_content_type}, {result}
+            {uuid}, {code}, {method}, {content_type}, {href}, {request_content_type}, {request_post_data}, {result_content_type}, {result_data}
           )
         """).on(
         'uuid -> owcOperation.uuid.toString,
@@ -173,10 +174,10 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
         'method -> owcOperation.method,
         'content_type -> owcOperation.contentType,
         'href -> owcOperation.href,
-        'request_content_type -> owcOperation.request.map(_.contentType),
-        'request_post_data -> owcOperation.request.map(_.postData),
-        'result_content_type -> owcOperation.result.map(_.contentType.getOrElse("")),
-        'result -> owcOperation.result.map(_.resultData)
+        'request_content_type -> owcOperation.request.map(_.contentType.get),
+        'request_post_data -> owcOperation.request.map(_.postData.get),
+        'result_content_type -> owcOperation.result.map(_.contentType.get),
+        'result_data -> owcOperation.result.map(_.resultData.get)
       ).executeUpdate()
 
       rowCount match {
@@ -205,16 +206,16 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
            |request_content_type = {request_content_type},
            |request_post_data = {request_post_data},
            |result_content_type = {request_content_type},
-           |result = {result} where uuid = {uuid}
+           |result_data = {result_data} where uuid = {uuid}
         """.stripMargin).on(
         'code -> owcOperation.code,
         'method -> owcOperation.method,
         'content_type -> owcOperation.contentType,
         'href -> owcOperation.href,
-        'request_content_type -> owcOperation.request.map(_.contentType),
-        'request_post_data -> owcOperation.request.map(_.postData),
-        'result_content_type -> owcOperation.result.map(_.contentType.getOrElse("")),
-        'result -> owcOperation.result.map(_.resultData),
+        'request_content_type -> owcOperation.request.map(_.contentType.get),
+        'request_post_data -> owcOperation.request.map(_.postData.get),
+        'result_content_type -> owcOperation.result.map(_.contentType.get),
+        'result_data -> owcOperation.result.map(_.resultData.get),
         'uuid -> owcOperation.uuid.toString
       ).executeUpdate()
 

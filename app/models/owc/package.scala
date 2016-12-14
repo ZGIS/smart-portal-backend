@@ -235,13 +235,13 @@ package object owc {
     * OwcPostRequestConfig Json stuff
     */
   implicit val owcPostRequestConfigReads: Reads[OwcPostRequestConfig] = (
-    (JsPath \ "type").read[String] and
-      (JsPath \ "request").read[String]
+    (JsPath \ "type").readNullable[String] and
+      (JsPath \ "request").readNullable[String]
     )(OwcPostRequestConfig.apply _)
 
   val owcPostRequestConfigWrites: Writes[OwcPostRequestConfig] = (
-    (JsPath \ "type").write[String] and
-      (JsPath \ "request").write[String]
+    (JsPath \ "type").writeNullable[String] and
+      (JsPath \ "request").writeNullable[String]
     )(unlift(OwcPostRequestConfig.unapply))
 
   implicit val owcPostRequestConfigFormat: Format[OwcPostRequestConfig] =
@@ -252,12 +252,12 @@ package object owc {
     */
   implicit val owcRequestResultReads: Reads[OwcRequestResult] = (
     (JsPath \ "contentType").readNullable[String] and
-      (JsPath \ "result").read[String]
+      (JsPath \ "result").readNullable[String]
     )(OwcRequestResult.apply _)
 
   val owcRequestResultWrites: Writes[OwcRequestResult] = (
     (JsPath \ "contentType").writeNullable[String] and
-      (JsPath \ "result").write[String]
+      (JsPath \ "result").writeNullable[String]
     )(unlift(OwcRequestResult.unapply))
 
   implicit val owcRequestResultFormat: Format[OwcRequestResult] =

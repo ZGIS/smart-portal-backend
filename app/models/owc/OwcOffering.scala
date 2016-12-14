@@ -62,7 +62,7 @@ sealed trait OwcOffering {
   * @param contentType
   * @param postData
   */
-case class OwcPostRequestConfig(contentType: String, postData: String)extends ClassnameLogger {
+case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String])extends ClassnameLogger {
 
   /**
     *
@@ -83,7 +83,7 @@ object OwcPostRequestConfig extends ClassnameLogger {
   * @param contentType
   * @param resultData
   */
-case class OwcRequestResult(contentType: Option[String], resultData: String) extends ClassnameLogger {
+case class OwcRequestResult(contentType: Option[String], resultData: Option[String]) extends ClassnameLogger {
 
   /**
     *

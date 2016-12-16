@@ -53,7 +53,7 @@ sealed trait OwcOffering {
   val operations: List[OwcOperation]
   val content: List[String]
 
-  def toJson
+  def toJson: JsValue
 }
 
 /**
@@ -68,7 +68,7 @@ case class OwcPostRequestConfig(contentType: Option[String], postData: Option[St
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson : JsValue = Json.toJson(this)
 }
 
 /**
@@ -89,7 +89,7 @@ case class OwcRequestResult(contentType: Option[String], resultData: Option[Stri
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson : JsValue = Json.toJson(this)
 }
 
 /**
@@ -121,7 +121,7 @@ case class OwcOperation(uuid: UUID,
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson : JsValue = Json.toJson(this)
 }
 
 /**
@@ -167,7 +167,7 @@ case class WmsOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson : JsValue = Json.toJson(this)
 }
 
 /**
@@ -188,7 +188,7 @@ case class WmtsOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson : JsValue = Json.toJson(this)
 }
 
 /**

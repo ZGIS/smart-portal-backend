@@ -21,15 +21,18 @@ import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
 import org.locationtech.spatial4j.context.SpatialContext
-import org.scalatest.Ignore
 import org.scalatestplus.play.PlaySpec
 import play.api.libs.json._
 import models.owc._
+import utils.ClassnameLogger
+
+import scala.language.implicitConversions
+
 
 /**
   * Test Spec for [[OwcDocument]] and co
   */
-class OwcDocumentJsonSpec extends PlaySpec {
+class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
@@ -252,6 +255,13 @@ class OwcDocumentJsonSpec extends PlaySpec {
 
 
     "encode OwcOfferings" in {
+      implicit val owcOfferingReads = models.owc.owcOfferingReads
+      val jsOffering = offering1.toJson
+      val jsCode = (jsOffering \ "code").get
+      jsCode.as[String] mustEqual offering1.code
+
+      val offering1BackResult = Json.fromJson[OwcOffering](jsOffering)
+      offering1BackResult.get.code mustEqual offering1.code
 
     }
 

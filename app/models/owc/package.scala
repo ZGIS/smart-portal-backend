@@ -334,7 +334,7 @@ package object owc {
         case "http://www.opengis.net/spec/owc-geojson/1.0/req/sos" => SosOffering(uuid, code, operations, content)
         case "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf" => NetCdfOffering(uuid, code, operations, content)
         case "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link" => HttpLinkOffering(uuid, code, operations, content)
-        case _ => throw new NoSuchElementException("offering code cannot be used to build offering type")
+        case _ => throw new IllegalArgumentException("offering code cannot be used to build offering type")
       }
 
     }
@@ -353,7 +353,7 @@ package object owc {
   val owcOfferingWrites: Writes[OwcOffering] = (
     (JsPath \ "code").write[String] and
       (JsPath \ "operations").write[List[OwcOperation]] and
-      (JsPath \ "href").write[List[String]]
+      (JsPath \ "content").write[List[String]]
     )(unlift(OwcOfferingJs.unapply))
 
   implicit val owcOfferingFormat: Format[OwcOffering] =
@@ -366,4 +366,5 @@ package object owc {
   /**
     * OwcDocument Json stuff
     */
+
 }

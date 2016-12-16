@@ -18,17 +18,17 @@
  */
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfter, TestData}
+import org.scalatest.{BeforeAndAfter, Ignore, TestData}
 import org.scalatestplus.play._
 import play.api.db.evolutions._
 import play.api.db.{Database, Databases}
 import play.api.inject.guice._
+import play.api.libs.json._
 import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Configuration}
-import play.api.libs.json._
-import org.scalatest.Ignore
 import utils.ClassnameLogger
+import scala.language.implicitConversions
 
 /**
   *
@@ -41,8 +41,7 @@ trait WithTestDatabase extends ClassnameLogger {
     * @tparam T
     * @return
     */
-  def withTestDatabase[T](block: Database => T) = {
-
+  def withTestDatabase[T](block: Database => T): T = {
     val config = new Configuration(ConfigFactory.load("application.testdev.conf"))
 
     val driver = config.getString("db.default.driver").get
@@ -62,11 +61,8 @@ trait WithTestDatabase extends ClassnameLogger {
         "logStatements" -> logSql
       )
     ) { database =>
-
       Evolutions.withEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/")) {
-
         block(database)
-
       }
     }
   }
@@ -84,11 +80,11 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build()
 
   before {
-
+    // EMPTY
   }
 
   after {
-
+    // EMPTY
   }
 
   lazy val PROFILENOPASS = """{"email":"alex@example.com","username":"alex","firstname":"Alex","lastname":"K"}"""
@@ -96,26 +92,6 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
   lazy val FULLPROFILE = """{"email":"alex@example.com","username":"akmoch","firstname":"Alex","lastname":"K","password":"testpass123"}"""
 
   "Routes" should {
-
-
-    /*
-  POST           /api/v1/login                             controllers.HomeController.login
-POST           /api/v1/login/gconnect                    controllers.HomeController.gconnect
-
-GET            /api/v1/logout                            controllers.HomeController.logout
-POST           /api/v1/logout                            controllers.HomeController.logout
-GET            /api/v1/logout/gdisconnect                controllers.HomeController.gdisconnect
-
-# Users API
-GET            /api/v1/users/self                        controllers.UserController.userSelf
-GET            /api/v1/users/delete/:username            controllers.UserController.deleteUser(username: String)
-GET            /api/v1/users/profile/:username           controllers.UserController.getProfile(username: String)
-POST           /api/v1/users/update/:username            controllers.UserController.updateProfile(username: String)
-POST           /api/v1/users/updatepass                  controllers.UserController.updatePassword
-POST           /api/v1/users/register                    controllers.UserController.registerUser
-GET            /api/v1/users/register/:linkId            controllers.UserController.registerConfirm(linkId: String)
-   */
-
     "send 404 on a bad request and GETs at POST endpoint" in {
       route(app, FakeRequest(GET, "/api/v1/login")).map(status(_)) mustBe Some(NOT_FOUND)
       route(app, FakeRequest(GET, "/api/v1/login/gconnect")).map(status(_)) mustBe Some(NOT_FOUND)
@@ -124,8 +100,10 @@ GET            /api/v1/users/register/:linkId            controllers.UserControl
     "send 401 on a unauthorized request" in {
       withTestDatabase { database =>
         Evolutions.applyEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/"))
-        route(app, FakeRequest(POST, "/api/v1/login").withJsonBody(Json.parse(LOGIN))).map(status(_)) mustBe Some(UNAUTHORIZED)
-        route(app, FakeRequest(POST, "/api/v1/login/gconnect").withJsonBody(Json.parse(LOGIN))).map(status(_)) mustBe Some(UNAUTHORIZED)
+        route(app, FakeRequest(POST, "/api/v1/login").withJsonBody(Json.parse(LOGIN))).map(status(_)) mustBe Some(
+          UNAUTHORIZED)
+        route(app, FakeRequest(POST, "/api/v1/login/gconnect").withJsonBody(Json.parse(LOGIN))).map(
+          status(_)) mustBe Some(UNAUTHORIZED)
         route(app, FakeRequest(GET, "/api/v1/users/self")).map(status(_)) mustBe Some(UNAUTHORIZED)
         route(app, FakeRequest(GET, "/api/v1/logout")).map(status(_)) mustBe Some(UNAUTHORIZED)
         route(app, FakeRequest(GET, "/api/v1/logout/gdisconnect")).map(status(_)) mustBe Some(UNAUTHORIZED)
@@ -133,17 +111,17 @@ GET            /api/v1/users/register/:linkId            controllers.UserControl
     }
 
     "send 415 unsupported media type when JSON is required but not provided" in {
-      route(app, FakeRequest(POST, "/api/v1/login").withTextBody(LOGIN)).map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
-      route(app, FakeRequest(POST, "/api/v1/login") withXmlBody (<username>alex</username> <password>testpass123</password>))
+      route(app, FakeRequest(POST, "/api/v1/login").withTextBody(LOGIN)).map(status(_)) mustBe Some(
+        UNSUPPORTED_MEDIA_TYPE)
+      route(app,
+        FakeRequest(POST, "/api/v1/login") withXmlBody (<username>alex</username> <password>testpass123</password>))
         .map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
       route(app, FakeRequest(POST, "/api/v1/users/register")).map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
       route(app, FakeRequest(GET, "/api/v1/users/delete/testuser")).map(status(_)) mustBe Some(NOT_IMPLEMENTED)
     }
-
   }
 
   "HomeController" should {
-
     "render the index page" in {
       val home = route(app, FakeRequest(GET, "/")).get
 
@@ -170,7 +148,8 @@ GET            /api/v1/users/register/:linkId            controllers.UserControl
       preflightHeaders.get("Access-Control-Allow-Origin").get mustBe "*"
       preflightHeaders.get("Allow").get mustBe "*"
       preflightHeaders.get("Access-Control-Allow-Methods").get mustBe "GET, POST, OPTIONS"
-      preflightHeaders.get("Access-Control-Allow-Headers").get mustBe "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date"
+      preflightHeaders.get(
+        "Access-Control-Allow-Headers").get mustBe "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date"
       preflightHeaders.get("Access-Control-Allow-Credentials").get mustBe "true"
 
       val preflight2 = route(app, FakeRequest(OPTIONS, "/api/v1/login")).get
@@ -179,20 +158,35 @@ GET            /api/v1/users/register/:linkId            controllers.UserControl
 
       val preflight3 = route(app, FakeRequest(OPTIONS, "/api/v1/users/register")).get
       status(preflight3) mustBe OK
-      headers(preflight2).get("Access-Control-Allow-Headers").get mustBe "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date"
-
+      headers(preflight2).get(
+        "Access-Control-Allow-Headers").get mustBe "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date"
     }
-
   }
 
   "CountController" should {
-
     "return an increasing count" in {
       contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "0"
       contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "1"
       contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "2"
     }
-
   }
 
+  "CswController" should {
+    "return validValues JSON for 'topicCategories'" in {
+      val topicCategories = route(app, FakeRequest(GET, "/api/v1/csw/get-valid-values-for/topicCategory"))
+      topicCategories mustBe defined
+      status(topicCategories.get) mustBe 200
+      val jsonTopicCategories = contentAsJson(topicCategories.get)
+      (jsonTopicCategories \ "standardValue").toOption mustBe defined
+      (jsonTopicCategories \ "standardValue").as[Int] mustBe 0
+      (jsonTopicCategories \ "descriptions").asOpt[List[String]] mustBe None
+    }
+
+    "return error on validValues for unknown category" in {
+      val topicCategories = route(app, FakeRequest(GET, "/api/v1/csw/get-valid-values-for/bogus"))
+      topicCategories mustBe defined
+      status(topicCategories.get) mustBe 400
+      contentAsString(topicCategories.get) mustBe "There are not valid values for 'bogus'"
+    }
+  }
 }

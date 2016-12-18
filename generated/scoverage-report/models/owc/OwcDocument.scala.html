@@ -1,0 +1,529 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcDocument.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.time.ZonedDateTime
+</span>23 <span style=''>import java.time.format.{DateTimeFormatter, DateTimeParseException}
+</span>24 <span style=''>
+</span>25 <span style=''>import org.locationtech.spatial4j.context.SpatialContext
+</span>26 <span style=''>import org.locationtech.spatial4j.io.ShapeIO
+</span>27 <span style=''>import org.locationtech.spatial4j.shape.Rectangle
+</span>28 <span style=''>import play.api.libs.functional.syntax._
+</span>29 <span style=''>import play.api.libs.json._
+</span>30 <span style=''>import utils.ClassnameLogger
+</span>31 <span style=''>
+</span>32 <span style=''>/**
+</span>33 <span style=''>  * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
+</span>34 <span style=''>  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
+</span>35 <span style=''>  * about the things they provide the context for (i.e. other data sets, services, metadata records)
+</span>36 <span style=''>  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
+</span>37 <span style=''>  *
+</span>38 <span style=''>  * http://www.opengeospatial.org/standards/owc
+</span>39 <span style=''>  *
+</span>40 <span style=''>  * Classically, the WMC documents (Web Map Context documents) were a list of WMS layers for a web map viewer
+</span>41 <span style=''>  * with a certain context, i.e. title, Bounding Box and a few visualisation properties like scale/zoom,
+</span>42 <span style=''>  * OWC has superseded that concept into a generic collection of resources:
+</span>43 <span style=''>  *
+</span>44 <span style=''>  * We use OWC primarily in the form of collections of case studies, preferably with at least two offerings per entry:
+</span>45 <span style=''>  * 1) a web visualisable form, e.g.WMS, WFS, SOS ...
+</span>46 <span style=''>  * 2) a CSW addressable MD_Metadata record according to the resource
+</span>47 <span style=''>  *
+</span>48 <span style=''>  * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
+</span>49 <span style=''>  */
+</span>50 <span style=''>sealed trait OwcFeatureType {
+</span>51 <span style=''>  val id: String
+</span>52 <span style=''>  val bbox: Option[Rectangle]
+</span>53 <span style=''>  val properties: OwcProperties
+</span>54 <span style=''>}
+</span>55 <span style=''>
+</span>56 <span style=''>/**
+</span>57 <span style=''>  * implicit type is Feature
+</span>58 <span style=''>  *
+</span>59 <span style=''>  * @param id
+</span>60 <span style=''>  * @param bbox
+</span>61 <span style=''>  * @param properties
+</span>62 <span style=''>  * @param offerings // aka resources
+</span>63 <span style=''>  */
+</span>64 <span style=''>case class OwcEntry(
+</span>65 <span style=''>                     id: String,
+</span>66 <span style=''>                     bbox: Option[Rectangle],
+</span>67 <span style=''>                     properties: OwcProperties,
+</span>68 <span style=''>                     offerings: List[OwcOffering] // special here of course
+</span>69 <span style=''>                   ) extends OwcFeatureType with ClassnameLogger {
+</span>70 <span style=''>
+</span>71 <span style=''>/**
+</span>72 <span style=''>  *
+</span>73 <span style=''>  * @return
+</span>74 <span style=''>  */
+</span>75 <span style=''>def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>76 <span style=''>}
+</span>77 <span style=''>
+</span>78 <span style=''>/**
+</span>79 <span style=''>  * companion object for [[OwcEntry]]
+</span>80 <span style=''>  */
+</span>81 <span style=''>object OwcEntry extends ClassnameLogger {
+</span>82 <span style=''>
+</span>83 <span style=''>  /**
+</span>84 <span style=''>    *
+</span>85 <span style=''>    * @param jsonString
+</span>86 <span style=''>    * @return
+</span>87 <span style=''>    */
+</span>88 <span style=''>  def parseJson(jsonString: String) : Option[OwcEntry] = </span><span style='background: #F0ADAD'>parseJson(Json.parse(jsonString))</span><span style=''>
+</span>89 <span style=''>
+</span>90 <span style=''>  /**
+</span>91 <span style=''>    *
+</span>92 <span style=''>    * @param json
+</span>93 <span style=''>    * @return
+</span>94 <span style=''>    */
+</span>95 <span style=''>  def parseJson(json: JsValue) : Option[OwcEntry] = {
+</span>96 <span style=''>    val resultFromJson: JsResult[OwcEntry] = </span><span style='background: #F0ADAD'>Json.fromJson[OwcEntry](json)</span><span style=''>
+</span>97 <span style=''>    resultFromJson match {
+</span>98 <span style=''>      case JsSuccess(r: OwcEntry, path: JsPath) => </span><span style='background: #F0ADAD'>Some(r)</span><span style=''>
+</span>99 <span style=''>      case e: JsError => </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>100 <span style=''>    }
+</span>101 <span style=''>  }
+</span>102 <span style=''>}
+</span>103 <span style=''>
+</span>104 <span style=''>/**
+</span>105 <span style=''>  * the OwcDocument wraps it all up
+</span>106 <span style=''>  * implicit type is FeatureCollection
+</span>107 <span style=''>  * properties.links must contain a profile link element
+</span>108 <span style=''>  *
+</span>109 <span style=''>  * @param id
+</span>110 <span style=''>  * @param bbox
+</span>111 <span style=''>  * @param properties
+</span>112 <span style=''>  * @param features // aka the entries
+</span>113 <span style=''>  */
+</span>114 <span style=''>case class OwcDocument(
+</span>115 <span style=''>                        id: String,
+</span>116 <span style=''>                        bbox: Option[Rectangle],
+</span>117 <span style=''>                        properties: OwcProperties,
+</span>118 <span style=''>                        features: List[OwcEntry] // special here of course
+</span>119 <span style=''>                      ) extends OwcFeatureType with ClassnameLogger  {
+</span>120 <span style=''>
+</span>121 <span style=''>  /**
+</span>122 <span style=''>    *
+</span>123 <span style=''>    * @return
+</span>124 <span style=''>    */
+</span>125 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>126 <span style=''>}
+</span>127 <span style=''>
+</span>128 <span style=''>/**
+</span>129 <span style=''>  * Companion Object to [[OwcDocument]]
+</span>130 <span style=''>  */
+</span>131 <span style=''>object OwcDocument extends ClassnameLogger {
+</span>132 <span style=''>
+</span>133 <span style=''>  /**
+</span>134 <span style=''>    *
+</span>135 <span style=''>    * @param jsonString
+</span>136 <span style=''>    * @return
+</span>137 <span style=''>    */
+</span>138 <span style=''>  def parseJson(jsonString: String) : Option[OwcDocument] = </span><span style='background: #F0ADAD'>parseJson(Json.parse(jsonString))</span><span style=''>
+</span>139 <span style=''>
+</span>140 <span style=''>  /**
+</span>141 <span style=''>    *
+</span>142 <span style=''>    * @param json
+</span>143 <span style=''>    * @return
+</span>144 <span style=''>    */
+</span>145 <span style=''>  def parseJson(json: JsValue) : Option[OwcDocument] = {
+</span>146 <span style=''>    val resultFromJson: JsResult[OwcDocument] = </span><span style='background: #F0ADAD'>Json.fromJson[OwcDocument](json)</span><span style=''>
+</span>147 <span style=''>    resultFromJson match {
+</span>148 <span style=''>      case JsSuccess(r: OwcDocument, path: JsPath) => </span><span style='background: #F0ADAD'>Some(r)</span><span style=''>
+</span>149 <span style=''>      case e: JsError => </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>150 <span style=''>    }
+</span>151 <span style=''>  }
+</span>152 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          988
+        </td>
+        <td>
+          2968
+          -
+          2985
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.OwcEntry](this)(owc.this.`package`.owcEntryFormat)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          987
+        </td>
+        <td>
+          2979
+          -
+          2979
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcEntryFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcEntryFormat
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          989
+        </td>
+        <td>
+          3203
+          -
+          3225
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.parse
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.parse(jsonString)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          990
+        </td>
+        <td>
+          3193
+          -
+          3226
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcEntry.parseJson
+        </td>
+        <td style="background: #F0ADAD">
+          OwcEntry.this.parseJson(play.api.libs.json.Json.parse(jsonString))
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          992
+        </td>
+        <td>
+          3378
+          -
+          3407
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.fromJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.fromJson[models.owc.OwcEntry](json)(owc.this.`package`.owcEntryFormat)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          991
+        </td>
+        <td>
+          3401
+          -
+          3401
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcEntryFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcEntryFormat
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          993
+        </td>
+        <td>
+          3486
+          -
+          3493
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[models.owc.OwcEntry](r)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          994
+        </td>
+        <td>
+          3519
+          -
+          3523
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          995
+        </td>
+        <td>
+          4148
+          -
+          4148
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcDocumentFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcDocumentFormat
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          996
+        </td>
+        <td>
+          4137
+          -
+          4154
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.OwcDocument](this)(owc.this.`package`.owcDocumentFormat)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          998
+        </td>
+        <td>
+          4370
+          -
+          4403
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcDocument.parseJson
+        </td>
+        <td style="background: #F0ADAD">
+          OwcDocument.this.parseJson(play.api.libs.json.Json.parse(jsonString))
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          997
+        </td>
+        <td>
+          4380
+          -
+          4402
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.parse
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.parse(jsonString)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          1000
+        </td>
+        <td>
+          4561
+          -
+          4593
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.fromJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.fromJson[models.owc.OwcDocument](json)(owc.this.`package`.owcDocumentFormat)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          999
+        </td>
+        <td>
+          4587
+          -
+          4587
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcDocumentFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcDocumentFormat
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          1001
+        </td>
+        <td>
+          4675
+          -
+          4682
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[models.owc.OwcDocument](r)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1002
+        </td>
+        <td>
+          4708
+          -
+          4712
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

@@ -1,0 +1,1203 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcOffering.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.util.UUID
+</span>23 <span style=''>
+</span>24 <span style=''>import play.api.libs.json._
+</span>25 <span style=''>import utils.ClassnameLogger
+</span>26 <span style=''>
+</span>27 <span style=''>/**
+</span>28 <span style=''>  * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
+</span>29 <span style=''>  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
+</span>30 <span style=''>  * about the things they provide the context for (i.e. other data sets, services, metadata records)
+</span>31 <span style=''>  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
+</span>32 <span style=''>  *
+</span>33 <span style=''>  * http://www.opengeospatial.org/standards/owc
+</span>34 <span style=''>  *
+</span>35 <span style=''>  * Classically, the WMC documents (Web Map Context documents) were a list of WMS layers for a web map viewer
+</span>36 <span style=''>  * with a certain context, i.e. title, Bounding Box and a few visualisation properties like scale/zoom,
+</span>37 <span style=''>  * OWC has superseded that concept into a generic collection of resources:
+</span>38 <span style=''>  *
+</span>39 <span style=''>  * We use OWC primarily in the form of collections of case studies, preferably with at least two offerings per entry:
+</span>40 <span style=''>  * 1) a web visualisable form, e.g.WMS, WFS, SOS ...
+</span>41 <span style=''>  * 2) a CSW addressable MD_Metadata record according to the resource
+</span>42 <span style=''>  *
+</span>43 <span style=''>  * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
+</span>44 <span style=''>  */
+</span>45 <span style=''>
+</span>46 <span style=''>/**
+</span>47 <span style=''>  * trait OwcOffering
+</span>48 <span style=''>  */
+</span>49 <span style=''>sealed trait OwcOffering {
+</span>50 <span style=''>  val uuid: UUID
+</span>51 <span style=''>  val code: String
+</span>52 <span style=''>  val operations: List[OwcOperation]
+</span>53 <span style=''>  val content: List[String]
+</span>54 <span style=''>
+</span>55 <span style=''>  def toJson: JsValue
+</span>56 <span style=''>}
+</span>57 <span style=''>
+</span>58 <span style=''>/**
+</span>59 <span style=''>  * object for request contentType and POST data
+</span>60 <span style=''>  *
+</span>61 <span style=''>  * @param contentType
+</span>62 <span style=''>  * @param postData
+</span>63 <span style=''>  */
+</span>64 <span style=''>case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String]) extends ClassnameLogger {
+</span>65 <span style=''>
+</span>66 <span style=''>  /**
+</span>67 <span style=''>    *
+</span>68 <span style=''>    * @return
+</span>69 <span style=''>    */
+</span>70 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>71 <span style=''>}
+</span>72 <span style=''>
+</span>73 <span style=''>/**
+</span>74 <span style=''>  * companion object for [[OwcPostRequestConfig]]
+</span>75 <span style=''>  */
+</span>76 <span style=''>object OwcPostRequestConfig extends ClassnameLogger {
+</span>77 <span style=''>}
+</span>78 <span style=''>
+</span>79 <span style=''>/**
+</span>80 <span style=''>  * object for result contentType and POST data
+</span>81 <span style=''>  *
+</span>82 <span style=''>  * @param contentType
+</span>83 <span style=''>  * @param resultData
+</span>84 <span style=''>  */
+</span>85 <span style=''>case class OwcRequestResult(contentType: Option[String], resultData: Option[String]) extends ClassnameLogger {
+</span>86 <span style=''>
+</span>87 <span style=''>  /**
+</span>88 <span style=''>    *
+</span>89 <span style=''>    * @return
+</span>90 <span style=''>    */
+</span>91 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>92 <span style=''>}
+</span>93 <span style=''>
+</span>94 <span style=''>/**
+</span>95 <span style=''>  * companion object for [[OwcRequestResult]]
+</span>96 <span style=''>  */
+</span>97 <span style=''>object OwcRequestResult extends ClassnameLogger {
+</span>98 <span style=''>}
+</span>99 <span style=''>
+</span>100 <span style=''>/**
+</span>101 <span style=''>  * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
+</span>102 <span style=''>  * which should correspond to the offering type code (e.g. WMS, WFS ..)
+</span>103 <span style=''>  *
+</span>104 <span style=''>  * @param code        operation code, e.g. GetCapabilities
+</span>105 <span style=''>  * @param method      GET, POST ...
+</span>106 <span style=''>  * @param contentType e.g. "application/xml", for expected return type (accept header?)
+</span>107 <span style=''>  * @param href        could be URL / URI type though
+</span>108 <span style=''>  * @param request     only need to hold data when method is POST
+</span>109 <span style=''>  * @param result      could hold inline result of the request, not sure if we need
+</span>110 <span style=''>  */
+</span>111 <span style=''>case class OwcOperation(uuid: UUID,
+</span>112 <span style=''>                        code: String,
+</span>113 <span style=''>                        method: String,
+</span>114 <span style=''>                        contentType: String,
+</span>115 <span style=''>                        href: String, request:
+</span>116 <span style=''>                        Option[OwcPostRequestConfig],
+</span>117 <span style=''>                        result: Option[OwcRequestResult]) extends ClassnameLogger {
+</span>118 <span style=''>
+</span>119 <span style=''>  /**
+</span>120 <span style=''>    *
+</span>121 <span style=''>    * @return
+</span>122 <span style=''>    */
+</span>123 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
+</span>124 <span style=''>}
+</span>125 <span style=''>
+</span>126 <span style=''>/**
+</span>127 <span style=''>  * companion object for [[OwcOperation]]
+</span>128 <span style=''>  */
+</span>129 <span style=''>object OwcOperation extends ClassnameLogger {
+</span>130 <span style=''>  /**
+</span>131 <span style=''>    *
+</span>132 <span style=''>    * @param jsonString
+</span>133 <span style=''>    * @return
+</span>134 <span style=''>    */
+</span>135 <span style=''>  def parseJson(jsonString: String): Option[OwcOperation] = </span><span style='background: #F0ADAD'>parseJson(Json.parse(jsonString))</span><span style=''>
+</span>136 <span style=''>
+</span>137 <span style=''>  /**
+</span>138 <span style=''>    *
+</span>139 <span style=''>    * @param json
+</span>140 <span style=''>    * @return
+</span>141 <span style=''>    */
+</span>142 <span style=''>  def parseJson(json: JsValue): Option[OwcOperation] = {
+</span>143 <span style=''>    val resultFromJson: JsResult[OwcOperation] = </span><span style='background: #AEF1AE'>Json.fromJson[OwcOperation](json)</span><span style=''>
+</span>144 <span style=''>    resultFromJson match {
+</span>145 <span style=''>      case JsSuccess(r: OwcOperation, path: JsPath) => </span><span style='background: #AEF1AE'>Some(r)</span><span style=''>
+</span>146 <span style=''>      case e: JsError => </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>147 <span style=''>    }
+</span>148 <span style=''>  }
+</span>149 <span style=''>}
+</span>150 <span style=''>
+</span>151 <span style=''>/**
+</span>152 <span style=''>  *
+</span>153 <span style=''>  * @param uuid
+</span>154 <span style=''>  * @param code
+</span>155 <span style=''>  * @param operations
+</span>156 <span style=''>  * @param content
+</span>157 <span style=''>  */
+</span>158 <span style=''>case class WmsOffering(
+</span>159 <span style=''>                        uuid: UUID,
+</span>160 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
+</span>161 <span style=''>                        operations: List[OwcOperation],
+</span>162 <span style=''>                        content: List[String]
+</span>163 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>164 <span style=''>
+</span>165 <span style=''>  /**
+</span>166 <span style=''>    *
+</span>167 <span style=''>    * @return
+</span>168 <span style=''>    */
+</span>169 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
+</span>170 <span style=''>}
+</span>171 <span style=''>
+</span>172 <span style=''>/**
+</span>173 <span style=''>  *
+</span>174 <span style=''>  * @param uuid
+</span>175 <span style=''>  * @param code
+</span>176 <span style=''>  * @param operations
+</span>177 <span style=''>  * @param content
+</span>178 <span style=''>  */
+</span>179 <span style=''>case class WmtsOffering(
+</span>180 <span style=''>                         uuid: UUID,
+</span>181 <span style=''>                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
+</span>182 <span style=''>                         operations: List[OwcOperation],
+</span>183 <span style=''>                         content: List[String]
+</span>184 <span style=''>                       ) extends OwcOffering with ClassnameLogger {
+</span>185 <span style=''>
+</span>186 <span style=''>  /**
+</span>187 <span style=''>    *
+</span>188 <span style=''>    * @return
+</span>189 <span style=''>    */
+</span>190 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>191 <span style=''>}
+</span>192 <span style=''>
+</span>193 <span style=''>/**
+</span>194 <span style=''>  *
+</span>195 <span style=''>  * @param uuid
+</span>196 <span style=''>  * @param code
+</span>197 <span style=''>  * @param operations
+</span>198 <span style=''>  * @param content
+</span>199 <span style=''>  */
+</span>200 <span style=''>case class WfsOffering(
+</span>201 <span style=''>                        uuid: UUID,
+</span>202 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
+</span>203 <span style=''>                        operations: List[OwcOperation],
+</span>204 <span style=''>                        content: List[String]
+</span>205 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>206 <span style=''>
+</span>207 <span style=''>  /**
+</span>208 <span style=''>    *
+</span>209 <span style=''>    * @return
+</span>210 <span style=''>    */
+</span>211 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>212 <span style=''>}
+</span>213 <span style=''>
+</span>214 <span style=''>/**
+</span>215 <span style=''>  *
+</span>216 <span style=''>  * @param uuid
+</span>217 <span style=''>  * @param code
+</span>218 <span style=''>  * @param operations
+</span>219 <span style=''>  * @param content
+</span>220 <span style=''>  */
+</span>221 <span style=''>case class WcsOffering(
+</span>222 <span style=''>                        uuid: UUID,
+</span>223 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
+</span>224 <span style=''>                        operations: List[OwcOperation],
+</span>225 <span style=''>                        content: List[String]
+</span>226 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>227 <span style=''>
+</span>228 <span style=''>  /**
+</span>229 <span style=''>    *
+</span>230 <span style=''>    * @return
+</span>231 <span style=''>    */
+</span>232 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>233 <span style=''>}
+</span>234 <span style=''>
+</span>235 <span style=''>/**
+</span>236 <span style=''>  *
+</span>237 <span style=''>  * @param uuid
+</span>238 <span style=''>  * @param code
+</span>239 <span style=''>  * @param operations
+</span>240 <span style=''>  * @param content
+</span>241 <span style=''>  */
+</span>242 <span style=''>case class CswOffering(
+</span>243 <span style=''>                        uuid: UUID,
+</span>244 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
+</span>245 <span style=''>                        operations: List[OwcOperation],
+</span>246 <span style=''>                        content: List[String]
+</span>247 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>248 <span style=''>
+</span>249 <span style=''>  /**
+</span>250 <span style=''>    *
+</span>251 <span style=''>    * @return
+</span>252 <span style=''>    */
+</span>253 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>254 <span style=''>}
+</span>255 <span style=''>
+</span>256 <span style=''>/**
+</span>257 <span style=''>  *
+</span>258 <span style=''>  * @param uuid
+</span>259 <span style=''>  * @param code
+</span>260 <span style=''>  * @param operations
+</span>261 <span style=''>  * @param content
+</span>262 <span style=''>  */
+</span>263 <span style=''>case class WpsOffering(
+</span>264 <span style=''>                        uuid: UUID,
+</span>265 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
+</span>266 <span style=''>                        operations: List[OwcOperation],
+</span>267 <span style=''>                        content: List[String]
+</span>268 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>269 <span style=''>
+</span>270 <span style=''>  /**
+</span>271 <span style=''>    *
+</span>272 <span style=''>    * @return
+</span>273 <span style=''>    */
+</span>274 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>275 <span style=''>}
+</span>276 <span style=''>
+</span>277 <span style=''>/**
+</span>278 <span style=''>  *
+</span>279 <span style=''>  * @param uuid
+</span>280 <span style=''>  * @param code
+</span>281 <span style=''>  * @param operations
+</span>282 <span style=''>  * @param content
+</span>283 <span style=''>  */
+</span>284 <span style=''>case class GmlOffering(
+</span>285 <span style=''>                        uuid: UUID,
+</span>286 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
+</span>287 <span style=''>                        operations: List[OwcOperation],
+</span>288 <span style=''>                        content: List[String]
+</span>289 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>290 <span style=''>
+</span>291 <span style=''>  /**
+</span>292 <span style=''>    *
+</span>293 <span style=''>    * @return
+</span>294 <span style=''>    */
+</span>295 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>296 <span style=''>}
+</span>297 <span style=''>
+</span>298 <span style=''>/**
+</span>299 <span style=''>  *
+</span>300 <span style=''>  * @param uuid
+</span>301 <span style=''>  * @param code
+</span>302 <span style=''>  * @param operations
+</span>303 <span style=''>  * @param content
+</span>304 <span style=''>  */
+</span>305 <span style=''>case class KmlOffering(
+</span>306 <span style=''>                        uuid: UUID,
+</span>307 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
+</span>308 <span style=''>                        operations: List[OwcOperation],
+</span>309 <span style=''>                        content: List[String]
+</span>310 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>311 <span style=''>
+</span>312 <span style=''>  /**
+</span>313 <span style=''>    *
+</span>314 <span style=''>    * @return
+</span>315 <span style=''>    */
+</span>316 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>317 <span style=''>}
+</span>318 <span style=''>
+</span>319 <span style=''>/**
+</span>320 <span style=''>  *
+</span>321 <span style=''>  * @param uuid
+</span>322 <span style=''>  * @param code
+</span>323 <span style=''>  * @param operations
+</span>324 <span style=''>  * @param content
+</span>325 <span style=''>  */
+</span>326 <span style=''>case class GeoTiffOffering(
+</span>327 <span style=''>                            uuid: UUID,
+</span>328 <span style=''>                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
+</span>329 <span style=''>                            operations: List[OwcOperation],
+</span>330 <span style=''>                            content: List[String]
+</span>331 <span style=''>                          ) extends OwcOffering with ClassnameLogger {
+</span>332 <span style=''>
+</span>333 <span style=''>  /**
+</span>334 <span style=''>    *
+</span>335 <span style=''>    * @return
+</span>336 <span style=''>    */
+</span>337 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>338 <span style=''>}
+</span>339 <span style=''>
+</span>340 <span style=''>// the following two are not in the spec, but we need them so I made up an extension
+</span>341 <span style=''>
+</span>342 <span style=''>/**
+</span>343 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>344 <span style=''>  *
+</span>345 <span style=''>  * @param uuid
+</span>346 <span style=''>  * @param code
+</span>347 <span style=''>  * @param operations
+</span>348 <span style=''>  * @param content
+</span>349 <span style=''>  */
+</span>350 <span style=''>case class SosOffering(
+</span>351 <span style=''>                        uuid: UUID,
+</span>352 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
+</span>353 <span style=''>                        operations: List[OwcOperation],
+</span>354 <span style=''>                        content: List[String]
+</span>355 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>356 <span style=''>
+</span>357 <span style=''>  /**
+</span>358 <span style=''>    *
+</span>359 <span style=''>    * @return
+</span>360 <span style=''>    */
+</span>361 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>362 <span style=''>}
+</span>363 <span style=''>
+</span>364 <span style=''>/**
+</span>365 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>366 <span style=''>  *
+</span>367 <span style=''>  * @param uuid
+</span>368 <span style=''>  * @param code
+</span>369 <span style=''>  * @param operations
+</span>370 <span style=''>  * @param content
+</span>371 <span style=''>  */
+</span>372 <span style=''>case class NetCdfOffering(
+</span>373 <span style=''>                           uuid: UUID,
+</span>374 <span style=''>                           code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
+</span>375 <span style=''>                           operations: List[OwcOperation],
+</span>376 <span style=''>                           content: List[String]
+</span>377 <span style=''>                         ) extends OwcOffering with ClassnameLogger {
+</span>378 <span style=''>
+</span>379 <span style=''>  /**
+</span>380 <span style=''>    *
+</span>381 <span style=''>    * @return
+</span>382 <span style=''>    */
+</span>383 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>384 <span style=''>}
+</span>385 <span style=''>
+</span>386 <span style=''>/**
+</span>387 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>388 <span style=''>  *
+</span>389 <span style=''>  * @param uuid
+</span>390 <span style=''>  * @param code
+</span>391 <span style=''>  * @param operations
+</span>392 <span style=''>  * @param content
+</span>393 <span style=''>  */
+</span>394 <span style=''>case class HttpLinkOffering(
+</span>395 <span style=''>                             uuid: UUID,
+</span>396 <span style=''>                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
+</span>397 <span style=''>                             operations: List[OwcOperation],
+</span>398 <span style=''>                             content: List[String]
+</span>399 <span style=''>                           ) extends OwcOffering with ClassnameLogger {
+</span>400 <span style=''>
+</span>401 <span style=''>  /**
+</span>402 <span style=''>    *
+</span>403 <span style=''>    * @return
+</span>404 <span style=''>    */
+</span>405 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>406 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          1273
+        </td>
+        <td>
+          2588
+          -
+          2588
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcPostRequestConfigFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcPostRequestConfigFormat
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          1274
+        </td>
+        <td>
+          2577
+          -
+          2594
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.OwcPostRequestConfig](this)(owc.this.`package`.owcPostRequestConfigFormat)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          1276
+        </td>
+        <td>
+          2989
+          -
+          3006
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.OwcRequestResult](this)(owc.this.`package`.owcRequestResultFormat)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          1275
+        </td>
+        <td>
+          3000
+          -
+          3000
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcRequestResultFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcRequestResultFormat
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1278
+        </td>
+        <td>
+          4110
+          -
+          4127
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.toJson[models.owc.OwcOperation](this)(owc.this.`package`.owcOperationFormat)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1277
+        </td>
+        <td>
+          4121
+          -
+          4121
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOperationFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.owcOperationFormat
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          1279
+        </td>
+        <td>
+          4355
+          -
+          4377
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.parse
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.parse(jsonString)
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          1280
+        </td>
+        <td>
+          4345
+          -
+          4378
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOperation.parseJson
+        </td>
+        <td style="background: #F0ADAD">
+          OwcOperation.this.parseJson(play.api.libs.json.Json.parse(jsonString))
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          1282
+        </td>
+        <td>
+          4537
+          -
+          4570
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.fromJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.fromJson[models.owc.OwcOperation](json)(owc.this.`package`.owcOperationFormat)
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          1281
+        </td>
+        <td>
+          4564
+          -
+          4564
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOperationFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.owcOperationFormat
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1283
+        </td>
+        <td>
+          4653
+          -
+          4660
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.owc.OwcOperation](r)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          1284
+        </td>
+        <td>
+          4686
+          -
+          4690
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1285
+        </td>
+        <td>
+          5182
+          -
+          5182
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1286
+        </td>
+        <td>
+          5171
+          -
+          5188
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.toJson[models.owc.WmsOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          1288
+        </td>
+        <td>
+          5666
+          -
+          5683
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.WmtsOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          1287
+        </td>
+        <td>
+          5677
+          -
+          5677
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          1290
+        </td>
+        <td>
+          6154
+          -
+          6171
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.WfsOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          1289
+        </td>
+        <td>
+          6165
+          -
+          6165
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          232
+        </td>
+        <td>
+          1291
+        </td>
+        <td>
+          6653
+          -
+          6653
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          232
+        </td>
+        <td>
+          1292
+        </td>
+        <td>
+          6642
+          -
+          6659
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.WcsOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          1294
+        </td>
+        <td>
+          7130
+          -
+          7147
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.CswOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          1293
+        </td>
+        <td>
+          7141
+          -
+          7141
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1296
+        </td>
+        <td>
+          7618
+          -
+          7635
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.WpsOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1295
+        </td>
+        <td>
+          7629
+          -
+          7629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          295
+        </td>
+        <td>
+          1297
+        </td>
+        <td>
+          8117
+          -
+          8117
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          295
+        </td>
+        <td>
+          1298
+        </td>
+        <td>
+          8106
+          -
+          8123
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.GmlOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          1300
+        </td>
+        <td>
+          8594
+          -
+          8611
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.KmlOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          1299
+        </td>
+        <td>
+          8605
+          -
+          8605
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          337
+        </td>
+        <td>
+          1302
+        </td>
+        <td>
+          9110
+          -
+          9127
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.GeoTiffOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          337
+        </td>
+        <td>
+          1301
+        </td>
+        <td>
+          9121
+          -
+          9121
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          361
+        </td>
+        <td>
+          1303
+        </td>
+        <td>
+          9759
+          -
+          9759
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          361
+        </td>
+        <td>
+          1304
+        </td>
+        <td>
+          9748
+          -
+          9765
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.SosOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          383
+        </td>
+        <td>
+          1306
+        </td>
+        <td>
+          10321
+          -
+          10338
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.NetCdfOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          383
+        </td>
+        <td>
+          1305
+        </td>
+        <td>
+          10332
+          -
+          10332
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          405
+        </td>
+        <td>
+          1308
+        </td>
+        <td>
+          10909
+          -
+          10926
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.owc.HttpLinkOffering](this)(owc.this.`package`.owcOfferingFormat)
+        </td>
+      </tr><tr>
+        <td>
+          405
+        </td>
+        <td>
+          1307
+        </td>
+        <td>
+          10920
+          -
+          10920
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.`package`.owcOfferingFormat
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

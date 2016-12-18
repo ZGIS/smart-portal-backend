@@ -24,6 +24,7 @@ import org.locationtech.spatial4j.context.SpatialContext
 import org.scalatestplus.play.PlaySpec
 import play.api.libs.json._
 import models.owc._
+import org.locationtech.spatial4j.io.ShapeIO
 import utils.ClassnameLogger
 
 import scala.language.implicitConversions
@@ -36,10 +37,6 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
-
-//  "JSON reader" should {
-//
-//  }
 
   "JSON writer" should {
 
@@ -266,10 +263,51 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
     }
 
     "encode OwcEntries" in {
+      implicit val owcEntryFormat = models.owc.owcEntryFormat
+      // implicit val rectangleFormat = models.owc.rectangleFormat
+      implicit val rectangleFormat = models.owc.rectangleWrites
+
+      val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100", None, featureProps1, List(offering1, offering2))
+      val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz_aquifers", Some(world), featureProps2, List(offering3, offering4))
+
+      // val jsOwcEntry1 = owcEntry1.toJson
+
+      val ctx = SpatialContext.GEO
+      val geoJsonReader = ctx.getFormats().getReader(ShapeIO.GeoJSON)
+      val geoJsonWriter = ctx.getFormats().getWriter(ShapeIO.GeoJSON)
+
+      try {
+        // val jsOwcEntry2 = owcEntry2.toJson
+        val jsOwcEntry2 = Json.toJson(owcEntry2)
+
+      } catch {
+        case np: NullPointerException =>
+          logger.error(s"jsOwcEntry2 npe ", np)
+      }
+
 
     }
 
     "encode OwcDocuments" in {
+
+      implicit val owcDocumentFormat = models.owc.owcDocumentFormat
+      // implicit val rectangleFormat = models.owc.rectangleFormat
+
+      val jsonTestCollection = scala.io.Source.fromURL(owcResource).getLines.mkString
+
+      val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100", None, featureProps1, List(offering1, offering2))
+      val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz_aquifers", Some(world), featureProps2, List(offering3, offering4))
+
+      val owcDocument1 = OwcDocument("http://portal.smart-project.info/context/smart-sac", Some(world), documentProps1, List(owcEntry1, owcEntry2))
+
+      // logger.error(s"before tojson owcDocument1")
+      // val jsOwcDocument1 = owcDocument1.toJson
+
+      // logger.error(s"jsOwcDocument1 ${jsOwcDocument1}")
+
+      // logger.error(s"before owcDoc1 ${owcDocument1}")
+      // val owcDoc1 = OwcDocument.parseJson(jsonTestCollection)
+      // owcDoc1 mustBe defined
 
     }
 

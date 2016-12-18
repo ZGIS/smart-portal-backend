@@ -58,7 +58,7 @@ case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Optio
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -83,7 +83,7 @@ case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[S
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -106,7 +106,7 @@ case class OwcLink(uuid: UUID, rel: String, mimeType: Option[String], href: Stri
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -148,7 +148,7 @@ case class OwcProperties(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -161,14 +161,14 @@ object OwcProperties extends ClassnameLogger {
     * @param jsonString
     * @return
     */
-  def parseJson(jsonString: String) : Option[OwcProperties] = parseJson(Json.parse(jsonString))
+  def parseJson(jsonString: String): Option[OwcProperties] = parseJson(Json.parse(jsonString))
 
   /**
     *
     * @param json
     * @return
     */
-  def parseJson(json: JsValue) : Option[OwcProperties] = {
+  def parseJson(json: JsValue): Option[OwcProperties] = {
     val resultFromJson: JsResult[OwcProperties] = Json.fromJson[OwcProperties](json)
     resultFromJson match {
       case JsSuccess(r: OwcProperties, path: JsPath) => Some(r)

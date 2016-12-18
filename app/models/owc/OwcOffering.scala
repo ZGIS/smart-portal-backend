@@ -21,7 +21,6 @@ package models.owc
 
 import java.util.UUID
 
-import org.locationtech.spatial4j.shape.Rectangle
 import play.api.libs.json._
 import utils.ClassnameLogger
 
@@ -62,13 +61,13 @@ sealed trait OwcOffering {
   * @param contentType
   * @param postData
   */
-case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String])extends ClassnameLogger {
+case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String]) extends ClassnameLogger {
 
   /**
     *
     * @return
     */
-  def toJson : JsValue = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -89,7 +88,7 @@ case class OwcRequestResult(contentType: Option[String], resultData: Option[Stri
     *
     * @return
     */
-  def toJson : JsValue = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -102,12 +101,12 @@ object OwcRequestResult extends ClassnameLogger {
   * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
   * which should correspond to the offering type code (e.g. WMS, WFS ..)
   *
-  * @param code operation code, e.g. GetCapabilities
-  * @param method GET, POST ...
+  * @param code        operation code, e.g. GetCapabilities
+  * @param method      GET, POST ...
   * @param contentType e.g. "application/xml", for expected return type (accept header?)
-  * @param href could be URL / URI type though
-  * @param request only need to hold data when method is POST
-  * @param result could hold inline result of the request, not sure if we need
+  * @param href        could be URL / URI type though
+  * @param request     only need to hold data when method is POST
+  * @param result      could hold inline result of the request, not sure if we need
   */
 case class OwcOperation(uuid: UUID,
                         code: String,
@@ -121,7 +120,7 @@ case class OwcOperation(uuid: UUID,
     *
     * @return
     */
-  def toJson : JsValue = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -133,14 +132,14 @@ object OwcOperation extends ClassnameLogger {
     * @param jsonString
     * @return
     */
-  def parseJson(jsonString: String) : Option[OwcOperation] = parseJson(Json.parse(jsonString))
+  def parseJson(jsonString: String): Option[OwcOperation] = parseJson(Json.parse(jsonString))
 
   /**
     *
     * @param json
     * @return
     */
-  def parseJson(json: JsValue) : Option[OwcOperation] = {
+  def parseJson(json: JsValue): Option[OwcOperation] = {
     val resultFromJson: JsResult[OwcOperation] = Json.fromJson[OwcOperation](json)
     resultFromJson match {
       case JsSuccess(r: OwcOperation, path: JsPath) => Some(r)
@@ -167,7 +166,7 @@ case class WmsOffering(
     *
     * @return
     */
-  def toJson : JsValue = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -188,7 +187,7 @@ case class WmtsOffering(
     *
     * @return
     */
-  def toJson : JsValue = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -209,7 +208,7 @@ case class WfsOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -230,7 +229,7 @@ case class WcsOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -251,7 +250,7 @@ case class CswOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -272,7 +271,7 @@ case class WpsOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -293,7 +292,7 @@ case class GmlOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -314,7 +313,7 @@ case class KmlOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -335,7 +334,7 @@ case class GeoTiffOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 // the following two are not in the spec, but we need them so I made up an extension
@@ -359,7 +358,7 @@ case class SosOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -381,7 +380,7 @@ case class NetCdfOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 /**
@@ -403,7 +402,7 @@ case class HttpLinkOffering(
     *
     * @return
     */
-  def toJson = Json.toJson(this)
+  def toJson: JsValue = Json.toJson(this)
 }
 
 

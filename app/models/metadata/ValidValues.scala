@@ -33,6 +33,8 @@ import play.api.libs.json._
   * @param values        list of values
   * @param descriptions  optional list of descriptions
   */
+
+// TODO SR For more complicated things (like valid BBOXes or so) value needs to become an object See https://github.com/angular/angular/issues/4843#issuecomment-206583992
 class ValidValues(
                    val standardValue: Int,
                    val values: List[String],
@@ -85,7 +87,7 @@ object ValidValues {
   implicit val validValuesWriter: Writes[ValidValues] = (
     (JsPath \ "standardValue").write[Int] and
       (JsPath \ "values").write[List[String]] and
-      (JsPath \ "description").writeNullable[List[String]]
+      (JsPath \ "descriptions").writeNullable[List[String]]
     ) (unlift(ValidValues.unapply))
 
   /**

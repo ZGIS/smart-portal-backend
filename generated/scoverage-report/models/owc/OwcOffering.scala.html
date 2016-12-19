@@ -23,7 +23,7 @@
         <div class="tab-content">
           <div class="tab-pane active" id="codegrid">
             <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
-</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
 </span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
 </span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
 </span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
@@ -32,7 +32,7 @@
 </span>8 <span style=''> * you may not use this file except in compliance with the License.
 </span>9 <span style=''> * You may obtain a copy of the License at
 </span>10 <span style=''> *
-</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
 </span>12 <span style=''> *
 </span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
 </span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,389 +45,580 @@
 </span>21 <span style=''>
 </span>22 <span style=''>import java.util.UUID
 </span>23 <span style=''>
-</span>24 <span style=''>import play.api.libs.json._
-</span>25 <span style=''>import utils.ClassnameLogger
-</span>26 <span style=''>
-</span>27 <span style=''>/**
-</span>28 <span style=''>  * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
-</span>29 <span style=''>  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
-</span>30 <span style=''>  * about the things they provide the context for (i.e. other data sets, services, metadata records)
-</span>31 <span style=''>  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
-</span>32 <span style=''>  *
-</span>33 <span style=''>  * http://www.opengeospatial.org/standards/owc
-</span>34 <span style=''>  *
-</span>35 <span style=''>  * Classically, the WMC documents (Web Map Context documents) were a list of WMS layers for a web map viewer
-</span>36 <span style=''>  * with a certain context, i.e. title, Bounding Box and a few visualisation properties like scale/zoom,
-</span>37 <span style=''>  * OWC has superseded that concept into a generic collection of resources:
-</span>38 <span style=''>  *
-</span>39 <span style=''>  * We use OWC primarily in the form of collections of case studies, preferably with at least two offerings per entry:
-</span>40 <span style=''>  * 1) a web visualisable form, e.g.WMS, WFS, SOS ...
-</span>41 <span style=''>  * 2) a CSW addressable MD_Metadata record according to the resource
-</span>42 <span style=''>  *
-</span>43 <span style=''>  * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
-</span>44 <span style=''>  */
-</span>45 <span style=''>
-</span>46 <span style=''>/**
-</span>47 <span style=''>  * trait OwcOffering
-</span>48 <span style=''>  */
-</span>49 <span style=''>sealed trait OwcOffering {
-</span>50 <span style=''>  val uuid: UUID
-</span>51 <span style=''>  val code: String
-</span>52 <span style=''>  val operations: List[OwcOperation]
-</span>53 <span style=''>  val content: List[String]
-</span>54 <span style=''>
-</span>55 <span style=''>  def toJson: JsValue
-</span>56 <span style=''>}
-</span>57 <span style=''>
-</span>58 <span style=''>/**
-</span>59 <span style=''>  * object for request contentType and POST data
-</span>60 <span style=''>  *
-</span>61 <span style=''>  * @param contentType
-</span>62 <span style=''>  * @param postData
-</span>63 <span style=''>  */
-</span>64 <span style=''>case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String]) extends ClassnameLogger {
-</span>65 <span style=''>
-</span>66 <span style=''>  /**
-</span>67 <span style=''>    *
-</span>68 <span style=''>    * @return
-</span>69 <span style=''>    */
-</span>70 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>71 <span style=''>}
-</span>72 <span style=''>
-</span>73 <span style=''>/**
-</span>74 <span style=''>  * companion object for [[OwcPostRequestConfig]]
-</span>75 <span style=''>  */
-</span>76 <span style=''>object OwcPostRequestConfig extends ClassnameLogger {
-</span>77 <span style=''>}
-</span>78 <span style=''>
-</span>79 <span style=''>/**
-</span>80 <span style=''>  * object for result contentType and POST data
-</span>81 <span style=''>  *
-</span>82 <span style=''>  * @param contentType
-</span>83 <span style=''>  * @param resultData
-</span>84 <span style=''>  */
-</span>85 <span style=''>case class OwcRequestResult(contentType: Option[String], resultData: Option[String]) extends ClassnameLogger {
-</span>86 <span style=''>
-</span>87 <span style=''>  /**
-</span>88 <span style=''>    *
-</span>89 <span style=''>    * @return
-</span>90 <span style=''>    */
-</span>91 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>92 <span style=''>}
+</span>24 <span style=''>import play.api.libs.functional.syntax._
+</span>25 <span style=''>import play.api.libs.json._
+</span>26 <span style=''>import utils.ClassnameLogger
+</span>27 <span style=''>
+</span>28 <span style=''>/**
+</span>29 <span style=''>  * Model of OWS Context Documents and provide GeoJson encoding thereof (and maybe AtomXML)
+</span>30 <span style=''>  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
+</span>31 <span style=''>  * about the things they provide the context for (i.e. other data sets, services, metadata records)
+</span>32 <span style=''>  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
+</span>33 <span style=''>  *
+</span>34 <span style=''>  * http://www.opengeospatial.org/standards/owc
+</span>35 <span style=''>  *
+</span>36 <span style=''>  * Classically, the WMC documents (Web Map Context documents) were a list of WMS layers for a web map viewer
+</span>37 <span style=''>  * with a certain context, i.e. title, Bounding Box and a few visualisation properties like scale/zoom,
+</span>38 <span style=''>  * OWC has superseded that concept into a generic collection of resources:
+</span>39 <span style=''>  *
+</span>40 <span style=''>  * We use OWC primarily in the form of collections of case studies, preferably with at least two offerings per entry:
+</span>41 <span style=''>  * 1) a web visualisable form, e.g.WMS, WFS, SOS ...
+</span>42 <span style=''>  * 2) a CSW addressable MD_Metadata record according to the resource
+</span>43 <span style=''>  *
+</span>44 <span style=''>  * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
+</span>45 <span style=''>  */
+</span>46 <span style=''>
+</span>47 <span style=''>
+</span>48 <span style=''>/**
+</span>49 <span style=''>  * object for request contentType and POST data
+</span>50 <span style=''>  *
+</span>51 <span style=''>  * @param contentType
+</span>52 <span style=''>  * @param postData
+</span>53 <span style=''>  */
+</span>54 <span style=''>case class OwcPostRequestConfig(contentType: Option[String], postData: Option[String]) extends ClassnameLogger {
+</span>55 <span style=''>
+</span>56 <span style=''>  /**
+</span>57 <span style=''>    *
+</span>58 <span style=''>    * @return
+</span>59 <span style=''>    */
+</span>60 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>61 <span style=''>}
+</span>62 <span style=''>
+</span>63 <span style=''>/**
+</span>64 <span style=''>  * companion object for [[OwcPostRequestConfig]]
+</span>65 <span style=''>  */
+</span>66 <span style=''>object OwcPostRequestConfig extends ClassnameLogger {
+</span>67 <span style=''>
+</span>68 <span style=''>  /**
+</span>69 <span style=''>    * OwcPostRequestConfig Json stuff
+</span>70 <span style=''>    */
+</span>71 <span style=''>  implicit val owcPostRequestConfigReads: Reads[OwcPostRequestConfig] = </span><span style='background: #AEF1AE'>(
+</span>72 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "type").readNullable[String] and
+</span>73 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "request").readNullable[String]
+</span>74 <span style=''></span><span style='background: #AEF1AE'>    ) (OwcPostRequestConfig.apply _)</span><span style=''>
+</span>75 <span style=''>
+</span>76 <span style=''>  implicit val owcPostRequestConfigWrites: Writes[OwcPostRequestConfig] = </span><span style='background: #AEF1AE'>(
+</span>77 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "type").writeNullable[String] and
+</span>78 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "request").writeNullable[String]
+</span>79 <span style=''></span><span style='background: #AEF1AE'>    ) (unlift(OwcPostRequestConfig.unapply))</span><span style=''>
+</span>80 <span style=''>
+</span>81 <span style=''>  implicit val owcPostRequestConfigFormat: Format[OwcPostRequestConfig] =
+</span>82 <span style=''>    </span><span style='background: #AEF1AE'>Format(owcPostRequestConfigReads, owcPostRequestConfigWrites)</span><span style=''>
+</span>83 <span style=''>
+</span>84 <span style=''>}
+</span>85 <span style=''>
+</span>86 <span style=''>/**
+</span>87 <span style=''>  * object for result contentType and POST data
+</span>88 <span style=''>  *
+</span>89 <span style=''>  * @param contentType
+</span>90 <span style=''>  * @param resultData
+</span>91 <span style=''>  */
+</span>92 <span style=''>case class OwcRequestResult(contentType: Option[String], resultData: Option[String]) extends ClassnameLogger {
 </span>93 <span style=''>
-</span>94 <span style=''>/**
-</span>95 <span style=''>  * companion object for [[OwcRequestResult]]
-</span>96 <span style=''>  */
-</span>97 <span style=''>object OwcRequestResult extends ClassnameLogger {
-</span>98 <span style=''>}
-</span>99 <span style=''>
-</span>100 <span style=''>/**
-</span>101 <span style=''>  * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
-</span>102 <span style=''>  * which should correspond to the offering type code (e.g. WMS, WFS ..)
-</span>103 <span style=''>  *
-</span>104 <span style=''>  * @param code        operation code, e.g. GetCapabilities
-</span>105 <span style=''>  * @param method      GET, POST ...
-</span>106 <span style=''>  * @param contentType e.g. "application/xml", for expected return type (accept header?)
-</span>107 <span style=''>  * @param href        could be URL / URI type though
-</span>108 <span style=''>  * @param request     only need to hold data when method is POST
-</span>109 <span style=''>  * @param result      could hold inline result of the request, not sure if we need
-</span>110 <span style=''>  */
-</span>111 <span style=''>case class OwcOperation(uuid: UUID,
-</span>112 <span style=''>                        code: String,
-</span>113 <span style=''>                        method: String,
-</span>114 <span style=''>                        contentType: String,
-</span>115 <span style=''>                        href: String, request:
-</span>116 <span style=''>                        Option[OwcPostRequestConfig],
-</span>117 <span style=''>                        result: Option[OwcRequestResult]) extends ClassnameLogger {
+</span>94 <span style=''>  /**
+</span>95 <span style=''>    *
+</span>96 <span style=''>    * @return
+</span>97 <span style=''>    */
+</span>98 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>99 <span style=''>}
+</span>100 <span style=''>
+</span>101 <span style=''>/**
+</span>102 <span style=''>  * companion object for [[OwcRequestResult]]
+</span>103 <span style=''>  */
+</span>104 <span style=''>object OwcRequestResult extends ClassnameLogger {
+</span>105 <span style=''>
+</span>106 <span style=''>  /**
+</span>107 <span style=''>    * OwcRequestResult Json stuff
+</span>108 <span style=''>    */
+</span>109 <span style=''>  implicit val owcRequestResultReads: Reads[OwcRequestResult] = </span><span style='background: #AEF1AE'>(
+</span>110 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "contentType").readNullable[String] and
+</span>111 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "result").readNullable[String]
+</span>112 <span style=''></span><span style='background: #AEF1AE'>    ) (OwcRequestResult.apply _)</span><span style=''>
+</span>113 <span style=''>
+</span>114 <span style=''>  implicit val owcRequestResultWrites: Writes[OwcRequestResult] = </span><span style='background: #AEF1AE'>(
+</span>115 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "contentType").writeNullable[String] and
+</span>116 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "result").writeNullable[String]
+</span>117 <span style=''></span><span style='background: #AEF1AE'>    ) (unlift(OwcRequestResult.unapply))</span><span style=''>
 </span>118 <span style=''>
-</span>119 <span style=''>  /**
-</span>120 <span style=''>    *
-</span>121 <span style=''>    * @return
-</span>122 <span style=''>    */
-</span>123 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
-</span>124 <span style=''>}
-</span>125 <span style=''>
-</span>126 <span style=''>/**
-</span>127 <span style=''>  * companion object for [[OwcOperation]]
-</span>128 <span style=''>  */
-</span>129 <span style=''>object OwcOperation extends ClassnameLogger {
-</span>130 <span style=''>  /**
-</span>131 <span style=''>    *
-</span>132 <span style=''>    * @param jsonString
-</span>133 <span style=''>    * @return
-</span>134 <span style=''>    */
-</span>135 <span style=''>  def parseJson(jsonString: String): Option[OwcOperation] = </span><span style='background: #F0ADAD'>parseJson(Json.parse(jsonString))</span><span style=''>
-</span>136 <span style=''>
-</span>137 <span style=''>  /**
-</span>138 <span style=''>    *
-</span>139 <span style=''>    * @param json
-</span>140 <span style=''>    * @return
-</span>141 <span style=''>    */
-</span>142 <span style=''>  def parseJson(json: JsValue): Option[OwcOperation] = {
-</span>143 <span style=''>    val resultFromJson: JsResult[OwcOperation] = </span><span style='background: #AEF1AE'>Json.fromJson[OwcOperation](json)</span><span style=''>
-</span>144 <span style=''>    resultFromJson match {
-</span>145 <span style=''>      case JsSuccess(r: OwcOperation, path: JsPath) => </span><span style='background: #AEF1AE'>Some(r)</span><span style=''>
-</span>146 <span style=''>      case e: JsError => </span><span style='background: #F0ADAD'>None</span><span style=''>
-</span>147 <span style=''>    }
-</span>148 <span style=''>  }
-</span>149 <span style=''>}
-</span>150 <span style=''>
-</span>151 <span style=''>/**
-</span>152 <span style=''>  *
-</span>153 <span style=''>  * @param uuid
-</span>154 <span style=''>  * @param code
-</span>155 <span style=''>  * @param operations
-</span>156 <span style=''>  * @param content
-</span>157 <span style=''>  */
-</span>158 <span style=''>case class WmsOffering(
-</span>159 <span style=''>                        uuid: UUID,
-</span>160 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
-</span>161 <span style=''>                        operations: List[OwcOperation],
-</span>162 <span style=''>                        content: List[String]
-</span>163 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>164 <span style=''>
-</span>165 <span style=''>  /**
-</span>166 <span style=''>    *
-</span>167 <span style=''>    * @return
-</span>168 <span style=''>    */
-</span>169 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
-</span>170 <span style=''>}
-</span>171 <span style=''>
-</span>172 <span style=''>/**
-</span>173 <span style=''>  *
-</span>174 <span style=''>  * @param uuid
-</span>175 <span style=''>  * @param code
-</span>176 <span style=''>  * @param operations
-</span>177 <span style=''>  * @param content
-</span>178 <span style=''>  */
-</span>179 <span style=''>case class WmtsOffering(
-</span>180 <span style=''>                         uuid: UUID,
-</span>181 <span style=''>                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
-</span>182 <span style=''>                         operations: List[OwcOperation],
-</span>183 <span style=''>                         content: List[String]
-</span>184 <span style=''>                       ) extends OwcOffering with ClassnameLogger {
-</span>185 <span style=''>
-</span>186 <span style=''>  /**
-</span>187 <span style=''>    *
-</span>188 <span style=''>    * @return
-</span>189 <span style=''>    */
-</span>190 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>191 <span style=''>}
-</span>192 <span style=''>
-</span>193 <span style=''>/**
-</span>194 <span style=''>  *
-</span>195 <span style=''>  * @param uuid
-</span>196 <span style=''>  * @param code
-</span>197 <span style=''>  * @param operations
-</span>198 <span style=''>  * @param content
-</span>199 <span style=''>  */
-</span>200 <span style=''>case class WfsOffering(
-</span>201 <span style=''>                        uuid: UUID,
-</span>202 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
-</span>203 <span style=''>                        operations: List[OwcOperation],
-</span>204 <span style=''>                        content: List[String]
-</span>205 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>206 <span style=''>
-</span>207 <span style=''>  /**
-</span>208 <span style=''>    *
-</span>209 <span style=''>    * @return
-</span>210 <span style=''>    */
-</span>211 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>212 <span style=''>}
-</span>213 <span style=''>
-</span>214 <span style=''>/**
-</span>215 <span style=''>  *
-</span>216 <span style=''>  * @param uuid
-</span>217 <span style=''>  * @param code
-</span>218 <span style=''>  * @param operations
-</span>219 <span style=''>  * @param content
-</span>220 <span style=''>  */
-</span>221 <span style=''>case class WcsOffering(
-</span>222 <span style=''>                        uuid: UUID,
-</span>223 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
-</span>224 <span style=''>                        operations: List[OwcOperation],
-</span>225 <span style=''>                        content: List[String]
-</span>226 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>227 <span style=''>
-</span>228 <span style=''>  /**
-</span>229 <span style=''>    *
-</span>230 <span style=''>    * @return
-</span>231 <span style=''>    */
-</span>232 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>233 <span style=''>}
-</span>234 <span style=''>
-</span>235 <span style=''>/**
-</span>236 <span style=''>  *
-</span>237 <span style=''>  * @param uuid
-</span>238 <span style=''>  * @param code
-</span>239 <span style=''>  * @param operations
-</span>240 <span style=''>  * @param content
-</span>241 <span style=''>  */
-</span>242 <span style=''>case class CswOffering(
-</span>243 <span style=''>                        uuid: UUID,
-</span>244 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
-</span>245 <span style=''>                        operations: List[OwcOperation],
-</span>246 <span style=''>                        content: List[String]
-</span>247 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>248 <span style=''>
-</span>249 <span style=''>  /**
-</span>250 <span style=''>    *
-</span>251 <span style=''>    * @return
-</span>252 <span style=''>    */
-</span>253 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>254 <span style=''>}
-</span>255 <span style=''>
-</span>256 <span style=''>/**
-</span>257 <span style=''>  *
-</span>258 <span style=''>  * @param uuid
-</span>259 <span style=''>  * @param code
-</span>260 <span style=''>  * @param operations
-</span>261 <span style=''>  * @param content
-</span>262 <span style=''>  */
-</span>263 <span style=''>case class WpsOffering(
-</span>264 <span style=''>                        uuid: UUID,
-</span>265 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
-</span>266 <span style=''>                        operations: List[OwcOperation],
-</span>267 <span style=''>                        content: List[String]
-</span>268 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>269 <span style=''>
-</span>270 <span style=''>  /**
-</span>271 <span style=''>    *
-</span>272 <span style=''>    * @return
-</span>273 <span style=''>    */
-</span>274 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>275 <span style=''>}
-</span>276 <span style=''>
-</span>277 <span style=''>/**
-</span>278 <span style=''>  *
-</span>279 <span style=''>  * @param uuid
-</span>280 <span style=''>  * @param code
-</span>281 <span style=''>  * @param operations
-</span>282 <span style=''>  * @param content
-</span>283 <span style=''>  */
-</span>284 <span style=''>case class GmlOffering(
-</span>285 <span style=''>                        uuid: UUID,
-</span>286 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
-</span>287 <span style=''>                        operations: List[OwcOperation],
-</span>288 <span style=''>                        content: List[String]
-</span>289 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>290 <span style=''>
-</span>291 <span style=''>  /**
-</span>292 <span style=''>    *
-</span>293 <span style=''>    * @return
-</span>294 <span style=''>    */
-</span>295 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>296 <span style=''>}
+</span>119 <span style=''>  implicit val owcRequestResultFormat: Format[OwcRequestResult] =
+</span>120 <span style=''>    </span><span style='background: #AEF1AE'>Format(owcRequestResultReads, owcRequestResultWrites)</span><span style=''>
+</span>121 <span style=''>
+</span>122 <span style=''>}
+</span>123 <span style=''>
+</span>124 <span style=''>/**
+</span>125 <span style=''>  * an owc offering can have multiple operations, e.g. typically GetCapabilities and a data retrieving operation,
+</span>126 <span style=''>  * which should correspond to the offering type code (e.g. WMS, WFS ..)
+</span>127 <span style=''>  *
+</span>128 <span style=''>  * @param code        operation code, e.g. GetCapabilities
+</span>129 <span style=''>  * @param method      GET, POST ...
+</span>130 <span style=''>  * @param contentType e.g. "application/xml", for expected return type (accept header?)
+</span>131 <span style=''>  * @param href        could be URL / URI type though
+</span>132 <span style=''>  * @param request     only need to hold data when method is POST
+</span>133 <span style=''>  * @param result      could hold inline result of the request, not sure if we need
+</span>134 <span style=''>  */
+</span>135 <span style=''>case class OwcOperation(uuid: UUID,
+</span>136 <span style=''>                        code: String,
+</span>137 <span style=''>                        method: String,
+</span>138 <span style=''>                        contentType: String,
+</span>139 <span style=''>                        href: String, request:
+</span>140 <span style=''>                        Option[OwcPostRequestConfig],
+</span>141 <span style=''>                        result: Option[OwcRequestResult]) extends ClassnameLogger {
+</span>142 <span style=''>
+</span>143 <span style=''>  /**
+</span>144 <span style=''>    *
+</span>145 <span style=''>    * @return
+</span>146 <span style=''>    */
+</span>147 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
+</span>148 <span style=''>}
+</span>149 <span style=''>
+</span>150 <span style=''>/**
+</span>151 <span style=''>  * companion object for [[OwcOperation]]
+</span>152 <span style=''>  */
+</span>153 <span style=''>object OwcOperation extends ClassnameLogger {
+</span>154 <span style=''>
+</span>155 <span style=''>  implicit val owcOperationReads: Reads[OwcOperation] = </span><span style='background: #AEF1AE'>(
+</span>156 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "code").read[String] and
+</span>157 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "method").read[String] and
+</span>158 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "type").read[String] and
+</span>159 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "href").read[String] and
+</span>160 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "request").readNullable[OwcPostRequestConfig] and
+</span>161 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "result").readNullable[OwcRequestResult]
+</span>162 <span style=''></span><span style='background: #AEF1AE'>    ) (OwcOperationJs.apply _)</span><span style=''>
+</span>163 <span style=''>
+</span>164 <span style=''>  implicit val owcOperationWrites: Writes[OwcOperation] = </span><span style='background: #AEF1AE'>(
+</span>165 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "code").write[String] and
+</span>166 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "method").write[String] and
+</span>167 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "type").write[String] and
+</span>168 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "href").write[String] and
+</span>169 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "request").writeNullable[OwcPostRequestConfig] and
+</span>170 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "result").writeNullable[OwcRequestResult]
+</span>171 <span style=''></span><span style='background: #AEF1AE'>    ) (unlift(OwcOperationJs.unapply))</span><span style=''>
+</span>172 <span style=''>
+</span>173 <span style=''>  implicit val owcOperationFormat: Format[OwcOperation] =
+</span>174 <span style=''>    </span><span style='background: #AEF1AE'>Format(owcOperationReads, owcOperationWrites)</span><span style=''>
+</span>175 <span style=''>
+</span>176 <span style=''>  /**
+</span>177 <span style=''>    *
+</span>178 <span style=''>    * @param jsonString
+</span>179 <span style=''>    * @return
+</span>180 <span style=''>    */
+</span>181 <span style=''>  def parseJson(jsonString: String): Option[OwcOperation] = </span><span style='background: #F0ADAD'>parseJson(Json.parse(jsonString))</span><span style=''>
+</span>182 <span style=''>
+</span>183 <span style=''>  /**
+</span>184 <span style=''>    *
+</span>185 <span style=''>    * @param json
+</span>186 <span style=''>    * @return
+</span>187 <span style=''>    */
+</span>188 <span style=''>  def parseJson(json: JsValue): Option[OwcOperation] = {
+</span>189 <span style=''>    val resultFromJson: JsResult[OwcOperation] = </span><span style='background: #AEF1AE'>Json.fromJson[OwcOperation](json)</span><span style=''>
+</span>190 <span style=''>    resultFromJson match {
+</span>191 <span style=''>      case JsSuccess(r: OwcOperation, path: JsPath) => </span><span style='background: #AEF1AE'>Some(r)</span><span style=''>
+</span>192 <span style=''>      case e: JsError => {
+</span>193 <span style=''>        val lines = </span><span style='background: #F0ADAD'>e.errors.map { tupleAction =>
+</span>194 <span style=''></span><span style='background: #F0ADAD'>          val jsPath = tupleAction._1
+</span>195 <span style=''></span><span style='background: #F0ADAD'>          val valErrors = tupleAction._2.map( valErr => valErr.message ).toList.mkString(" ; ")
+</span>196 <span style=''></span><span style='background: #F0ADAD'>          jsPath.toJsonString + " >> " +  valErrors
+</span>197 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style=''>
+</span>198 <span style=''>
+</span>199 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(s"JsError info  ${lines.mkString(" | ")}")</span><span style=''>
+</span>200 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>201 <span style=''>      }
+</span>202 <span style=''>    }
+</span>203 <span style=''>  }
+</span>204 <span style=''>}
+</span>205 <span style=''>
+</span>206 <span style=''>/**
+</span>207 <span style=''>  * OwcOperation Json stuff
+</span>208 <span style=''>  */
+</span>209 <span style=''>object OwcOperationJs {
+</span>210 <span style=''>
+</span>211 <span style=''>  /**
+</span>212 <span style=''>    *
+</span>213 <span style=''>    * @param code
+</span>214 <span style=''>    * @param method
+</span>215 <span style=''>    * @param contentType
+</span>216 <span style=''>    * @param href
+</span>217 <span style=''>    * @param request
+</span>218 <span style=''>    * @param result
+</span>219 <span style=''>    * @return
+</span>220 <span style=''>    */
+</span>221 <span style=''>  def apply(code: String,
+</span>222 <span style=''>            method: String,
+</span>223 <span style=''>            contentType: String,
+</span>224 <span style=''>            href: String,
+</span>225 <span style=''>            request: Option[OwcPostRequestConfig],
+</span>226 <span style=''>            result: Option[OwcRequestResult]): OwcOperation = {
+</span>227 <span style=''>    // Todo, we might find a way to find an existing UUID from DB if entry exists
+</span>228 <span style=''>    val uuid = </span><span style='background: #AEF1AE'>UUID.randomUUID()</span><span style=''>
+</span>229 <span style=''>    </span><span style='background: #AEF1AE'>OwcOperation(uuid, code, method, contentType, href, request, result)</span><span style=''>
+</span>230 <span style=''>  }
+</span>231 <span style=''>
+</span>232 <span style=''>  /**
+</span>233 <span style=''>    *
+</span>234 <span style=''>    * @param arg
+</span>235 <span style=''>    * @return
+</span>236 <span style=''>    */
+</span>237 <span style=''>  def unapply(arg: OwcOperation): Option[(String,
+</span>238 <span style=''>    String,
+</span>239 <span style=''>    String,
+</span>240 <span style=''>    String,
+</span>241 <span style=''>    Option[OwcPostRequestConfig],
+</span>242 <span style=''>    Option[OwcRequestResult])] = {
+</span>243 <span style=''>    </span><span style='background: #AEF1AE'>Some(arg.code,
+</span>244 <span style=''></span><span style='background: #AEF1AE'>      arg.method,
+</span>245 <span style=''></span><span style='background: #AEF1AE'>      arg.contentType,
+</span>246 <span style=''></span><span style='background: #AEF1AE'>      arg.href,
+</span>247 <span style=''></span><span style='background: #AEF1AE'>      arg.request,
+</span>248 <span style=''></span><span style='background: #AEF1AE'>      arg.result)</span><span style=''>
+</span>249 <span style=''>  }
+</span>250 <span style=''>}
+</span>251 <span style=''>
+</span>252 <span style=''>
+</span>253 <span style=''>/**
+</span>254 <span style=''>  * trait OwcOffering
+</span>255 <span style=''>  */
+</span>256 <span style=''>sealed trait OwcOffering {
+</span>257 <span style=''>  val uuid: UUID
+</span>258 <span style=''>  val code: String
+</span>259 <span style=''>  val operations: List[OwcOperation]
+</span>260 <span style=''>  val content: List[String]
+</span>261 <span style=''>
+</span>262 <span style=''>  def toJson: JsValue
+</span>263 <span style=''>}
+</span>264 <span style=''>
+</span>265 <span style=''>object OwcOffering extends ClassnameLogger {
+</span>266 <span style=''>
+</span>267 <span style=''>  implicit val owcOfferingReads: Reads[OwcOffering] = </span><span style='background: #AEF1AE'>(
+</span>268 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "code").read[String] and
+</span>269 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "operations").read[List[OwcOperation]] and
+</span>270 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "contents").read[List[String]]
+</span>271 <span style=''></span><span style='background: #AEF1AE'>  ) (OwcOfferingJs.apply _)</span><span style=''>
+</span>272 <span style=''>
+</span>273 <span style=''>  implicit val owcOfferingWrites: Writes[OwcOffering] = </span><span style='background: #AEF1AE'>(
+</span>274 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "code").write[String] and
+</span>275 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "operations").write[List[OwcOperation]] and
+</span>276 <span style=''></span><span style='background: #AEF1AE'>  (JsPath \ "contents").write[List[String]]
+</span>277 <span style=''></span><span style='background: #AEF1AE'>  ) (unlift(OwcOfferingJs.unapply))</span><span style=''>
+</span>278 <span style=''>
+</span>279 <span style=''>  implicit val owcOfferingFormat: Format[OwcOffering] =
+</span>280 <span style=''>  </span><span style='background: #AEF1AE'>Format(owcOfferingReads, owcOfferingWrites)</span><span style=''>
+</span>281 <span style=''>
+</span>282 <span style=''>}
+</span>283 <span style=''>
+</span>284 <span style=''>
+</span>285 <span style=''>/**
+</span>286 <span style=''>  * OwcOffering Json stuff
+</span>287 <span style=''>  */
+</span>288 <span style=''>object OwcOfferingJs extends ClassnameLogger {
+</span>289 <span style=''>
+</span>290 <span style=''>  private lazy val OwcReqPattern = </span><span style='background: #AEF1AE'>"^http://www.opengis.net/spec/owc-(geojson|atom)/1.0/req/(wms|wmts|wfs|wcs|csw|wps|gml|kml|geotiff|sos|netcdf|http-link)$".r</span><span style=''>
+</span>291 <span style=''>
+</span>292 <span style=''>  def buildOfferingFrom(offeringType: String, operations: List[OwcOperation], content: List[String]): OwcOffering = {
+</span>293 <span style=''>    // Todo, we might find a way to find an existing UUID from DB if entry exists
+</span>294 <span style=''>    val uuid = </span><span style='background: #AEF1AE'>UUID.randomUUID()</span><span style=''>
+</span>295 <span style=''>
+</span>296 <span style=''>    val geoJsonCode = </span><span style='background: #AEF1AE'>"http://www.opengis.net/spec/owc-geojson/1.0/req/" + offeringType</span><span style=''>
 </span>297 <span style=''>
-</span>298 <span style=''>/**
-</span>299 <span style=''>  *
-</span>300 <span style=''>  * @param uuid
-</span>301 <span style=''>  * @param code
-</span>302 <span style=''>  * @param operations
-</span>303 <span style=''>  * @param content
-</span>304 <span style=''>  */
-</span>305 <span style=''>case class KmlOffering(
-</span>306 <span style=''>                        uuid: UUID,
-</span>307 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
-</span>308 <span style=''>                        operations: List[OwcOperation],
-</span>309 <span style=''>                        content: List[String]
-</span>310 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>311 <span style=''>
-</span>312 <span style=''>  /**
-</span>313 <span style=''>    *
-</span>314 <span style=''>    * @return
-</span>315 <span style=''>    */
-</span>316 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>317 <span style=''>}
-</span>318 <span style=''>
-</span>319 <span style=''>/**
-</span>320 <span style=''>  *
-</span>321 <span style=''>  * @param uuid
-</span>322 <span style=''>  * @param code
-</span>323 <span style=''>  * @param operations
-</span>324 <span style=''>  * @param content
-</span>325 <span style=''>  */
-</span>326 <span style=''>case class GeoTiffOffering(
-</span>327 <span style=''>                            uuid: UUID,
-</span>328 <span style=''>                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
-</span>329 <span style=''>                            operations: List[OwcOperation],
-</span>330 <span style=''>                            content: List[String]
-</span>331 <span style=''>                          ) extends OwcOffering with ClassnameLogger {
-</span>332 <span style=''>
-</span>333 <span style=''>  /**
-</span>334 <span style=''>    *
+</span>298 <span style=''>    offeringType match {
+</span>299 <span style=''>      case "wms" => </span><span style='background: #AEF1AE'>WmsOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>300 <span style=''>      case "wmts" => </span><span style='background: #F0ADAD'>WmtsOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>301 <span style=''>      case "wfs" => </span><span style='background: #AEF1AE'>WfsOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>302 <span style=''>      case "wcs" => </span><span style='background: #F0ADAD'>WcsOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>303 <span style=''>      case "csw" => </span><span style='background: #AEF1AE'>CswOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>304 <span style=''>      case "wps" => </span><span style='background: #AEF1AE'>WpsOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>305 <span style=''>      case "gml" => </span><span style='background: #F0ADAD'>GmlOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>306 <span style=''>      case "kml" => </span><span style='background: #F0ADAD'>KmlOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>307 <span style=''>      case "geotiff" => </span><span style='background: #F0ADAD'>GeoTiffOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>308 <span style=''>      case "sos" => </span><span style='background: #F0ADAD'>SosOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>309 <span style=''>      case "netcdf" => </span><span style='background: #F0ADAD'>NetCdfOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>310 <span style=''>      case "http-link" => </span><span style='background: #F0ADAD'>HttpLinkOffering(uuid, geoJsonCode, operations, content)</span><span style=''>
+</span>311 <span style=''>    }
+</span>312 <span style=''>  }
+</span>313 <span style=''>
+</span>314 <span style=''>  /**
+</span>315 <span style=''>    *
+</span>316 <span style=''>    * @param code
+</span>317 <span style=''>    * @param operations
+</span>318 <span style=''>    * @param content
+</span>319 <span style=''>    * @return
+</span>320 <span style=''>    */
+</span>321 <span style=''>  def apply(code: String, operations: List[OwcOperation], content: List[String]): OwcOffering = {
+</span>322 <span style=''>
+</span>323 <span style=''>    code match {
+</span>324 <span style=''>      case OwcReqPattern(owcEncoding, offeringType) => {
+</span>325 <span style=''>        </span><span style='background: #AEF1AE'>logger.debug(s"$owcEncoding, $offeringType")</span><span style=''>
+</span>326 <span style=''>        </span><span style='background: #AEF1AE'>buildOfferingFrom(offeringType, operations, content)</span><span style=''>
+</span>327 <span style=''>      }
+</span>328 <span style=''>      case _ => </span><span style='background: #F0ADAD'>throw new IllegalArgumentException(s"offering code cannot be used to build offering type: $code")</span><span style=''>
+</span>329 <span style=''>    }
+</span>330 <span style=''>  }
+</span>331 <span style=''>
+</span>332 <span style=''>  /**
+</span>333 <span style=''>    *
+</span>334 <span style=''>    * @param arg
 </span>335 <span style=''>    * @return
 </span>336 <span style=''>    */
-</span>337 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>338 <span style=''>}
-</span>339 <span style=''>
-</span>340 <span style=''>// the following two are not in the spec, but we need them so I made up an extension
+</span>337 <span style=''>  def unapply(arg: OwcOffering): Option[(String, List[OwcOperation], List[String])] = {
+</span>338 <span style=''>    </span><span style='background: #AEF1AE'>Some(arg.code, arg.operations, arg.content)</span><span style=''>
+</span>339 <span style=''>  }
+</span>340 <span style=''>}
 </span>341 <span style=''>
 </span>342 <span style=''>/**
-</span>343 <span style=''>  * not in the spec, but we need them so I made up an extension
-</span>344 <span style=''>  *
-</span>345 <span style=''>  * @param uuid
-</span>346 <span style=''>  * @param code
-</span>347 <span style=''>  * @param operations
-</span>348 <span style=''>  * @param content
-</span>349 <span style=''>  */
-</span>350 <span style=''>case class SosOffering(
-</span>351 <span style=''>                        uuid: UUID,
-</span>352 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
-</span>353 <span style=''>                        operations: List[OwcOperation],
-</span>354 <span style=''>                        content: List[String]
-</span>355 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
-</span>356 <span style=''>
-</span>357 <span style=''>  /**
-</span>358 <span style=''>    *
-</span>359 <span style=''>    * @return
-</span>360 <span style=''>    */
-</span>361 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>362 <span style=''>}
-</span>363 <span style=''>
-</span>364 <span style=''>/**
-</span>365 <span style=''>  * not in the spec, but we need them so I made up an extension
-</span>366 <span style=''>  *
-</span>367 <span style=''>  * @param uuid
-</span>368 <span style=''>  * @param code
-</span>369 <span style=''>  * @param operations
-</span>370 <span style=''>  * @param content
-</span>371 <span style=''>  */
-</span>372 <span style=''>case class NetCdfOffering(
-</span>373 <span style=''>                           uuid: UUID,
-</span>374 <span style=''>                           code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
-</span>375 <span style=''>                           operations: List[OwcOperation],
-</span>376 <span style=''>                           content: List[String]
-</span>377 <span style=''>                         ) extends OwcOffering with ClassnameLogger {
-</span>378 <span style=''>
-</span>379 <span style=''>  /**
-</span>380 <span style=''>    *
-</span>381 <span style=''>    * @return
-</span>382 <span style=''>    */
-</span>383 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>384 <span style=''>}
-</span>385 <span style=''>
-</span>386 <span style=''>/**
-</span>387 <span style=''>  * not in the spec, but we need them so I made up an extension
-</span>388 <span style=''>  *
-</span>389 <span style=''>  * @param uuid
-</span>390 <span style=''>  * @param code
-</span>391 <span style=''>  * @param operations
-</span>392 <span style=''>  * @param content
-</span>393 <span style=''>  */
-</span>394 <span style=''>case class HttpLinkOffering(
-</span>395 <span style=''>                             uuid: UUID,
-</span>396 <span style=''>                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
-</span>397 <span style=''>                             operations: List[OwcOperation],
-</span>398 <span style=''>                             content: List[String]
-</span>399 <span style=''>                           ) extends OwcOffering with ClassnameLogger {
-</span>400 <span style=''>
-</span>401 <span style=''>  /**
-</span>402 <span style=''>    *
-</span>403 <span style=''>    * @return
-</span>404 <span style=''>    */
-</span>405 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
-</span>406 <span style=''>}
+</span>343 <span style=''>  *
+</span>344 <span style=''>  * @param uuid
+</span>345 <span style=''>  * @param code
+</span>346 <span style=''>  * @param operations
+</span>347 <span style=''>  * @param content
+</span>348 <span style=''>  */
+</span>349 <span style=''>case class WmsOffering(
+</span>350 <span style=''>                        uuid: UUID,
+</span>351 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wms",
+</span>352 <span style=''>                        operations: List[OwcOperation],
+</span>353 <span style=''>                        content: List[String]
+</span>354 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>355 <span style=''>
+</span>356 <span style=''>  /**
+</span>357 <span style=''>    *
+</span>358 <span style=''>    * @return
+</span>359 <span style=''>    */
+</span>360 <span style=''>  def toJson: JsValue = </span><span style='background: #AEF1AE'>Json.toJson(this)</span><span style=''>
+</span>361 <span style=''>}
+</span>362 <span style=''>
+</span>363 <span style=''>/**
+</span>364 <span style=''>  *
+</span>365 <span style=''>  * @param uuid
+</span>366 <span style=''>  * @param code
+</span>367 <span style=''>  * @param operations
+</span>368 <span style=''>  * @param content
+</span>369 <span style=''>  */
+</span>370 <span style=''>case class WmtsOffering(
+</span>371 <span style=''>                         uuid: UUID,
+</span>372 <span style=''>                         code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wmts",
+</span>373 <span style=''>                         operations: List[OwcOperation],
+</span>374 <span style=''>                         content: List[String]
+</span>375 <span style=''>                       ) extends OwcOffering with ClassnameLogger {
+</span>376 <span style=''>
+</span>377 <span style=''>  /**
+</span>378 <span style=''>    *
+</span>379 <span style=''>    * @return
+</span>380 <span style=''>    */
+</span>381 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>382 <span style=''>}
+</span>383 <span style=''>
+</span>384 <span style=''>/**
+</span>385 <span style=''>  *
+</span>386 <span style=''>  * @param uuid
+</span>387 <span style=''>  * @param code
+</span>388 <span style=''>  * @param operations
+</span>389 <span style=''>  * @param content
+</span>390 <span style=''>  */
+</span>391 <span style=''>case class WfsOffering(
+</span>392 <span style=''>                        uuid: UUID,
+</span>393 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wfs",
+</span>394 <span style=''>                        operations: List[OwcOperation],
+</span>395 <span style=''>                        content: List[String]
+</span>396 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>397 <span style=''>
+</span>398 <span style=''>  /**
+</span>399 <span style=''>    *
+</span>400 <span style=''>    * @return
+</span>401 <span style=''>    */
+</span>402 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>403 <span style=''>}
+</span>404 <span style=''>
+</span>405 <span style=''>/**
+</span>406 <span style=''>  *
+</span>407 <span style=''>  * @param uuid
+</span>408 <span style=''>  * @param code
+</span>409 <span style=''>  * @param operations
+</span>410 <span style=''>  * @param content
+</span>411 <span style=''>  */
+</span>412 <span style=''>case class WcsOffering(
+</span>413 <span style=''>                        uuid: UUID,
+</span>414 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wcs",
+</span>415 <span style=''>                        operations: List[OwcOperation],
+</span>416 <span style=''>                        content: List[String]
+</span>417 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>418 <span style=''>
+</span>419 <span style=''>  /**
+</span>420 <span style=''>    *
+</span>421 <span style=''>    * @return
+</span>422 <span style=''>    */
+</span>423 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>424 <span style=''>}
+</span>425 <span style=''>
+</span>426 <span style=''>/**
+</span>427 <span style=''>  *
+</span>428 <span style=''>  * @param uuid
+</span>429 <span style=''>  * @param code
+</span>430 <span style=''>  * @param operations
+</span>431 <span style=''>  * @param content
+</span>432 <span style=''>  */
+</span>433 <span style=''>case class CswOffering(
+</span>434 <span style=''>                        uuid: UUID,
+</span>435 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
+</span>436 <span style=''>                        operations: List[OwcOperation],
+</span>437 <span style=''>                        content: List[String]
+</span>438 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>439 <span style=''>
+</span>440 <span style=''>  /**
+</span>441 <span style=''>    *
+</span>442 <span style=''>    * @return
+</span>443 <span style=''>    */
+</span>444 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>445 <span style=''>}
+</span>446 <span style=''>
+</span>447 <span style=''>/**
+</span>448 <span style=''>  *
+</span>449 <span style=''>  * @param uuid
+</span>450 <span style=''>  * @param code
+</span>451 <span style=''>  * @param operations
+</span>452 <span style=''>  * @param content
+</span>453 <span style=''>  */
+</span>454 <span style=''>case class WpsOffering(
+</span>455 <span style=''>                        uuid: UUID,
+</span>456 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/wps",
+</span>457 <span style=''>                        operations: List[OwcOperation],
+</span>458 <span style=''>                        content: List[String]
+</span>459 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>460 <span style=''>
+</span>461 <span style=''>  /**
+</span>462 <span style=''>    *
+</span>463 <span style=''>    * @return
+</span>464 <span style=''>    */
+</span>465 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>466 <span style=''>}
+</span>467 <span style=''>
+</span>468 <span style=''>/**
+</span>469 <span style=''>  *
+</span>470 <span style=''>  * @param uuid
+</span>471 <span style=''>  * @param code
+</span>472 <span style=''>  * @param operations
+</span>473 <span style=''>  * @param content
+</span>474 <span style=''>  */
+</span>475 <span style=''>case class GmlOffering(
+</span>476 <span style=''>                        uuid: UUID,
+</span>477 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/gml",
+</span>478 <span style=''>                        operations: List[OwcOperation],
+</span>479 <span style=''>                        content: List[String]
+</span>480 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>481 <span style=''>
+</span>482 <span style=''>  /**
+</span>483 <span style=''>    *
+</span>484 <span style=''>    * @return
+</span>485 <span style=''>    */
+</span>486 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>487 <span style=''>}
+</span>488 <span style=''>
+</span>489 <span style=''>/**
+</span>490 <span style=''>  *
+</span>491 <span style=''>  * @param uuid
+</span>492 <span style=''>  * @param code
+</span>493 <span style=''>  * @param operations
+</span>494 <span style=''>  * @param content
+</span>495 <span style=''>  */
+</span>496 <span style=''>case class KmlOffering(
+</span>497 <span style=''>                        uuid: UUID,
+</span>498 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/kml",
+</span>499 <span style=''>                        operations: List[OwcOperation],
+</span>500 <span style=''>                        content: List[String]
+</span>501 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>502 <span style=''>
+</span>503 <span style=''>  /**
+</span>504 <span style=''>    *
+</span>505 <span style=''>    * @return
+</span>506 <span style=''>    */
+</span>507 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>508 <span style=''>}
+</span>509 <span style=''>
+</span>510 <span style=''>/**
+</span>511 <span style=''>  *
+</span>512 <span style=''>  * @param uuid
+</span>513 <span style=''>  * @param code
+</span>514 <span style=''>  * @param operations
+</span>515 <span style=''>  * @param content
+</span>516 <span style=''>  */
+</span>517 <span style=''>case class GeoTiffOffering(
+</span>518 <span style=''>                            uuid: UUID,
+</span>519 <span style=''>                            code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/geotiff",
+</span>520 <span style=''>                            operations: List[OwcOperation],
+</span>521 <span style=''>                            content: List[String]
+</span>522 <span style=''>                          ) extends OwcOffering with ClassnameLogger {
+</span>523 <span style=''>
+</span>524 <span style=''>  /**
+</span>525 <span style=''>    *
+</span>526 <span style=''>    * @return
+</span>527 <span style=''>    */
+</span>528 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>529 <span style=''>}
+</span>530 <span style=''>
+</span>531 <span style=''>// the following two are not in the spec, but we need them so I made up an extension
+</span>532 <span style=''>
+</span>533 <span style=''>/**
+</span>534 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>535 <span style=''>  *
+</span>536 <span style=''>  * @param uuid
+</span>537 <span style=''>  * @param code
+</span>538 <span style=''>  * @param operations
+</span>539 <span style=''>  * @param content
+</span>540 <span style=''>  */
+</span>541 <span style=''>case class SosOffering(
+</span>542 <span style=''>                        uuid: UUID,
+</span>543 <span style=''>                        code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/sos",
+</span>544 <span style=''>                        operations: List[OwcOperation],
+</span>545 <span style=''>                        content: List[String]
+</span>546 <span style=''>                      ) extends OwcOffering with ClassnameLogger {
+</span>547 <span style=''>
+</span>548 <span style=''>  /**
+</span>549 <span style=''>    *
+</span>550 <span style=''>    * @return
+</span>551 <span style=''>    */
+</span>552 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>553 <span style=''>}
+</span>554 <span style=''>
+</span>555 <span style=''>/**
+</span>556 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>557 <span style=''>  *
+</span>558 <span style=''>  * @param uuid
+</span>559 <span style=''>  * @param code
+</span>560 <span style=''>  * @param operations
+</span>561 <span style=''>  * @param content
+</span>562 <span style=''>  */
+</span>563 <span style=''>case class NetCdfOffering(
+</span>564 <span style=''>                           uuid: UUID,
+</span>565 <span style=''>                           code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/netcdf",
+</span>566 <span style=''>                           operations: List[OwcOperation],
+</span>567 <span style=''>                           content: List[String]
+</span>568 <span style=''>                         ) extends OwcOffering with ClassnameLogger {
+</span>569 <span style=''>
+</span>570 <span style=''>  /**
+</span>571 <span style=''>    *
+</span>572 <span style=''>    * @return
+</span>573 <span style=''>    */
+</span>574 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>575 <span style=''>}
+</span>576 <span style=''>
+</span>577 <span style=''>/**
+</span>578 <span style=''>  * not in the spec, but we need them so I made up an extension
+</span>579 <span style=''>  *
+</span>580 <span style=''>  * @param uuid
+</span>581 <span style=''>  * @param code
+</span>582 <span style=''>  * @param operations
+</span>583 <span style=''>  * @param content
+</span>584 <span style=''>  */
+</span>585 <span style=''>case class HttpLinkOffering(
+</span>586 <span style=''>                             uuid: UUID,
+</span>587 <span style=''>                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
+</span>588 <span style=''>                             operations: List[OwcOperation],
+</span>589 <span style=''>                             content: List[String]
+</span>590 <span style=''>                           ) extends OwcOffering with ClassnameLogger {
+</span>591 <span style=''>
+</span>592 <span style=''>  /**
+</span>593 <span style=''>    *
+</span>594 <span style=''>    * @return
+</span>595 <span style=''>    */
+</span>596 <span style=''>  def toJson: JsValue = </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>597 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -441,15 +632,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          70
+          60
         </td>
         <td>
-          1371
+          1590
         </td>
         <td>
-          2577
+          2435
           -
-          2594
+          2452
         </td>
         <td>
           ApplyToImplicitArgs
@@ -458,61 +649,634 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.OwcPostRequestConfig](this)(owc.this.`package`.owcPostRequestConfigFormat)
+          play.api.libs.json.Json.toJson[models.owc.OwcPostRequestConfig](this)(owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat)
         </td>
       </tr><tr>
         <td>
-          70
+          60
         </td>
         <td>
-          1370
+          1589
         </td>
         <td>
-          2588
+          2446
           -
-          2588
+          2446
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcPostRequestConfigFormat
+          models.owc.OwcPostRequestConfig.owcPostRequestConfigFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcPostRequestConfigFormat
+          owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat
         </td>
       </tr><tr>
         <td>
-          91
+          72
         </td>
         <td>
-          1372
+          1596
         </td>
         <td>
-          3000
+          2729
           -
-          3000
+          2729
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalCanBuild.functionalCanBuildApplicative
+        </td>
+        <td style="background: #AEF1AE">
+          functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1593
+        </td>
+        <td>
+          2700
+          -
+          2737
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;type&quot;).readNullable[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1592
+        </td>
+        <td>
+          2729
+          -
+          2729
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcRequestResultFormat
+          play.api.libs.json.DefaultReads.StringReads
         </td>
-        <td style="background: #F0ADAD">
-          owc.this.`package`.owcRequestResultFormat
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
         </td>
       </tr><tr>
         <td>
-          91
+          72
         </td>
         <td>
-          1373
+          1595
         </td>
         <td>
-          2989
+          2729
           -
-          3006
+          2729
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1591
+        </td>
+        <td>
+          2709
+          -
+          2715
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1594
+        </td>
+        <td>
+          2729
+          -
+          2729
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1599
+        </td>
+        <td>
+          2749
+          -
+          2789
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;request&quot;).readNullable[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1598
+        </td>
+        <td>
+          2781
+          -
+          2781
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1597
+        </td>
+        <td>
+          2758
+          -
+          2767
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request&quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1602
+        </td>
+        <td>
+          2796
+          -
+          2796
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1601
+        </td>
+        <td>
+          2796
+          -
+          2796
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1604
+        </td>
+        <td>
+          2693
+          -
+          2826
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild2.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.Reads, Option[String]](play.api.libs.json.JsPath.\(&quot;type&quot;).readNullable[String](json.this.Reads.StringReads))(functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).and[Option[String]](play.api.libs.json.JsPath.\(&quot;request&quot;).readNullable[String](json.this.Reads.StringReads)).apply[models.owc.OwcPostRequestConfig]({
+  ((contentType: Option[String], postData: Option[String]) =&gt; OwcPostRequestConfig.apply(contentType, postData))
+})(json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1600
+        </td>
+        <td>
+          2797
+          -
+          2823
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPostRequestConfig.apply(contentType, postData)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1603
+        </td>
+        <td>
+          2796
+          -
+          2796
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.functorReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1605
+        </td>
+        <td>
+          2918
+          -
+          2924
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1608
+        </td>
+        <td>
+          2939
+          -
+          2939
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.functionalCanBuildOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.functionalCanBuildOWrites
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1607
+        </td>
+        <td>
+          2909
+          -
+          2947
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;type&quot;).writeNullable[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1606
+        </td>
+        <td>
+          2939
+          -
+          2939
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          78
+        </td>
+        <td>
+          1611
+        </td>
+        <td>
+          2959
+          -
+          3000
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;request&quot;).writeNullable[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          78
+        </td>
+        <td>
+          1610
+        </td>
+        <td>
+          2992
+          -
+          2992
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          78
+        </td>
+        <td>
+          1609
+        </td>
+        <td>
+          2968
+          -
+          2977
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request&quot;
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          1614
+        </td>
+        <td>
+          3007
+          -
+          3007
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.contravariantfunctorOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.contravariantfunctorOWrites
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          1613
+        </td>
+        <td>
+          3008
+          -
+          3044
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.syntax.unlift
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcPostRequestConfig, (Option[String], Option[String])]({
+  ((x$0: models.owc.OwcPostRequestConfig) =&gt; OwcPostRequestConfig.unapply(x$0))
+})
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          1615
+        </td>
+        <td>
+          2902
+          -
+          3045
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild2.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.OWrites, Option[String]](play.api.libs.json.JsPath.\(&quot;type&quot;).writeNullable[String](json.this.Writes.StringWrites))(json.this.OWrites.functionalCanBuildOWrites).and[Option[String]](play.api.libs.json.JsPath.\(&quot;request&quot;).writeNullable[String](json.this.Writes.StringWrites)).apply[models.owc.OwcPostRequestConfig](play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcPostRequestConfig, (Option[String], Option[String])]({
+  ((x$0: models.owc.OwcPostRequestConfig) =&gt; OwcPostRequestConfig.unapply(x$0))
+}))(json.this.OWrites.contravariantfunctorOWrites)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          1612
+        </td>
+        <td>
+          3015
+          -
+          3043
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.unapply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPostRequestConfig.unapply(x$0)
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1617
+        </td>
+        <td>
+          3159
+          -
+          3185
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.owcPostRequestConfigWrites
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPostRequestConfig.this.owcPostRequestConfigWrites
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1616
+        </td>
+        <td>
+          3132
+          -
+          3157
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.owcPostRequestConfigReads
+        </td>
+        <td style="background: #AEF1AE">
+          OwcPostRequestConfig.this.owcPostRequestConfigReads
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1618
+        </td>
+        <td>
+          3125
+          -
+          3186
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Format.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Format.apply[models.owc.OwcPostRequestConfig](OwcPostRequestConfig.this.owcPostRequestConfigReads, OwcPostRequestConfig.this.owcPostRequestConfigWrites)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          1620
+        </td>
+        <td>
+          3466
+          -
+          3483
         </td>
         <td>
           ApplyToImplicitArgs
@@ -521,19 +1285,634 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.OwcRequestResult](this)(owc.this.`package`.owcRequestResultFormat)
+          play.api.libs.json.Json.toJson[models.owc.OwcRequestResult](this)(owc.this.OwcRequestResult.owcRequestResultFormat)
         </td>
       </tr><tr>
         <td>
-          123
+          98
         </td>
         <td>
-          1375
+          1619
         </td>
         <td>
-          4110
+          3477
           -
-          4127
+          3477
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcRequestResult.owcRequestResultFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.OwcRequestResult.owcRequestResultFormat
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1623
+        </td>
+        <td>
+          3711
+          -
+          3755
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;contentType&quot;).readNullable[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1626
+        </td>
+        <td>
+          3747
+          -
+          3747
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalCanBuild.functionalCanBuildApplicative
+        </td>
+        <td style="background: #AEF1AE">
+          functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1622
+        </td>
+        <td>
+          3747
+          -
+          3747
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1625
+        </td>
+        <td>
+          3747
+          -
+          3747
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1624
+        </td>
+        <td>
+          3747
+          -
+          3747
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1621
+        </td>
+        <td>
+          3720
+          -
+          3733
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;contentType&quot;
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1629
+        </td>
+        <td>
+          3767
+          -
+          3806
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;result&quot;).readNullable[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1628
+        </td>
+        <td>
+          3798
+          -
+          3798
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1627
+        </td>
+        <td>
+          3776
+          -
+          3784
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1632
+        </td>
+        <td>
+          3813
+          -
+          3813
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1634
+        </td>
+        <td>
+          3704
+          -
+          3839
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild2.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.Reads, Option[String]](play.api.libs.json.JsPath.\(&quot;contentType&quot;).readNullable[String](json.this.Reads.StringReads))(functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).and[Option[String]](play.api.libs.json.JsPath.\(&quot;result&quot;).readNullable[String](json.this.Reads.StringReads)).apply[models.owc.OwcRequestResult]({
+  ((contentType: Option[String], resultData: Option[String]) =&gt; OwcRequestResult.apply(contentType, resultData))
+})(json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)))
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1631
+        </td>
+        <td>
+          3813
+          -
+          3813
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1633
+        </td>
+        <td>
+          3813
+          -
+          3813
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.functorReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1630
+        </td>
+        <td>
+          3814
+          -
+          3836
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcRequestResult.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcRequestResult.apply(contentType, resultData)
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1638
+        </td>
+        <td>
+          3951
+          -
+          3951
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.functionalCanBuildOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.functionalCanBuildOWrites
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1635
+        </td>
+        <td>
+          3923
+          -
+          3936
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;contentType&quot;
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1637
+        </td>
+        <td>
+          3914
+          -
+          3959
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;contentType&quot;).writeNullable[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1636
+        </td>
+        <td>
+          3951
+          -
+          3951
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1641
+        </td>
+        <td>
+          3971
+          -
+          4011
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;result&quot;).writeNullable[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1640
+        </td>
+        <td>
+          4003
+          -
+          4003
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1639
+        </td>
+        <td>
+          3980
+          -
+          3988
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1644
+        </td>
+        <td>
+          4018
+          -
+          4018
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.contravariantfunctorOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.contravariantfunctorOWrites
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1643
+        </td>
+        <td>
+          4019
+          -
+          4051
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.syntax.unlift
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcRequestResult, (Option[String], Option[String])]({
+  ((x$0: models.owc.OwcRequestResult) =&gt; OwcRequestResult.unapply(x$0))
+})
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1642
+        </td>
+        <td>
+          4026
+          -
+          4050
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcRequestResult.unapply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcRequestResult.unapply(x$0)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1645
+        </td>
+        <td>
+          3907
+          -
+          4052
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild2.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.OWrites, Option[String]](play.api.libs.json.JsPath.\(&quot;contentType&quot;).writeNullable[String](json.this.Writes.StringWrites))(json.this.OWrites.functionalCanBuildOWrites).and[Option[String]](play.api.libs.json.JsPath.\(&quot;result&quot;).writeNullable[String](json.this.Writes.StringWrites)).apply[models.owc.OwcRequestResult](play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcRequestResult, (Option[String], Option[String])]({
+  ((x$0: models.owc.OwcRequestResult) =&gt; OwcRequestResult.unapply(x$0))
+}))(json.this.OWrites.contravariantfunctorOWrites)
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1647
+        </td>
+        <td>
+          4154
+          -
+          4176
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcRequestResult.owcRequestResultWrites
+        </td>
+        <td style="background: #AEF1AE">
+          OwcRequestResult.this.owcRequestResultWrites
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1646
+        </td>
+        <td>
+          4131
+          -
+          4152
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcRequestResult.owcRequestResultReads
+        </td>
+        <td style="background: #AEF1AE">
+          OwcRequestResult.this.owcRequestResultReads
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1648
+        </td>
+        <td>
+          4124
+          -
+          4177
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Format.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Format.apply[models.owc.OwcRequestResult](OwcRequestResult.this.owcRequestResultReads, OwcRequestResult.this.owcRequestResultWrites)
+        </td>
+      </tr><tr>
+        <td>
+          147
+        </td>
+        <td>
+          1650
+        </td>
+        <td>
+          5174
+          -
+          5191
         </td>
         <td>
           ApplyToImplicitArgs
@@ -542,40 +1921,1138 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #AEF1AE">
-          play.api.libs.json.Json.toJson[models.owc.OwcOperation](this)(owc.this.`package`.owcOperationFormat)
+          play.api.libs.json.Json.toJson[models.owc.OwcOperation](this)(owc.this.OwcOperation.owcOperationFormat)
         </td>
       </tr><tr>
         <td>
-          123
+          147
         </td>
         <td>
-          1374
+          1649
         </td>
         <td>
-          4121
+          5185
           -
-          4121
+          5185
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOperationFormat
+          models.owc.OwcOperation.owcOperationFormat
         </td>
         <td style="background: #AEF1AE">
-          owc.this.`package`.owcOperationFormat
+          owc.this.OwcOperation.owcOperationFormat
         </td>
       </tr><tr>
         <td>
-          135
+          156
         </td>
         <td>
-          1377
+          1656
         </td>
         <td>
-          4345
+          5377
           -
-          4378
+          5377
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalCanBuild.functionalCanBuildApplicative
+        </td>
+        <td style="background: #AEF1AE">
+          functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1653
+        </td>
+        <td>
+          5356
+          -
+          5385
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;code&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1652
+        </td>
+        <td>
+          5377
+          -
+          5377
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1655
+        </td>
+        <td>
+          5377
+          -
+          5377
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1651
+        </td>
+        <td>
+          5365
+          -
+          5371
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1654
+        </td>
+        <td>
+          5377
+          -
+          5377
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          1659
+        </td>
+        <td>
+          5397
+          -
+          5428
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;method&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          1658
+        </td>
+        <td>
+          5420
+          -
+          5420
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          1657
+        </td>
+        <td>
+          5406
+          -
+          5414
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;method&quot;
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1662
+        </td>
+        <td>
+          5440
+          -
+          5469
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;type&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1661
+        </td>
+        <td>
+          5461
+          -
+          5461
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1660
+        </td>
+        <td>
+          5449
+          -
+          5455
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1665
+        </td>
+        <td>
+          5481
+          -
+          5510
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;href&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1664
+        </td>
+        <td>
+          5502
+          -
+          5502
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1663
+        </td>
+        <td>
+          5490
+          -
+          5496
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          1668
+        </td>
+        <td>
+          5522
+          -
+          5576
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;request&quot;).readNullable[models.owc.OwcPostRequestConfig](owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat)
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          1667
+        </td>
+        <td>
+          5554
+          -
+          5554
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.owcPostRequestConfigFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          1666
+        </td>
+        <td>
+          5531
+          -
+          5540
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          1671
+        </td>
+        <td>
+          5588
+          -
+          5637
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.readNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;result&quot;).readNullable[models.owc.OwcRequestResult](owc.this.OwcRequestResult.owcRequestResultFormat)
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          1670
+        </td>
+        <td>
+          5619
+          -
+          5619
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcRequestResult.owcRequestResultFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcRequestResult.owcRequestResultFormat
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          1669
+        </td>
+        <td>
+          5597
+          -
+          5605
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1674
+        </td>
+        <td>
+          5644
+          -
+          5644
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1673
+        </td>
+        <td>
+          5644
+          -
+          5644
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1676
+        </td>
+        <td>
+          5349
+          -
+          5668
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild6.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.Reads, String](play.api.libs.json.JsPath.\(&quot;code&quot;).read[String](json.this.Reads.StringReads))(functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).and[String](play.api.libs.json.JsPath.\(&quot;method&quot;).read[String](json.this.Reads.StringReads)).and[String](play.api.libs.json.JsPath.\(&quot;type&quot;).read[String](json.this.Reads.StringReads)).and[String](play.api.libs.json.JsPath.\(&quot;href&quot;).read[String](json.this.Reads.StringReads)).and[Option[models.owc.OwcPostRequestConfig]](play.api.libs.json.JsPath.\(&quot;request&quot;).readNullable[models.owc.OwcPostRequestConfig](owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat)).and[Option[models.owc.OwcRequestResult]](play.api.libs.json.JsPath.\(&quot;result&quot;).readNullable[models.owc.OwcRequestResult](owc.this.OwcRequestResult.owcRequestResultFormat)).apply[models.owc.OwcOperation]({
+  ((code: String, method: String, contentType: String, href: String, request: Option[models.owc.OwcPostRequestConfig], result: Option[models.owc.OwcRequestResult]) =&gt; OwcOperationJs.apply(code, method, contentType, href, request, result))
+})(json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)))
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1675
+        </td>
+        <td>
+          5644
+          -
+          5644
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.functorReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1672
+        </td>
+        <td>
+          5645
+          -
+          5665
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOperationJs.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperationJs.apply(code, method, contentType, href, request, result)
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          1680
+        </td>
+        <td>
+          5757
+          -
+          5757
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.functionalCanBuildOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.functionalCanBuildOWrites
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          1677
+        </td>
+        <td>
+          5744
+          -
+          5750
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          1679
+        </td>
+        <td>
+          5735
+          -
+          5765
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;code&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          1678
+        </td>
+        <td>
+          5757
+          -
+          5757
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1683
+        </td>
+        <td>
+          5777
+          -
+          5809
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;method&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1682
+        </td>
+        <td>
+          5801
+          -
+          5801
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1681
+        </td>
+        <td>
+          5786
+          -
+          5794
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;method&quot;
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          1686
+        </td>
+        <td>
+          5821
+          -
+          5851
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;type&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          1685
+        </td>
+        <td>
+          5843
+          -
+          5843
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          167
+        </td>
+        <td>
+          1684
+        </td>
+        <td>
+          5830
+          -
+          5836
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          1689
+        </td>
+        <td>
+          5863
+          -
+          5893
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;href&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          1688
+        </td>
+        <td>
+          5885
+          -
+          5885
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          1687
+        </td>
+        <td>
+          5872
+          -
+          5878
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1692
+        </td>
+        <td>
+          5905
+          -
+          5960
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;request&quot;).writeNullable[models.owc.OwcPostRequestConfig](owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat)
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1691
+        </td>
+        <td>
+          5938
+          -
+          5938
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcPostRequestConfig.owcPostRequestConfigFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1690
+        </td>
+        <td>
+          5914
+          -
+          5923
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;request&quot;
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1695
+        </td>
+        <td>
+          5972
+          -
+          6022
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.writeNullable
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;result&quot;).writeNullable[models.owc.OwcRequestResult](owc.this.OwcRequestResult.owcRequestResultFormat)
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1694
+        </td>
+        <td>
+          6004
+          -
+          6004
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcRequestResult.owcRequestResultFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcRequestResult.owcRequestResultFormat
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1693
+        </td>
+        <td>
+          5981
+          -
+          5989
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1698
+        </td>
+        <td>
+          6029
+          -
+          6029
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.contravariantfunctorOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.contravariantfunctorOWrites
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1697
+        </td>
+        <td>
+          6030
+          -
+          6060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.syntax.unlift
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcOperation, (String, String, String, String, Option[models.owc.OwcPostRequestConfig], Option[models.owc.OwcRequestResult])]({
+  ((arg: models.owc.OwcOperation) =&gt; OwcOperationJs.unapply(arg))
+})
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1696
+        </td>
+        <td>
+          6037
+          -
+          6059
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOperationJs.unapply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperationJs.unapply(arg)
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1699
+        </td>
+        <td>
+          5728
+          -
+          6061
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild6.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.OWrites, String](play.api.libs.json.JsPath.\(&quot;code&quot;).write[String](json.this.Writes.StringWrites))(json.this.OWrites.functionalCanBuildOWrites).and[String](play.api.libs.json.JsPath.\(&quot;method&quot;).write[String](json.this.Writes.StringWrites)).and[String](play.api.libs.json.JsPath.\(&quot;type&quot;).write[String](json.this.Writes.StringWrites)).and[String](play.api.libs.json.JsPath.\(&quot;href&quot;).write[String](json.this.Writes.StringWrites)).and[Option[models.owc.OwcPostRequestConfig]](play.api.libs.json.JsPath.\(&quot;request&quot;).writeNullable[models.owc.OwcPostRequestConfig](owc.this.OwcPostRequestConfig.owcPostRequestConfigFormat)).and[Option[models.owc.OwcRequestResult]](play.api.libs.json.JsPath.\(&quot;result&quot;).writeNullable[models.owc.OwcRequestResult](owc.this.OwcRequestResult.owcRequestResultFormat)).apply[models.owc.OwcOperation](play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcOperation, (String, String, String, String, Option[models.owc.OwcPostRequestConfig], Option[models.owc.OwcRequestResult])]({
+  ((arg: models.owc.OwcOperation) =&gt; OwcOperationJs.unapply(arg))
+}))(json.this.OWrites.contravariantfunctorOWrites)
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1701
+        </td>
+        <td>
+          6151
+          -
+          6169
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.owcOperationWrites
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperation.this.owcOperationWrites
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1700
+        </td>
+        <td>
+          6132
+          -
+          6149
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.owcOperationReads
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperation.this.owcOperationReads
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1702
+        </td>
+        <td>
+          6125
+          -
+          6170
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Format.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Format.apply[models.owc.OwcOperation](OwcOperation.this.owcOperationReads, OwcOperation.this.owcOperationWrites)
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          1704
+        </td>
+        <td>
+          6289
+          -
+          6322
         </td>
         <td>
           Apply
@@ -588,15 +3065,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          181
         </td>
         <td>
-          1376
+          1703
         </td>
         <td>
-          4355
+          6299
           -
-          4377
+          6321
         </td>
         <td>
           Apply
@@ -609,36 +3086,15 @@
         </td>
       </tr><tr>
         <td>
-          143
+          189
         </td>
         <td>
-          1378
+          1706
         </td>
         <td>
-          4564
+          6481
           -
-          4564
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.owcOperationFormat
-        </td>
-        <td style="background: #AEF1AE">
-          owc.this.`package`.owcOperationFormat
-        </td>
-      </tr><tr>
-        <td>
-          143
-        </td>
-        <td>
-          1379
-        </td>
-        <td>
-          4537
-          -
-          4570
+          6514
         </td>
         <td>
           ApplyToImplicitArgs
@@ -647,19 +3103,40 @@
           play.api.libs.json.Json.fromJson
         </td>
         <td style="background: #AEF1AE">
-          play.api.libs.json.Json.fromJson[models.owc.OwcOperation](json)(owc.this.`package`.owcOperationFormat)
+          play.api.libs.json.Json.fromJson[models.owc.OwcOperation](json)(OwcOperation.this.owcOperationFormat)
         </td>
       </tr><tr>
         <td>
-          145
+          189
         </td>
         <td>
-          1380
+          1705
         </td>
         <td>
-          4653
+          6508
           -
-          4660
+          6508
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.owcOperationFormat
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperation.this.owcOperationFormat
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1707
+        </td>
+        <td>
+          6597
+          -
+          6604
         </td>
         <td>
           Apply
@@ -672,15 +3149,229 @@
         </td>
       </tr><tr>
         <td>
-          146
+          193
         </td>
         <td>
-          1381
+          1712
         </td>
         <td>
-          4686
+          6652
           -
-          4690
+          6877
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          e.errors.map[String, Seq[String]](((tupleAction: (play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])) =&gt; {
+  val jsPath: play.api.libs.json.JsPath = tupleAction._1;
+  val valErrors: String = tupleAction._2.map[String, Seq[String]](((valErr: play.api.data.validation.ValidationError) =&gt; valErr.message))(collection.this.Seq.canBuildFrom[String]).toList.mkString(&quot; ; &quot;);
+  jsPath.toJsonString.+(&quot; &gt;&gt; &quot;).+(valErrors)
+}))(collection.this.Seq.canBuildFrom[String])
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1711
+        </td>
+        <td>
+          6665
+          -
+          6665
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1708
+        </td>
+        <td>
+          6705
+          -
+          6719
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple2._1
+        </td>
+        <td style="background: #F0ADAD">
+          tupleAction._1
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          1709
+        </td>
+        <td>
+          6746
+          -
+          6815
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          tupleAction._2.map[String, Seq[String]](((valErr: play.api.data.validation.ValidationError) =&gt; valErr.message))(collection.this.Seq.canBuildFrom[String]).toList.mkString(&quot; ; &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1710
+        </td>
+        <td>
+          6826
+          -
+          6867
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          jsPath.toJsonString.+(&quot; &gt;&gt; &quot;).+(valErrors)
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1716
+        </td>
+        <td>
+          6900
+          -
+          6941
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;JsError info  &quot;, &quot;&quot;).s(lines.mkString(&quot; | &quot;))
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1713
+        </td>
+        <td>
+          6902
+          -
+          6917
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;JsError info  &quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1715
+        </td>
+        <td>
+          6918
+          -
+          6939
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          lines.mkString(&quot; | &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1717
+        </td>
+        <td>
+          6887
+          -
+          6942
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcOperation.this.logger.error(scala.StringContext.apply(&quot;JsError info  &quot;, &quot;&quot;).s(lines.mkString(&quot; | &quot;)))
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1714
+        </td>
+        <td>
+          6940
+          -
+          6941
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1718
+        </td>
+        <td>
+          6951
+          -
+          6955
         </td>
         <td>
           Select
@@ -693,15 +3384,1596 @@
         </td>
       </tr><tr>
         <td>
-          169
+          228
         </td>
         <td>
-          1383
+          1719
         </td>
         <td>
-          5171
+          7519
           -
-          5188
+          7536
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.randomUUID
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.randomUUID()
+        </td>
+      </tr><tr>
+        <td>
+          229
+        </td>
+        <td>
+          1720
+        </td>
+        <td>
+          7541
+          -
+          7609
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOperation.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOperation.apply(uuid, code, method, contentType, href, request, result)
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          1728
+        </td>
+        <td>
+          7824
+          -
+          7932
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[(String, String, String, String, Option[models.owc.OwcPostRequestConfig], Option[models.owc.OwcRequestResult])](scala.Tuple6.apply[String, String, String, String, Option[models.owc.OwcPostRequestConfig], Option[models.owc.OwcRequestResult]](arg.code, arg.method, arg.contentType, arg.href, arg.request, arg.result))
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          1721
+        </td>
+        <td>
+          7829
+          -
+          7837
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.code
+        </td>
+        <td style="background: #AEF1AE">
+          arg.code
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          1727
+        </td>
+        <td>
+          7824
+          -
+          7932
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple6.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple6.apply[String, String, String, String, Option[models.owc.OwcPostRequestConfig], Option[models.owc.OwcRequestResult]](arg.code, arg.method, arg.contentType, arg.href, arg.request, arg.result)
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          1722
+        </td>
+        <td>
+          7845
+          -
+          7855
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.method
+        </td>
+        <td style="background: #AEF1AE">
+          arg.method
+        </td>
+      </tr><tr>
+        <td>
+          245
+        </td>
+        <td>
+          1723
+        </td>
+        <td>
+          7863
+          -
+          7878
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.contentType
+        </td>
+        <td style="background: #AEF1AE">
+          arg.contentType
+        </td>
+      </tr><tr>
+        <td>
+          246
+        </td>
+        <td>
+          1724
+        </td>
+        <td>
+          7886
+          -
+          7894
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.href
+        </td>
+        <td style="background: #AEF1AE">
+          arg.href
+        </td>
+      </tr><tr>
+        <td>
+          247
+        </td>
+        <td>
+          1725
+        </td>
+        <td>
+          7902
+          -
+          7913
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.request
+        </td>
+        <td style="background: #AEF1AE">
+          arg.request
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          1726
+        </td>
+        <td>
+          7921
+          -
+          7931
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.result
+        </td>
+        <td style="background: #AEF1AE">
+          arg.result
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1734
+        </td>
+        <td>
+          8252
+          -
+          8252
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalCanBuild.functionalCanBuildApplicative
+        </td>
+        <td style="background: #AEF1AE">
+          functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1731
+        </td>
+        <td>
+          8231
+          -
+          8260
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;code&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1730
+        </td>
+        <td>
+          8252
+          -
+          8252
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1733
+        </td>
+        <td>
+          8252
+          -
+          8252
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1729
+        </td>
+        <td>
+          8240
+          -
+          8246
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          268
+        </td>
+        <td>
+          1732
+        </td>
+        <td>
+          8252
+          -
+          8252
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          1737
+        </td>
+        <td>
+          8295
+          -
+          8295
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.owcOperationFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcOperation.owcOperationFormat
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          1739
+        </td>
+        <td>
+          8268
+          -
+          8315
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;operations&quot;).read[List[models.owc.OwcOperation]](json.this.Reads.traversableReads[List, models.owc.OwcOperation](immutable.this.List.canBuildFrom[models.owc.OwcOperation], owc.this.OwcOperation.owcOperationFormat))
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          1736
+        </td>
+        <td>
+          8295
+          -
+          8295
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.immutable.List.canBuildFrom
+        </td>
+        <td style="background: #AEF1AE">
+          immutable.this.List.canBuildFrom[models.owc.OwcOperation]
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          1735
+        </td>
+        <td>
+          8277
+          -
+          8289
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;operations&quot;
+        </td>
+      </tr><tr>
+        <td>
+          269
+        </td>
+        <td>
+          1738
+        </td>
+        <td>
+          8295
+          -
+          8295
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.LowPriorityDefaultReads.traversableReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.traversableReads[List, models.owc.OwcOperation](immutable.this.List.canBuildFrom[models.owc.OwcOperation], owc.this.OwcOperation.owcOperationFormat)
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          1743
+        </td>
+        <td>
+          8348
+          -
+          8348
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.LowPriorityDefaultReads.traversableReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          1742
+        </td>
+        <td>
+          8348
+          -
+          8348
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          1744
+        </td>
+        <td>
+          8323
+          -
+          8362
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;contents&quot;).read[List[String]](json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads))
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          1741
+        </td>
+        <td>
+          8348
+          -
+          8348
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.immutable.List.canBuildFrom
+        </td>
+        <td style="background: #AEF1AE">
+          immutable.this.List.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          270
+        </td>
+        <td>
+          1740
+        </td>
+        <td>
+          8332
+          -
+          8342
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;contents&quot;
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          1746
+        </td>
+        <td>
+          8367
+          -
+          8367
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          1748
+        </td>
+        <td>
+          8367
+          -
+          8367
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.functorReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          1745
+        </td>
+        <td>
+          8368
+          -
+          8387
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingJs.apply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingJs.apply(code, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          1747
+        </td>
+        <td>
+          8367
+          -
+          8367
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          271
+        </td>
+        <td>
+          1749
+        </td>
+        <td>
+          8226
+          -
+          8390
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild3.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.Reads, String](play.api.libs.json.JsPath.\(&quot;code&quot;).read[String](json.this.Reads.StringReads))(functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).and[List[models.owc.OwcOperation]](play.api.libs.json.JsPath.\(&quot;operations&quot;).read[List[models.owc.OwcOperation]](json.this.Reads.traversableReads[List, models.owc.OwcOperation](immutable.this.List.canBuildFrom[models.owc.OwcOperation], owc.this.OwcOperation.owcOperationFormat))).and[List[String]](play.api.libs.json.JsPath.\(&quot;contents&quot;).read[List[String]](json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads))).apply[models.owc.OwcOffering]({
+  ((code: String, operations: List[models.owc.OwcOperation], content: List[String]) =&gt; OwcOfferingJs.apply(code, operations, content))
+})(json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)))
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1752
+        </td>
+        <td>
+          8453
+          -
+          8483
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;code&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1751
+        </td>
+        <td>
+          8475
+          -
+          8475
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1753
+        </td>
+        <td>
+          8475
+          -
+          8475
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.functionalCanBuildOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.functionalCanBuildOWrites
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          1750
+        </td>
+        <td>
+          8462
+          -
+          8468
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1755
+        </td>
+        <td>
+          8519
+          -
+          8519
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOperation.owcOperationFormat
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.OwcOperation.owcOperationFormat
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1754
+        </td>
+        <td>
+          8500
+          -
+          8512
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;operations&quot;
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1757
+        </td>
+        <td>
+          8491
+          -
+          8539
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;operations&quot;).write[List[models.owc.OwcOperation]](json.this.Writes.traversableWrites[models.owc.OwcOperation](owc.this.OwcOperation.owcOperationFormat))
+        </td>
+      </tr><tr>
+        <td>
+          275
+        </td>
+        <td>
+          1756
+        </td>
+        <td>
+          8519
+          -
+          8519
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.traversableWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.traversableWrites[models.owc.OwcOperation](owc.this.OwcOperation.owcOperationFormat)
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1761
+        </td>
+        <td>
+          8547
+          -
+          8587
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;contents&quot;).write[List[String]](json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1760
+        </td>
+        <td>
+          8573
+          -
+          8573
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.traversableWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1759
+        </td>
+        <td>
+          8573
+          -
+          8573
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          276
+        </td>
+        <td>
+          1758
+        </td>
+        <td>
+          8556
+          -
+          8566
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;contents&quot;
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1764
+        </td>
+        <td>
+          8592
+          -
+          8592
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.contravariantfunctorOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.contravariantfunctorOWrites
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1763
+        </td>
+        <td>
+          8593
+          -
+          8622
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.syntax.unlift
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcOffering, (String, List[models.owc.OwcOperation], List[String])]({
+  ((arg: models.owc.OwcOffering) =&gt; OwcOfferingJs.unapply(arg))
+})
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1762
+        </td>
+        <td>
+          8600
+          -
+          8621
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingJs.unapply
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingJs.unapply(arg)
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          1765
+        </td>
+        <td>
+          8448
+          -
+          8623
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild3.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.OWrites, String](play.api.libs.json.JsPath.\(&quot;code&quot;).write[String](json.this.Writes.StringWrites))(json.this.OWrites.functionalCanBuildOWrites).and[List[models.owc.OwcOperation]](play.api.libs.json.JsPath.\(&quot;operations&quot;).write[List[models.owc.OwcOperation]](json.this.Writes.traversableWrites[models.owc.OwcOperation](owc.this.OwcOperation.owcOperationFormat))).and[List[String]](play.api.libs.json.JsPath.\(&quot;contents&quot;).write[List[String]](json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites))).apply[models.owc.OwcOffering](play.api.libs.functional.syntax.`package`.unlift[models.owc.OwcOffering, (String, List[models.owc.OwcOperation], List[String])]({
+  ((arg: models.owc.OwcOffering) =&gt; OwcOfferingJs.unapply(arg))
+}))(json.this.OWrites.contravariantfunctorOWrites)
+        </td>
+      </tr><tr>
+        <td>
+          280
+        </td>
+        <td>
+          1766
+        </td>
+        <td>
+          8690
+          -
+          8706
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.owcOfferingReads
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOffering.this.owcOfferingReads
+        </td>
+      </tr><tr>
+        <td>
+          280
+        </td>
+        <td>
+          1768
+        </td>
+        <td>
+          8683
+          -
+          8726
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Format.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Format.apply[models.owc.OwcOffering](OwcOffering.this.owcOfferingReads, OwcOffering.this.owcOfferingWrites)
+        </td>
+      </tr><tr>
+        <td>
+          280
+        </td>
+        <td>
+          1767
+        </td>
+        <td>
+          8708
+          -
+          8725
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.owcOfferingWrites
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOffering.this.owcOfferingWrites
+        </td>
+      </tr><tr>
+        <td>
+          290
+        </td>
+        <td>
+          1770
+        </td>
+        <td>
+          8851
+          -
+          8975
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.r
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(&quot;^http://www.opengis.net/spec/owc-(geojson|atom)/1.0/req/(wms|wmts|wfs|wcs|csw|wps|gml|kml|geotiff|sos|netcdf|http-link)$&quot;).r
+        </td>
+      </tr><tr>
+        <td>
+          290
+        </td>
+        <td>
+          1769
+        </td>
+        <td>
+          8851
+          -
+          8973
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;^http://www.opengis.net/spec/owc-(geojson|atom)/1.0/req/(wms|wmts|wfs|wcs|csw|wps|gml|kml|geotiff|sos|netcdf|http-link)$&quot;
+        </td>
+      </tr><tr>
+        <td>
+          294
+        </td>
+        <td>
+          1771
+        </td>
+        <td>
+          9192
+          -
+          9209
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.randomUUID
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.randomUUID()
+        </td>
+      </tr><tr>
+        <td>
+          296
+        </td>
+        <td>
+          1772
+        </td>
+        <td>
+          9233
+          -
+          9298
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;http://www.opengis.net/spec/owc-geojson/1.0/req/&quot;.+(offeringType)
+        </td>
+      </tr><tr>
+        <td>
+          299
+        </td>
+        <td>
+          1773
+        </td>
+        <td>
+          9345
+          -
+          9396
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WmsOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          WmsOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          300
+        </td>
+        <td>
+          1774
+        </td>
+        <td>
+          9418
+          -
+          9470
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WmtsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WmtsOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          301
+        </td>
+        <td>
+          1775
+        </td>
+        <td>
+          9491
+          -
+          9542
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WfsOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          WfsOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          302
+        </td>
+        <td>
+          1776
+        </td>
+        <td>
+          9563
+          -
+          9614
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WcsOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          WcsOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          303
+        </td>
+        <td>
+          1777
+        </td>
+        <td>
+          9635
+          -
+          9686
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.CswOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          CswOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          304
+        </td>
+        <td>
+          1778
+        </td>
+        <td>
+          9707
+          -
+          9758
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.WpsOffering.apply
+        </td>
+        <td style="background: #AEF1AE">
+          WpsOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          305
+        </td>
+        <td>
+          1779
+        </td>
+        <td>
+          9779
+          -
+          9830
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.GmlOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          GmlOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          306
+        </td>
+        <td>
+          1780
+        </td>
+        <td>
+          9851
+          -
+          9902
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.KmlOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          KmlOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          307
+        </td>
+        <td>
+          1781
+        </td>
+        <td>
+          9927
+          -
+          9982
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.GeoTiffOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          GeoTiffOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          308
+        </td>
+        <td>
+          1782
+        </td>
+        <td>
+          10003
+          -
+          10054
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.SosOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          SosOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          309
+        </td>
+        <td>
+          1783
+        </td>
+        <td>
+          10078
+          -
+          10132
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.NetCdfOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          NetCdfOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          310
+        </td>
+        <td>
+          1784
+        </td>
+        <td>
+          10159
+          -
+          10215
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.HttpLinkOffering.apply
+        </td>
+        <td style="background: #F0ADAD">
+          HttpLinkOffering.apply(uuid, geoJsonCode, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          325
+        </td>
+        <td>
+          1786
+        </td>
+        <td>
+          10504
+          -
+          10548
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingJs.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;, &quot;, &quot;&quot;).s(owcEncoding, offeringType))
+        </td>
+      </tr><tr>
+        <td>
+          325
+        </td>
+        <td>
+          1785
+        </td>
+        <td>
+          10517
+          -
+          10547
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;&quot;, &quot;, &quot;, &quot;&quot;).s(owcEncoding, offeringType)
+        </td>
+      </tr><tr>
+        <td>
+          326
+        </td>
+        <td>
+          1787
+        </td>
+        <td>
+          10557
+          -
+          10609
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.owc.OwcOfferingJs.buildOfferingFrom
+        </td>
+        <td style="background: #AEF1AE">
+          OwcOfferingJs.this.buildOfferingFrom(offeringType, operations, content)
+        </td>
+      </tr><tr>
+        <td>
+          328
+        </td>
+        <td>
+          1788
+        </td>
+        <td>
+          10634
+          -
+          10731
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          throw new scala.`package`.IllegalArgumentException(scala.StringContext.apply(&quot;offering code cannot be used to build offering type: &quot;, &quot;&quot;).s(code))
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          1791
+        </td>
+        <td>
+          10916
+          -
+          10927
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.content
+        </td>
+        <td style="background: #AEF1AE">
+          arg.content
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          1790
+        </td>
+        <td>
+          10900
+          -
+          10914
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.operations
+        </td>
+        <td style="background: #AEF1AE">
+          arg.operations
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          1793
+        </td>
+        <td>
+          10885
+          -
+          10928
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[(String, List[models.owc.OwcOperation], List[String])](scala.Tuple3.apply[String, List[models.owc.OwcOperation], List[String]](arg.code, arg.operations, arg.content))
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          1789
+        </td>
+        <td>
+          10890
+          -
+          10898
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.code
+        </td>
+        <td style="background: #AEF1AE">
+          arg.code
+        </td>
+      </tr><tr>
+        <td>
+          338
+        </td>
+        <td>
+          1792
+        </td>
+        <td>
+          10885
+          -
+          10928
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Tuple3.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Tuple3.apply[String, List[models.owc.OwcOperation], List[String]](arg.code, arg.operations, arg.content)
+        </td>
+      </tr><tr>
+        <td>
+          360
+        </td>
+        <td>
+          1795
+        </td>
+        <td>
+          11403
+          -
+          11420
         </td>
         <td>
           ApplyToImplicitArgs
@@ -710,61 +4982,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #AEF1AE">
-          play.api.libs.json.Json.toJson[models.owc.WmsOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.WmsOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          169
+          360
         </td>
         <td>
-          1382
+          1794
         </td>
         <td>
-          5182
+          11414
           -
-          5182
+          11414
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #AEF1AE">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          190
+          381
         </td>
         <td>
-          1384
+          1797
         </td>
         <td>
-          5677
+          11898
           -
-          5677
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.owcOfferingFormat
-        </td>
-        <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
-        </td>
-      </tr><tr>
-        <td>
-          190
-        </td>
-        <td>
-          1385
-        </td>
-        <td>
-          5666
-          -
-          5683
+          11915
         </td>
         <td>
           ApplyToImplicitArgs
@@ -773,19 +5024,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.WmtsOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.WmtsOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          211
+          381
         </td>
         <td>
-          1387
+          1796
         </td>
         <td>
-          6154
+          11909
           -
-          6171
+          11909
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.OwcOffering.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          402
+        </td>
+        <td>
+          1799
+        </td>
+        <td>
+          12386
+          -
+          12403
         </td>
         <td>
           ApplyToImplicitArgs
@@ -794,40 +5066,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.WfsOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.WfsOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          211
+          402
         </td>
         <td>
-          1386
+          1798
         </td>
         <td>
-          6165
+          12397
           -
-          6165
+          12397
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          232
+          423
         </td>
         <td>
-          1389
+          1801
         </td>
         <td>
-          6642
+          12874
           -
-          6659
+          12891
         </td>
         <td>
           ApplyToImplicitArgs
@@ -836,61 +5108,61 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.WcsOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.WcsOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          232
+          423
         </td>
         <td>
-          1388
+          1800
         </td>
         <td>
-          6653
+          12885
           -
-          6653
+          12885
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          253
+          444
         </td>
         <td>
-          1390
+          1802
         </td>
         <td>
-          7141
+          13373
           -
-          7141
+          13373
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          253
+          444
         </td>
         <td>
-          1391
+          1803
         </td>
         <td>
-          7130
+          13362
           -
-          7147
+          13379
         </td>
         <td>
           ApplyToImplicitArgs
@@ -899,19 +5171,19 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.CswOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.CswOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          274
+          465
         </td>
         <td>
-          1393
+          1805
         </td>
         <td>
-          7618
+          13850
           -
-          7635
+          13867
         </td>
         <td>
           ApplyToImplicitArgs
@@ -920,40 +5192,61 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.WpsOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.WpsOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          274
+          465
         </td>
         <td>
-          1392
+          1804
         </td>
         <td>
-          7629
+          13861
           -
-          7629
+          13861
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          295
+          486
         </td>
         <td>
-          1395
+          1806
         </td>
         <td>
-          8106
+          14349
           -
-          8123
+          14349
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.OwcOffering.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          486
+        </td>
+        <td>
+          1807
+        </td>
+        <td>
+          14338
+          -
+          14355
         </td>
         <td>
           ApplyToImplicitArgs
@@ -962,61 +5255,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.GmlOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.GmlOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          295
+          507
         </td>
         <td>
-          1394
+          1808
         </td>
         <td>
-          8117
+          14837
           -
-          8117
+          14837
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          316
+          507
         </td>
         <td>
-          1396
+          1809
         </td>
         <td>
-          8605
+          14826
           -
-          8605
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.owcOfferingFormat
-        </td>
-        <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
-        </td>
-      </tr><tr>
-        <td>
-          316
-        </td>
-        <td>
-          1397
-        </td>
-        <td>
-          8594
-          -
-          8611
+          14843
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1025,19 +5297,19 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.KmlOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.KmlOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          337
+          528
         </td>
         <td>
-          1399
+          1811
         </td>
         <td>
-          9110
+          15342
           -
-          9127
+          15359
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1046,40 +5318,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.GeoTiffOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.GeoTiffOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          337
+          528
         </td>
         <td>
-          1398
+          1810
         </td>
         <td>
-          9121
+          15353
           -
-          9121
+          15353
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          361
+          552
         </td>
         <td>
-          1401
+          1813
         </td>
         <td>
-          9748
+          15980
           -
-          9765
+          15997
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1088,61 +5360,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.SosOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.SosOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          361
+          552
         </td>
         <td>
-          1400
+          1812
         </td>
         <td>
-          9759
+          15991
           -
-          9759
+          15991
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr><tr>
         <td>
-          383
+          574
         </td>
         <td>
-          1402
+          1815
         </td>
         <td>
-          10332
+          16553
           -
-          10332
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.owcOfferingFormat
-        </td>
-        <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
-        </td>
-      </tr><tr>
-        <td>
-          383
-        </td>
-        <td>
-          1403
-        </td>
-        <td>
-          10321
-          -
-          10338
+          16570
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1151,19 +5402,40 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.NetCdfOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.NetCdfOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          405
+          574
         </td>
         <td>
-          1405
+          1814
         </td>
         <td>
-          10909
+          16564
           -
-          10926
+          16564
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcOffering.owcOfferingFormat
+        </td>
+        <td style="background: #F0ADAD">
+          owc.this.OwcOffering.owcOfferingFormat
+        </td>
+      </tr><tr>
+        <td>
+          596
+        </td>
+        <td>
+          1817
+        </td>
+        <td>
+          17141
+          -
+          17158
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1172,28 +5444,28 @@
           play.api.libs.json.Json.toJson
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.owc.HttpLinkOffering](this)(owc.this.`package`.owcOfferingFormat)
+          play.api.libs.json.Json.toJson[models.owc.HttpLinkOffering](this)(owc.this.OwcOffering.owcOfferingFormat)
         </td>
       </tr><tr>
         <td>
-          405
+          596
         </td>
         <td>
-          1404
+          1816
         </td>
         <td>
-          10920
+          17152
           -
-          10920
+          17152
         </td>
         <td>
           Select
         </td>
         <td>
-          models.owc.owcOfferingFormat
+          models.owc.OwcOffering.owcOfferingFormat
         </td>
         <td style="background: #F0ADAD">
-          owc.this.`package`.owcOfferingFormat
+          owc.this.OwcOffering.owcOfferingFormat
         </td>
       </tr>
     </table>

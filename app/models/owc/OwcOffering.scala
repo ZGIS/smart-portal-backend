@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+ * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
  * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
  * Ministry of Business, Innovation and Employment (MBIE)
@@ -8,7 +8,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -289,7 +289,7 @@ object OwcOfferingJs extends ClassnameLogger {
 
   private lazy val OwcReqPattern = "^http://www.opengis.net/spec/owc-(geojson|atom)/1.0/req/(wms|wmts|wfs|wcs|csw|wps|gml|kml|geotiff|sos|netcdf|http-link)$".r
 
-  def buildOfferingFrom(code: String, operations: List[OwcOperation], content: List[String], offeringType: String): OwcOffering = {
+  def buildOfferingFrom(offeringType: String, operations: List[OwcOperation], content: List[String]): OwcOffering = {
     // Todo, we might find a way to find an existing UUID from DB if entry exists
     val uuid = UUID.randomUUID()
 
@@ -322,8 +322,8 @@ object OwcOfferingJs extends ClassnameLogger {
 
     code match {
       case OwcReqPattern(owcEncoding, offeringType) => {
-        logger.debug(s"owcEncoding, offeringType")
-        buildOfferingFrom(code, operations, content, offeringType)
+        logger.debug(s"$owcEncoding, $offeringType")
+        buildOfferingFrom(offeringType, operations, content)
       }
       case _ => throw new IllegalArgumentException(s"offering code cannot be used to build offering type: $code")
     }

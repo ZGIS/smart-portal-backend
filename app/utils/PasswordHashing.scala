@@ -81,7 +81,8 @@ class PasswordHashing @Inject()(configuration: Configuration) {
     val in = appSecret + username + useragent.toUpperCase
     val digestHash = MessageDigest.getInstance("SHA-512").digest(in.getBytes("UTF-8"))
     val testHash = fromHex(cookieHash)
-    // Logger.trace(s"testSessionCookie: testhash ${toHex(testHash)} vs newdigest ${toHex(digestHash)} app secret: $appSecret cookieHash: $cookieHash, username: $username, $useragent: useragent  >>> $in")
+//    Logger.trace(s"testSessionCookie: testhash ${toHex(testHash)} vs newdigest ${toHex(digestHash)}app secret: " +
+//      s"$appSecret cookieHash: $cookieHash, username: $username, $useragent: useragent  >>> $in")
     slowEquals(digestHash, testHash)
   }
 

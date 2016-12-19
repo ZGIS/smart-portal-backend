@@ -21,7 +21,6 @@ package controllers
 
 import javax.inject._
 
-import models._
 import models.users._
 import play.api.Configuration
 import play.api.cache._
@@ -39,26 +38,13 @@ import utils.{ClassnameLogger, PasswordHashing}
   * @param passwordHashing
   */
 @Singleton
-class HomeController @Inject() (config: Configuration,
-                                cacheApi: CacheApi,
-                                override val passwordHashing: PasswordHashing,
-                                userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
+class HomeController @Inject()(config: Configuration,
+                               cacheApi: CacheApi,
+                               override val passwordHashing: PasswordHashing,
+                               userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
-
-  /**
-    * to handle CORS and HttpSecurity headers, maybe that is already managed through the Filters?!
-    *
-    * @return
-    */
-  def headers = List(
-    "Access-Control-Allow-Origin" -> "*",
-    "Allow" -> "*",
-    "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers" -> "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date",
-    "Access-Control-Allow-Credentials" -> "true"
-  )
 
   /**
     * CORS needs preflight OPTION
@@ -70,6 +56,26 @@ class HomeController @Inject() (config: Configuration,
     NoContent.withHeaders(headers: _*)
   }
 
+  /**
+    * to handle CORS and HttpSecurity headers, maybe that is already managed through the Filters?!
+    *
+    * @return
+    */
+  def headers = List(
+    "Access-Control-Allow-Origin" -> "*",
+    "Allow" -> "*",
+    "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers" ->
+      "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date",
+    "Access-Control-Allow-Credentials" -> "true"
+  )
+
+  /**
+    * idea is to provide a listing of api usable endpoints with some parameter description,selectable by the fields param
+    *
+    * @param fields
+    * @return
+    */
   def discovery(fields: Option[String]) = Action { request =>
     Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
   }
@@ -122,9 +128,10 @@ class HomeController @Inject() (config: Configuration,
     * X-XSRF-TOKEN in HTTP header.
     */
   def logout = HasToken(parse.empty) { token =>
-    username => implicit request =>
-      cache.remove(token)
-      Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+    username =>
+      implicit request =>
+        cache.remove(token)
+        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 
   /**
@@ -145,9 +152,10 @@ class HomeController @Inject() (config: Configuration,
     * @return
     */
   def gdisconnect = HasToken(parse.empty) { token =>
-    username => implicit request =>
-      cache.remove(token)
-      // do some Google OAuth2 unregisteR
-      Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+    username =>
+      implicit request =>
+        cache.remove(token)
+        // do some Google OAuth2 unregisteR
+        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 }

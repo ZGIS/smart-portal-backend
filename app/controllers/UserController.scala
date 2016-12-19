@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+ * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
  * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
  * Ministry of Business, Innovation and Employment (MBIE)
@@ -8,7 +8,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,6 @@ package controllers
 import java.time.{ZoneId, ZonedDateTime}
 import javax.inject._
 
-import models._
 import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
@@ -44,7 +43,7 @@ import scala.util.{Failure, Success, Try}
 case class ProfileJs(email: String,
                      username: String,
                      firstname: String,
-                     lastname: String )
+                     lastname: String)
 
 /**
   * here password is compulsory
@@ -56,10 +55,10 @@ case class ProfileJs(email: String,
   * @param password
   */
 case class RegisterJs(email: String,
-                     username: String,
-                     firstname: String,
-                     lastname: String,
-                     password: String)
+                      username: String,
+                      firstname: String,
+                      lastname: String,
+                      password: String)
 
 
 /**
@@ -73,13 +72,12 @@ class UserController @Inject()(config: Configuration,
                                cacheApi: CacheApi,
                                emailService: EmailService,
                                userDAO: UserDAO,
-                               override val passwordHashing: PasswordHashing)extends Controller with ClassnameLogger with Security {
+                               override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
 
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   //TODO SR why not as VAL in parameters? Like passwordHashing?
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
-
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   /**
     * self registering for user accounts
@@ -102,7 +100,6 @@ class UserController @Inject()(config: Configuration,
             // found none, good, create user
             val regLinkId = java.util.UUID.randomUUID().toString()
             val cryptPass = passwordHashing.createHash(jsuser.password)
-            val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
 
             val newUser = User(jsuser.email,
               jsuser.username,
@@ -116,7 +113,8 @@ class UserController @Inject()(config: Configuration,
               logger.error("User create error.")
               BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
             } { user =>
-              logger.info("New user registered.")
+              val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
+              logger.info(s"New user registered. Email went out $emailWentOut")
               Ok(Json.toJson(user.asProfileJs()))
             }
           } { user =>
@@ -151,7 +149,7 @@ class UserController @Inject()(config: Configuration,
           // flash error message
           // BadRequest(Json.obj("status" -> "ERR", "message" -> "Unknown registration link."))
           Redirect("/#/register")
-        } { user  =>
+        } { user =>
           // good, update regstatus and send confirmation email
           val updateUser = User(
             user.email,
@@ -171,7 +169,7 @@ class UserController @Inject()(config: Configuration,
             val emailWentOut = emailService.sendConfirmationEmail(user.email, "Your GW HUB account is now active", user.firstname)
             // all good here
             // maybe should also do the full login thing here? how does that relate with the alternative Google Oauth thing
-            logger.info(s"Registered user ${user.username} confirmed email ${user.email}.")
+            logger.info(s"Registered user ${user.username} confirmed email ${user.email}. Email went out $emailWentOut")
             Redirect("/#/login")
           }
         }
@@ -192,14 +190,15 @@ class UserController @Inject()(config: Configuration,
     */
   def userSelf = HasToken(parse.empty) {
     token =>
-      cachedSecUser => implicit request =>
+      cachedSecUser =>
+        implicit request =>
 
-        userDAO.findByUsername(cachedSecUser).fold {
-          logger.error("User not found.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
-        } { user =>
-          Ok(Json.toJson(user.asProfileJs()))
-        }
+          userDAO.findByUsername(cachedSecUser).fold {
+            logger.error("User not found.")
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+          } { user =>
+            Ok(Json.toJson(user.asProfileJs()))
+          }
   }
 
   /**
@@ -210,66 +209,51 @@ class UserController @Inject()(config: Configuration,
     */
   def getProfile(username: String) = HasToken(parse.empty) {
     token =>
-      cachedSecUser => implicit request =>
+      cachedSecUser =>
+        implicit request =>
 
-        userDAO.findByUsername(username).fold {
-          logger.error("User not found.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
-        } { user =>
-          // too much checking here?
-          if (user.username.equals(username) && cachedSecUser.equals(username)) {
-            Ok(Json.toJson(user.asProfileJs()))
-          } else {
-            logger.error("Username Security Token mismatch.")
-            Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+          userDAO.findByUsername(username).fold {
+            logger.error("User not found.")
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+          } { user =>
+            // too much checking here?
+            if (user.username.equals(username) && cachedSecUser.equals(username)) {
+              Ok(Json.toJson(user.asProfileJs()))
+            } else {
+              logger.error("Username Security Token mismatch.")
+              Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+            }
           }
-        }
   }
 
   /**
     * update user's profile, can "never" touch password, password update is separate
+    * TODO should we remove username param or add additional check with HasToken?
     *
     * @param username
     * @return
     */
   def updateProfile(username: String) = HasToken(parse.json) {
     token =>
-      cachedSecUser => implicit request =>
+      cachedSecUser =>
+        implicit request =>
 
-        val profileResult = request.body.validate[ProfileJs]
-        profileResult.fold(
-          errors => {
-            BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
-          },
-          jsuser => {
-            userDAO.findByUsername(jsuser.username).fold {
-              logger.error("User not found.")
-              BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
-            } { dbuser =>
-              // is it really you? by the way you shouldn't / can't (?!) change your username!!!
-              if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
+          val profileResult = request.body.validate[ProfileJs]
+          profileResult.fold(
+            errors => {
+              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+            },
+            jsuser => {
+              userDAO.findByUsername(jsuser.username).fold {
+                logger.error("User not found.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+              } { dbuser =>
+                // is it really you? by the way you shouldn't / can't (?!) change your username!!!
+                if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
 
-                // check if new email is used already by another user than yourself
-                userDAO.findUserByEmail(jsuser.username).fold {
-                  // found none, good
-                  val updateUser = User(jsuser.email,
-                    dbuser.username,
-                    jsuser.firstname,
-                    jsuser.lastname,
-                    "***",
-                    "ACTIVE:PROFILEUPDATE",
-                    ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-                  userDAO.updateNoPass(updateUser).fold {
-                    logger.error("User update error.")
-                    BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
-                  } { user =>
-                    Ok(Json.toJson(user.asProfileJs()))
-                  }
-                } { dbuser =>
-                  // found one, is it yourself or somebody else?
-                  if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
-                    // it is you, so we can update you
+                  // check if new email is used already by another user than yourself
+                  userDAO.findUserByEmail(jsuser.username).fold {
+                    // found none, good
                     val updateUser = User(jsuser.email,
                       dbuser.username,
                       jsuser.firstname,
@@ -284,19 +268,37 @@ class UserController @Inject()(config: Configuration,
                     } { user =>
                       Ok(Json.toJson(user.asProfileJs()))
                     }
-                  } else {
-                    logger.error("Username Email mismatch, email already in use.")
-                    BadRequest(Json.obj("status" -> "ERR", "message" -> "Username Email mismatch, email already in use."))
+                  } { dbuser =>
+                    // found one, is it yourself or somebody else?
+                    if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
+                      // it is you, so we can update you
+                      val updateUser = User(jsuser.email,
+                        dbuser.username,
+                        jsuser.firstname,
+                        jsuser.lastname,
+                        "***",
+                        "ACTIVE:PROFILEUPDATE",
+                        ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+                      userDAO.updateNoPass(updateUser).fold {
+                        logger.error("User update error.")
+                        BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
+                      } { user =>
+                        Ok(Json.toJson(user.asProfileJs()))
+                      }
+                    } else {
+                      logger.error("Username Email mismatch, email already in use.")
+                      BadRequest(Json.obj("status" -> "ERR", "message" -> "Username Email mismatch, email already in use."))
+                    }
                   }
+
+                } else {
+                  logger.error("Username Security Token mismatch.")
+                  Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
                 }
-
-              } else {
-                logger.error("Username Security Token mismatch.")
-                Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
               }
-            }
 
-          })
+            })
 
   }
 
@@ -307,48 +309,50 @@ class UserController @Inject()(config: Configuration,
     */
   def updatePassword = HasToken(parse.json) {
     token =>
-      cachedSecUser => implicit request =>
+      cachedSecUser =>
+        implicit request =>
 
-    request.body.validate[LoginCredentials].fold(
-      errors => {
-        logger.error(JsError.toJson(errors).toString())
-        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
-      },
-      valid = credentials => {
-        // find user in db and compare password stuff
-        userDAO.findByUsername(credentials.username).fold {
-          logger.error("User not found.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "User not found."))
-        } { dbuser =>
-          val cryptPass = passwordHashing.createHash(credentials.password)
-          val updateUser = User(dbuser.email,
-            dbuser.username,
-            dbuser.firstname,
-            dbuser.lastname,
-            cryptPass,
-            "ACTIVE:PASSWORDUPDATE",
-            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+          request.body.validate[LoginCredentials].fold(
+            errors => {
+              logger.error(JsError.toJson(errors).toString())
+              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+            },
+            valid = credentials => {
+              // find user in db and compare password stuff
+              userDAO.findByUsername(credentials.username).fold {
+                logger.error("User not found.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "User not found."))
+              } { dbuser =>
+                val cryptPass = passwordHashing.createHash(credentials.password)
+                val updateUser = User(dbuser.email,
+                  dbuser.username,
+                  dbuser.firstname,
+                  dbuser.lastname,
+                  cryptPass,
+                  "ACTIVE:PASSWORDUPDATE",
+                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-          userDAO.updatePassword(updateUser).fold {
-            logger.error("Password update error.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "Password update error."))
-          } { user =>
-            val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-            // logger.info(s"Logging in username from $uaIdentifier")
-            cache.remove(token)
-            val newtoken = passwordHashing.createSessionCookie(user.username, uaIdentifier)
-            cache.set(newtoken, user.username)
-            Ok(Json.obj("status" -> "OK", "token" -> newtoken, "username" -> user.username))
-              .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
-          }
+                userDAO.updatePassword(updateUser).fold {
+                  logger.error("Password update error.")
+                  BadRequest(Json.obj("status" -> "ERR", "message" -> "Password update error."))
+                } { user =>
+                  val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+                  // logger.info(s"Logging in username from $uaIdentifier")
+                  cache.remove(token)
+                  val newtoken = passwordHashing.createSessionCookie(user.username, uaIdentifier)
+                  cache.set(newtoken, user.username)
+                  Ok(Json.obj("status" -> "OK", "token" -> newtoken, "username" -> user.username))
+                    .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
+                }
 
 
-        }
-      })
+              }
+            })
   }
 
   /**
     * should be really used function only except user really wants to delete own account
+    * TODO should we remove username param or add additional check with HasToken?
     *
     * @param username
     * @return

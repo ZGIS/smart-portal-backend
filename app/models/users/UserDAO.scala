@@ -54,11 +54,6 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   }
 
   /**
-    *
-    */
-  val macroUserParser: RowParser[User] = Macro.namedParser[User]
-
-  /**
     * Retrieve a User from username.
     *
     * @param username

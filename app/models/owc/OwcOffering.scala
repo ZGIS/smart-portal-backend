@@ -21,6 +21,7 @@ package models.owc
 
 import java.util.UUID
 
+import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import utils.ClassnameLogger
 
@@ -43,17 +44,6 @@ import utils.ClassnameLogger
   * The OWC JSON Encoding is a profile of GeoJSON FeatureCollection, the XML encoding is a profile of Atom/GeoRSS Feed
   */
 
-/**
-  * trait OwcOffering
-  */
-sealed trait OwcOffering {
-  val uuid: UUID
-  val code: String
-  val operations: List[OwcOperation]
-  val content: List[String]
-
-  def toJson: JsValue
-}
 
 /**
   * object for request contentType and POST data
@@ -74,6 +64,23 @@ case class OwcPostRequestConfig(contentType: Option[String], postData: Option[St
   * companion object for [[OwcPostRequestConfig]]
   */
 object OwcPostRequestConfig extends ClassnameLogger {
+
+  /**
+    * OwcPostRequestConfig Json stuff
+    */
+  implicit val owcPostRequestConfigReads: Reads[OwcPostRequestConfig] = (
+    (JsPath \ "type").readNullable[String] and
+      (JsPath \ "request").readNullable[String]
+    ) (OwcPostRequestConfig.apply _)
+
+  implicit val owcPostRequestConfigWrites: Writes[OwcPostRequestConfig] = (
+    (JsPath \ "type").writeNullable[String] and
+      (JsPath \ "request").writeNullable[String]
+    ) (unlift(OwcPostRequestConfig.unapply))
+
+  implicit val owcPostRequestConfigFormat: Format[OwcPostRequestConfig] =
+    Format(owcPostRequestConfigReads, owcPostRequestConfigWrites)
+
 }
 
 /**
@@ -95,6 +102,23 @@ case class OwcRequestResult(contentType: Option[String], resultData: Option[Stri
   * companion object for [[OwcRequestResult]]
   */
 object OwcRequestResult extends ClassnameLogger {
+
+  /**
+    * OwcRequestResult Json stuff
+    */
+  implicit val owcRequestResultReads: Reads[OwcRequestResult] = (
+    (JsPath \ "contentType").readNullable[String] and
+      (JsPath \ "result").readNullable[String]
+    ) (OwcRequestResult.apply _)
+
+  implicit val owcRequestResultWrites: Writes[OwcRequestResult] = (
+    (JsPath \ "contentType").writeNullable[String] and
+      (JsPath \ "result").writeNullable[String]
+    ) (unlift(OwcRequestResult.unapply))
+
+  implicit val owcRequestResultFormat: Format[OwcRequestResult] =
+    Format(owcRequestResultReads, owcRequestResultWrites)
+
 }
 
 /**
@@ -127,6 +151,28 @@ case class OwcOperation(uuid: UUID,
   * companion object for [[OwcOperation]]
   */
 object OwcOperation extends ClassnameLogger {
+
+  implicit val owcOperationReads: Reads[OwcOperation] = (
+    (JsPath \ "code").read[String] and
+      (JsPath \ "method").read[String] and
+      (JsPath \ "type").read[String] and
+      (JsPath \ "href").read[String] and
+      (JsPath \ "request").readNullable[OwcPostRequestConfig] and
+      (JsPath \ "result").readNullable[OwcRequestResult]
+    ) (OwcOperationJs.apply _)
+
+  implicit val owcOperationWrites: Writes[OwcOperation] = (
+    (JsPath \ "code").write[String] and
+      (JsPath \ "method").write[String] and
+      (JsPath \ "type").write[String] and
+      (JsPath \ "href").write[String] and
+      (JsPath \ "request").writeNullable[OwcPostRequestConfig] and
+      (JsPath \ "result").writeNullable[OwcRequestResult]
+    ) (unlift(OwcOperationJs.unapply))
+
+  implicit val owcOperationFormat: Format[OwcOperation] =
+    Format(owcOperationReads, owcOperationWrites)
+
   /**
     *
     * @param jsonString
@@ -143,8 +189,153 @@ object OwcOperation extends ClassnameLogger {
     val resultFromJson: JsResult[OwcOperation] = Json.fromJson[OwcOperation](json)
     resultFromJson match {
       case JsSuccess(r: OwcOperation, path: JsPath) => Some(r)
-      case e: JsError => None
+      case e: JsError => {
+        val lines = e.errors.map { tupleAction =>
+          val jsPath = tupleAction._1
+          val valErrors = tupleAction._2.map( valErr => valErr.message ).toList.mkString(" ; ")
+          jsPath.toJsonString + " >> " +  valErrors
+        }
+
+        logger.error(s"JsError info  ${lines.mkString(" | ")}")
+        None
+      }
     }
+  }
+}
+
+/**
+  * OwcOperation Json stuff
+  */
+object OwcOperationJs {
+
+  /**
+    *
+    * @param code
+    * @param method
+    * @param contentType
+    * @param href
+    * @param request
+    * @param result
+    * @return
+    */
+  def apply(code: String,
+            method: String,
+            contentType: String,
+            href: String,
+            request: Option[OwcPostRequestConfig],
+            result: Option[OwcRequestResult]): OwcOperation = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+    OwcOperation(uuid, code, method, contentType, href, request, result)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcOperation): Option[(String,
+    String,
+    String,
+    String,
+    Option[OwcPostRequestConfig],
+    Option[OwcRequestResult])] = {
+    Some(arg.code,
+      arg.method,
+      arg.contentType,
+      arg.href,
+      arg.request,
+      arg.result)
+  }
+}
+
+
+/**
+  * trait OwcOffering
+  */
+sealed trait OwcOffering {
+  val uuid: UUID
+  val code: String
+  val operations: List[OwcOperation]
+  val content: List[String]
+
+  def toJson: JsValue
+}
+
+object OwcOffering extends ClassnameLogger {
+
+  implicit val owcOfferingReads: Reads[OwcOffering] = (
+  (JsPath \ "code").read[String] and
+  (JsPath \ "operations").read[List[OwcOperation]] and
+  (JsPath \ "contents").read[List[String]]
+  ) (OwcOfferingJs.apply _)
+
+  implicit val owcOfferingWrites: Writes[OwcOffering] = (
+  (JsPath \ "code").write[String] and
+  (JsPath \ "operations").write[List[OwcOperation]] and
+  (JsPath \ "contents").write[List[String]]
+  ) (unlift(OwcOfferingJs.unapply))
+
+  implicit val owcOfferingFormat: Format[OwcOffering] =
+  Format(owcOfferingReads, owcOfferingWrites)
+
+}
+
+
+/**
+  * OwcOffering Json stuff
+  */
+object OwcOfferingJs extends ClassnameLogger {
+
+  private lazy val OwcReqPattern = "^http://www.opengis.net/spec/owc-(geojson|atom)/1.0/req/(wms|wmts|wfs|wcs|csw|wps|gml|kml|geotiff|sos|netcdf|http-link)$".r
+
+  def buildOfferingFrom(code: String, operations: List[OwcOperation], content: List[String], offeringType: String): OwcOffering = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+
+    val geoJsonCode = "http://www.opengis.net/spec/owc-geojson/1.0/req/" + offeringType
+
+    offeringType match {
+      case "wms" => WmsOffering(uuid, geoJsonCode, operations, content)
+      case "wmts" => WmtsOffering(uuid, geoJsonCode, operations, content)
+      case "wfs" => WfsOffering(uuid, geoJsonCode, operations, content)
+      case "wcs" => WcsOffering(uuid, geoJsonCode, operations, content)
+      case "csw" => CswOffering(uuid, geoJsonCode, operations, content)
+      case "wps" => WpsOffering(uuid, geoJsonCode, operations, content)
+      case "gml" => GmlOffering(uuid, geoJsonCode, operations, content)
+      case "kml" => KmlOffering(uuid, geoJsonCode, operations, content)
+      case "geotiff" => GeoTiffOffering(uuid, geoJsonCode, operations, content)
+      case "sos" => SosOffering(uuid, geoJsonCode, operations, content)
+      case "netcdf" => NetCdfOffering(uuid, geoJsonCode, operations, content)
+      case "http-link" => HttpLinkOffering(uuid, geoJsonCode, operations, content)
+    }
+  }
+
+  /**
+    *
+    * @param code
+    * @param operations
+    * @param content
+    * @return
+    */
+  def apply(code: String, operations: List[OwcOperation], content: List[String]): OwcOffering = {
+
+    code match {
+      case OwcReqPattern(owcEncoding, offeringType) => {
+        logger.debug(s"owcEncoding, offeringType")
+        buildOfferingFrom(code, operations, content, offeringType)
+      }
+      case _ => throw new IllegalArgumentException(s"offering code cannot be used to build offering type: $code")
+    }
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcOffering): Option[(String, List[OwcOperation], List[String])] = {
+    Some(arg.code, arg.operations, arg.content)
   }
 }
 

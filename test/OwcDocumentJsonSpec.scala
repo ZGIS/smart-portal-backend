@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+import java.net.URL
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
@@ -25,6 +26,7 @@ import org.scalatestplus.play.PlaySpec
 import play.api.libs.json._
 import models.owc._
 import org.locationtech.spatial4j.io.ShapeIO
+import org.locationtech.spatial4j.shape.{Rectangle, SpatialRelation}
 import utils.ClassnameLogger
 
 import scala.language.implicitConversions
@@ -36,7 +38,11 @@ import scala.language.implicitConversions
 class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
   private lazy val ctx = SpatialContext.GEO
-  private lazy val owcResource = this.getClass().getResource("owc/smart-nz.owc.json")
+  private lazy val owcResource1 = this.getClass().getResource("owc/smart-nz.owc.json")
+  private lazy val owcResource2 = this.getClass().getResource("owc/smart-sac.owc.json")
+  private lazy val owcResource3 = this.getClass().getResource("owc/csw_10entries.owc.json")
+  private lazy val owcResource4 = this.getClass().getResource("owc/wps_52north.owc.json")
+  private lazy val owcResource5 = this.getClass().getResource("owc/smart-mond.owc.json")
 
   "JSON writer" should {
 
@@ -221,7 +227,6 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
       featureProps1.toJson mustEqual jsProperties
 
-      implicit val owcPropsReads = models.owc.owcPropertiesReads
       val parsedProp = OwcProperties.parseJson(jsProperties)
       parsedProp.get.title mustEqual featureProps1.title
       parsedProp.get.authors.head.name mustEqual featureProps1.authors.head.name
@@ -240,7 +245,7 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
                                       |         "result": {}
                                       |        }""".stripMargin)
 
-      implicit val owcPropsReads = models.owc.owcOperationReads
+
       val parsedOps = OwcOperation.parseJson(jsOperations)
       parsedOps mustBe defined
       parsedOps.get.code mustEqual operation1.code
@@ -252,7 +257,6 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
 
     "encode OwcOfferings" in {
-      implicit val owcOfferingReads = models.owc.owcOfferingReads
       val jsOffering = offering1.toJson
       val jsCode = (jsOffering \ "code").get
       jsCode.as[String] mustEqual offering1.code
@@ -263,51 +267,104 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
     }
 
     "encode OwcEntries" in {
-      implicit val owcEntryFormat = models.owc.owcEntryFormat
-      // implicit val rectangleFormat = models.owc.rectangleFormat
-      implicit val rectangleFormat = models.owc.rectangleWrites
-
       val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100", None, featureProps1, List(offering1, offering2))
       val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz_aquifers", Some(world), featureProps2, List(offering3, offering4))
 
-      // val jsOwcEntry1 = owcEntry1.toJson
+      val jsOwcEntry1 = owcEntry1.toJson
 
-      val ctx = SpatialContext.GEO
-      val geoJsonReader = ctx.getFormats().getReader(ShapeIO.GeoJSON)
-      val geoJsonWriter = ctx.getFormats().getWriter(ShapeIO.GeoJSON)
+      val jsOwcEntry2impl = owcEntry2.toJson
+      val jsOwcEntry2expl = Json.toJson(owcEntry2)
 
-      try {
-        // val jsOwcEntry2 = owcEntry2.toJson
-        val jsOwcEntry2 = Json.toJson(owcEntry2)
+      jsOwcEntry2impl mustEqual jsOwcEntry2expl
 
-      } catch {
-        case np: NullPointerException =>
-          logger.error(s"jsOwcEntry2 npe ", np)
-      }
-
-
+      val backResult1 = Json.fromJson[OwcEntry](jsOwcEntry2impl)
+      backResult1.isSuccess mustBe true
+      backResult1.get.id mustEqual owcEntry2.id
+      backResult1.get.bbox.get.relate(owcEntry2.bbox.get) mustBe SpatialRelation.WITHIN
+      backResult1.get.properties.title mustEqual owcEntry2.properties.title
+      backResult1.get.offerings.head.code mustEqual owcEntry2.offerings.head.code
     }
 
     "encode OwcDocuments" in {
-
-      implicit val owcDocumentFormat = models.owc.owcDocumentFormat
-      // implicit val rectangleFormat = models.owc.rectangleFormat
-
-      val jsonTestCollection = scala.io.Source.fromURL(owcResource).getLines.mkString
 
       val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100", None, featureProps1, List(offering1, offering2))
       val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz_aquifers", Some(world), featureProps2, List(offering3, offering4))
 
       val owcDocument1 = OwcDocument("http://portal.smart-project.info/context/smart-sac", Some(world), documentProps1, List(owcEntry1, owcEntry2))
 
-      // logger.error(s"before tojson owcDocument1")
-      // val jsOwcDocument1 = owcDocument1.toJson
+      val jsOwcDocument1 = owcDocument1.toJson
+      // logger.warn(s"owc doc 1: ${Json.stringify(jsOwcDocument1)}")
 
-      // logger.error(s"jsOwcDocument1 ${jsOwcDocument1}")
+      val backResult1 = Json.fromJson[OwcDocument](jsOwcDocument1)
+      backResult1.isSuccess mustBe true
 
-      // logger.error(s"before owcDoc1 ${owcDocument1}")
-      // val owcDoc1 = OwcDocument.parseJson(jsonTestCollection)
-      // owcDoc1 mustBe defined
+      backResult1.get.id mustEqual owcDocument1.id
+      backResult1.get.bbox.get.relate(owcDocument1.bbox.get) mustBe SpatialRelation.WITHIN
+
+      backResult1.get.properties.title mustEqual owcDocument1.properties.title
+      backResult1.get.features.head.id mustEqual owcDocument1.features.head.id
+      backResult1.get.features.head.offerings.head.code mustEqual owcDocument1.features.head.offerings.head.code
+
+    }
+
+    "parse full OwcDocuments" in {
+
+      val jsonTestCollection1 = scala.io.Source.fromURL(owcResource1).getLines.mkString
+      val jsonTestCollection2 = scala.io.Source.fromURL(owcResource2).getLines.mkString
+      val jsonTestCollection3 = scala.io.Source.fromURL(owcResource3).getLines.mkString
+      val jsonTestCollection4 = scala.io.Source.fromURL(owcResource4).getLines.mkString
+      val jsonTestCollection5 = scala.io.Source.fromURL(owcResource5).getLines.mkString
+
+      val owcDoc1JsResult = OwcDocument.parseJson(jsonTestCollection1)
+      owcDoc1JsResult mustBe defined
+      val owcDoc1 = owcDoc1JsResult.get
+      // Json.stringify(owcDoc1.get.toJson) mustEqual Json.stringify(Json.parse(jsonTestCollection1))
+      owcDoc1.id mustEqual "http://portal.smart-project.info/context/smart-nz"
+      owcDoc1.features.size mustBe 16
+
+      owcDoc1.features.map( feat => feat.id).filter(id => id.equalsIgnoreCase("http://portal.smart-project.info/context/smart-nz_other-layer-765")).size mustBe 1
+      val opsList = owcDoc1.features.map( feat => feat.offerings ).flatten.map( offer => offer.operations).flatten
+      opsList.size mustBe 64
+
+      val owcDoc2JsResult = OwcDocument.parseJson(jsonTestCollection2)
+      owcDoc2JsResult mustBe defined
+      val owcDoc2 = owcDoc2JsResult.get
+      owcDoc2.id mustEqual "http://portal.smart-project.info/context/smart-sac"
+      owcDoc2.features.size mustBe 17
+
+      owcDoc2.features.map( feat => feat.id).filter(id => id.equalsIgnoreCase("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100")).size mustBe 1
+      val offerList = owcDoc1.features.map( feat => feat.offerings ).flatten
+      val wms1 = offerList.filter{ offer =>
+        offer.code.contains("wms")
+      }.size
+      val wms2 = offerList.map( offer => offer.operations ).flatten.filter {
+        ops =>
+          ops.code.equalsIgnoreCase("GetMap")
+      }.size
+      wms1 mustEqual wms2
+
+      val owcDoc5JsResult = OwcDocument.parseJson(jsonTestCollection5)
+      owcDoc5JsResult mustBe defined
+      val owcDoc5 = owcDoc5JsResult.get
+      owcDoc5.id mustEqual "http://portal.smart-project.info/context/smart-mond"
+      owcDoc5.features.size mustBe 33
+
+      owcDoc5.features.map( feat => feat.id).filter(id => id.equalsIgnoreCase("http://portal.smart-project.info/context/smart-mondsee_geol-DEM_BEV_10_wgs84")).size mustBe 1
+      val opsList5 = owcDoc5.features.map( feat => feat.offerings ).flatten.map( offer => offer.operations).flatten
+      opsList5.size mustBe 132
+
+      opsList5.map {
+        ops => ops.href
+      }.map( href => new URL(href)).filter( url => url.isInstanceOf[URL]).size mustBe 132
+
+      val owcDoc3 = OwcDocument.parseJson(jsonTestCollection3)
+      owcDoc3 mustBe defined
+      owcDoc3.get.bbox mustBe None
+      owcDoc3.get.features.size mustBe 3
+      owcDoc3.get.features.map (feat => feat.offerings ).flatten.map( offs => offs.operations).flatten.size mustBe 18
+
+      val owcDoc4 = OwcDocument.parseJson(jsonTestCollection4)
+      owcDoc4 mustBe defined
 
     }
 

@@ -19,11 +19,6 @@
 
 package models.owc
 
-import java.time.ZonedDateTime
-import java.time.format.{DateTimeFormatter, DateTimeParseException}
-
-import org.locationtech.spatial4j.context.SpatialContext
-import org.locationtech.spatial4j.io.ShapeIO
 import org.locationtech.spatial4j.shape.Rectangle
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
@@ -80,6 +75,29 @@ def toJson: JsValue = Json.toJson(this)
   */
 object OwcEntry extends ClassnameLogger {
 
+  implicit val rectangleWrites: Writes[Rectangle] = new RectangleWriter()
+  // implicit val rectangleReads: Reads[Rectangle] = new RectangleReader()
+  implicit val rectangleReads: Reads[Option[Rectangle]] = new JtsPolygonReader()
+
+  implicit val owcEntryReads: Reads[OwcEntry] = (
+    (JsPath \ "type").read[String] and
+    (JsPath \ "id").read[String] and
+      (JsPath \ "geometry").readNullable[Option[Rectangle]] and
+      (JsPath \ "properties").read[OwcProperties] and
+      (JsPath \ "properties" \ "offerings").read[List[OwcOffering]]
+    ) (OwcEntryJs.apply _)
+
+  implicit val owcEntryWrites: Writes[OwcEntry] = (
+    (JsPath \ "type").write[String] and
+    (JsPath \ "id").write[String] and
+      (JsPath \ "geometry").writeNullable[Rectangle] and
+      (JsPath \ "properties").write[OwcProperties] and
+      (JsPath \ "properties" \ "offerings").write[List[OwcOffering]]
+    ) (unlift(OwcEntryJs.unapply))
+
+  implicit val owcEntryFormat: Format[OwcEntry] =
+    Format(owcEntryReads, owcEntryWrites)
+
   /**
     *
     * @param jsonString
@@ -96,8 +114,60 @@ object OwcEntry extends ClassnameLogger {
     val resultFromJson: JsResult[OwcEntry] = Json.fromJson[OwcEntry](json)
     resultFromJson match {
       case JsSuccess(r: OwcEntry, path: JsPath) => Some(r)
-      case e: JsError => None
+      case e: JsError => {
+        val lines = e.errors.map { tupleAction =>
+          val jsPath = tupleAction._1
+          val valErrors = tupleAction._2.map( valErr => valErr.message ).toList.mkString(" ; ")
+          jsPath.toJsonString + " >> " +  valErrors
+        }
+
+        logger.error(s"JsError info  ${lines.mkString(" | ")}")
+        None
+      }
     }
+  }
+}
+
+/**
+  * OwcEntry Json stuff
+  */
+object OwcEntryJs extends ClassnameLogger {
+
+  /**
+    *
+    * @param featureType
+    * @param id
+    * @param bbox
+    * @param properties
+    * @param offerings
+    * @return
+    */
+  def apply(featureType: String, id: String,
+            bbox: Option[Option[Rectangle]],
+            properties: OwcProperties,
+            offerings: List[OwcOffering]): OwcEntry = {
+
+    if (!featureType.equalsIgnoreCase("feature")) {
+      throw new IllegalArgumentException("featureType <type> must be <feature>")
+    }
+    OwcEntry(id,
+      bbox.getOrElse(None),
+      properties,
+      offerings)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcEntry): Option[(
+    String,
+    String,
+      Option[Rectangle],
+      OwcProperties,
+      List[OwcOffering])] = {
+    Some("Feature", arg.id, arg.bbox, arg.properties, arg.offerings)
   }
 }
 
@@ -130,6 +200,32 @@ case class OwcDocument(
   */
 object OwcDocument extends ClassnameLogger {
 
+  implicit val rectangleWrites: Writes[Rectangle] = new RectangleWriter()
+  // implicit val rectangleReads: Reads[Rectangle] = new RectangleReader()
+  implicit val rectangleReads: Reads[Option[Rectangle]] = new JtsPolygonReader()
+
+  /**
+    * OwcDocument Json stuff
+    */
+  implicit val owcDocumentReads: Reads[OwcDocument] = (
+    (JsPath \ "type").read[String] and
+    (JsPath \ "id").read[String] and
+      (JsPath \ "geometry").readNullable[Option[Rectangle]] and
+      (JsPath \ "properties").read[OwcProperties] and
+      (JsPath \ "features").read[List[OwcEntry]]
+    ) (OwcDocumentJs.apply _)
+
+  implicit val owcDocumentWrites: Writes[OwcDocument] = (
+    (JsPath \ "type").write[String] and
+    (JsPath \ "id").write[String] and
+      (JsPath \ "geometry").writeNullable[Rectangle] and
+      (JsPath \ "properties").write[OwcProperties] and
+      (JsPath \ "features").write[List[OwcEntry]]
+    ) (unlift(OwcDocumentJs.unapply))
+
+  implicit val owcDocumentFormat: Format[OwcDocument] =
+    Format(owcDocumentReads, owcDocumentWrites)
+
   /**
     *
     * @param jsonString
@@ -146,7 +242,60 @@ object OwcDocument extends ClassnameLogger {
     val resultFromJson: JsResult[OwcDocument] = Json.fromJson[OwcDocument](json)
     resultFromJson match {
       case JsSuccess(r: OwcDocument, path: JsPath) => Some(r)
-      case e: JsError => None
+      case e: JsError => {
+        val lines = e.errors.map { tupleAction =>
+          val jsPath = tupleAction._1
+          val valErrors = tupleAction._2.map( valErr => valErr.message ).toList.mkString(" ; ")
+          jsPath.toJsonString + " >> " +  valErrors
+        }
+
+        logger.error(s"JsError info  ${lines.mkString(" | ")}")
+        None
+      }
     }
+  }
+}
+
+/**
+  * OwcDocument Json stuff
+  */
+object OwcDocumentJs extends ClassnameLogger {
+
+  /**
+    *
+    * @param featureType
+    * @param id
+    * @param bbox
+    * @param properties
+    * @param features
+    * @return
+    */
+  def apply(featureType: String,
+            id: String,
+            bbox: Option[Option[Rectangle]],
+            properties: OwcProperties,
+            features: List[OwcEntry]): OwcDocument = {
+
+    if (!featureType.equalsIgnoreCase("FeatureCollection")) {
+      throw new IllegalArgumentException("featureType <type> must be <FeatureCollection>")
+    }
+    OwcDocument(id,
+      bbox.getOrElse(None),
+      properties,
+      features)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcDocument): Option[(
+    String,
+      String,
+      Option[Rectangle],
+      OwcProperties,
+      List[OwcEntry])] = {
+    Some("FeatureCollection", arg.id, arg.bbox, arg.properties, arg.features)
   }
 }

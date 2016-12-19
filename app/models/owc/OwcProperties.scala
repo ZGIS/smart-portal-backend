@@ -22,7 +22,8 @@ package models.owc
 import java.time.ZonedDateTime
 import java.util.UUID
 
-import play.api.libs.json.{Json, _}
+import play.api.libs.functional.syntax._
+import play.api.libs.json._
 import utils.ClassnameLogger
 
 /**
@@ -54,6 +55,8 @@ import utils.ClassnameLogger
   */
 case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Option[String]) extends ClassnameLogger {
 
+
+
   /**
     *
     * @return
@@ -65,6 +68,49 @@ case class OwcAuthor(uuid: UUID, name: String, email: Option[String], uri: Optio
   * companion object for [[OwcAuthor]]
   */
 object OwcAuthor extends ClassnameLogger {
+
+  implicit val owcAuthorReads: Reads[OwcAuthor] = (
+    (JsPath \ "name").read[String] and
+      (JsPath \ "email").readNullable[String] and
+      (JsPath \ "uri").readNullable[String]
+    ) (OwcAuthorJs.apply _)
+
+  implicit val owcAuthorWrites: Writes[OwcAuthor] = (
+    (JsPath \ "name").write[String] and
+      (JsPath \ "email").writeNullable[String] and
+      (JsPath \ "uri").writeNullable[String]
+    ) (unlift(OwcAuthorJs.unapply))
+
+  implicit val owcAuthorFormat: Format[OwcAuthor] =
+    Format(owcAuthorReads, owcAuthorWrites)
+}
+
+/**
+  * OwcAuthor Json stuff
+  */
+object OwcAuthorJs extends ClassnameLogger {
+
+  /**
+    *
+    * @param name
+    * @param email
+    * @param uri
+    * @return
+    */
+  def apply(name: String, email: Option[String], uri: Option[String]): OwcAuthor = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+    OwcAuthor(uuid, name, email, uri)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcAuthor): Option[(String, Option[String], Option[String])] = {
+    Some(arg.name, arg.email, arg.uri)
+  }
 }
 
 
@@ -90,6 +136,50 @@ case class OwcCategory(uuid: UUID, scheme: String, term: String, label: Option[S
   * companion object for [[OwcCategory]]
   */
 object OwcCategory extends ClassnameLogger {
+
+  implicit val owcCategoryReads: Reads[OwcCategory] = (
+    (JsPath \ "scheme").read[String] and
+      (JsPath \ "term").read[String] and
+      (JsPath \ "label").readNullable[String]
+    ) (OwcCategoryJs.apply _)
+
+  implicit val owcCategoryWrites: Writes[OwcCategory] = (
+    (JsPath \ "scheme").write[String] and
+      (JsPath \ "term").write[String] and
+      (JsPath \ "label").writeNullable[String]
+    ) (unlift(OwcCategoryJs.unapply))
+
+  implicit val owcCategoryFormat: Format[OwcCategory] =
+    Format(owcCategoryReads, owcCategoryWrites)
+
+}
+
+/**
+  * OwcCategory Json stuff
+  */
+object OwcCategoryJs extends ClassnameLogger {
+
+  /**
+    *
+    * @param scheme
+    * @param term
+    * @param label
+    * @return
+    */
+  def apply(scheme: String, term: String, label: Option[String]): OwcCategory = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+    OwcCategory(uuid, scheme, term, label)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcCategory): Option[(String, String, Option[String])] = {
+    Some(arg.scheme, arg.term, arg.label)
+  }
 }
 
 /**
@@ -113,7 +203,55 @@ case class OwcLink(uuid: UUID, rel: String, mimeType: Option[String], href: Stri
   * companion object for [[OwcLink]]
   */
 object OwcLink extends ClassnameLogger {
+
+  implicit val owcLinkReads: Reads[OwcLink] = (
+    (JsPath \ "rel").read[String] and
+      (JsPath \ "type").readNullable[String] and
+      (JsPath \ "href").read[String] and
+      (JsPath \ "title").readNullable[String]
+    ) (OwcLinkJs.apply _)
+
+  implicit val owcLinkWrites: Writes[OwcLink] = (
+    (JsPath \ "rel").write[String] and
+      (JsPath \ "type").writeNullable[String] and
+      (JsPath \ "href").write[String] and
+      (JsPath \ "title").writeNullable[String]
+    ) (unlift(OwcLinkJs.unapply))
+
+  implicit val owcLinkFormat: Format[OwcLink] =
+    Format(owcLinkReads, owcLinkWrites)
+
 }
+
+/**
+  * OwcLink Json stuff
+  */
+object OwcLinkJs  extends ClassnameLogger {
+
+  /**
+    *
+    * @param rel
+    * @param mimeType
+    * @param href
+    * @param title
+    * @return
+    */
+  def apply(rel: String, mimeType: Option[String], href: String, title: Option[String]): OwcLink = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+    OwcLink(uuid, rel, mimeType, href, title)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcLink): Option[(String, Option[String], String, Option[String])] = {
+    Some(arg.rel, arg.mimeType, arg.href, arg.title)
+  }
+}
+
 
 /**
   *
@@ -156,6 +294,39 @@ case class OwcProperties(
   */
 object OwcProperties extends ClassnameLogger {
 
+  implicit val owcPropertiesReads: Reads[OwcProperties] = (
+    (JsPath \ "lang").readNullable[String] and
+      (JsPath \ "title").read[String] and
+      (JsPath \ "subtitle").readNullable[String] and
+      (JsPath \ "updated").readNullable[ZonedDateTime] and
+      (JsPath \ "generator").readNullable[String] and
+      (JsPath \ "rights").readNullable[String] and
+      (JsPath \ "authors").read[List[OwcAuthor]] and
+      (JsPath \ "contributors").read[List[OwcAuthor]] and
+      (JsPath \ "creator").readNullable[String] and
+      (JsPath \ "publisher").readNullable[String] and
+      (JsPath \ "categories").read[List[OwcCategory]] and
+      (JsPath \ "links").read[List[OwcLink]]
+    ) (OwcPropertiesJs.apply _)
+
+  implicit val owcPropertiesWrites: Writes[OwcProperties] = (
+    (JsPath \ "lang").write[String] and
+      (JsPath \ "title").write[String] and
+      (JsPath \ "subtitle").writeNullable[String] and
+      (JsPath \ "updated").writeNullable[ZonedDateTime] and
+      (JsPath \ "generator").writeNullable[String] and
+      (JsPath \ "rights").writeNullable[String] and
+      (JsPath \ "authors").write[List[OwcAuthor]] and
+      (JsPath \ "contributors").write[List[OwcAuthor]] and
+      (JsPath \ "creator").writeNullable[String] and
+      (JsPath \ "publisher").writeNullable[String] and
+      (JsPath \ "categories").write[List[OwcCategory]] and
+      (JsPath \ "links").write[List[OwcLink]]
+    ) (unlift(OwcPropertiesJs.unapply))
+
+  implicit val owcPropertiesFormat: Format[OwcProperties] =
+    Format(owcPropertiesReads, owcPropertiesWrites)
+
   /**
     *
     * @param jsonString
@@ -172,7 +343,99 @@ object OwcProperties extends ClassnameLogger {
     val resultFromJson: JsResult[OwcProperties] = Json.fromJson[OwcProperties](json)
     resultFromJson match {
       case JsSuccess(r: OwcProperties, path: JsPath) => Some(r)
-      case e: JsError => None
+      case e: JsError => {
+        val lines = e.errors.map { tupleAction =>
+          val jsPath = tupleAction._1
+          val valErrors = tupleAction._2.map( valErr => valErr.message ).toList.mkString(" ; ")
+          jsPath.toJsonString + " >> " +  valErrors
+        }
+
+        logger.error(s"JsError info  ${lines.mkString(" | ")}")
+        None
+      }
     }
   }
 }
+
+/**
+  * OwcProperties Json stuff
+  */
+object OwcPropertiesJs extends ClassnameLogger {
+
+  /**
+    *
+    * @param language
+    * @param title
+    * @param subtitle
+    * @param updated
+    * @param generator
+    * @param rights
+    * @param authors
+    * @param contributors
+    * @param creator
+    * @param publisher
+    * @param categories
+    * @param links
+    * @return
+    */
+  def apply(language: Option[String],
+            title: String,
+            subtitle: Option[String],
+            updated: Option[ZonedDateTime],
+            generator: Option[String],
+            rights: Option[String],
+            authors: List[OwcAuthor],
+            contributors: List[OwcAuthor],
+            creator: Option[String],
+            publisher: Option[String],
+            categories: List[OwcCategory],
+            links: List[OwcLink]): OwcProperties = {
+    // Todo, we might find a way to find an existing UUID from DB if entry exists
+    val uuid = UUID.randomUUID()
+    OwcProperties(uuid,
+      language.getOrElse("en"),
+      title,
+      subtitle,
+      updated,
+      generator,
+      rights,
+      authors,
+      contributors,
+      creator,
+      publisher,
+      categories,
+      links)
+  }
+
+  /**
+    *
+    * @param arg
+    * @return
+    */
+  def unapply(arg: OwcProperties): Option[(String,
+    String,
+    Option[String],
+    Option[ZonedDateTime],
+    Option[String],
+    Option[String],
+    List[OwcAuthor],
+    List[OwcAuthor],
+    Option[String],
+    Option[String],
+    List[OwcCategory],
+    List[OwcLink])] = {
+    Some(arg.language,
+      arg.title,
+      arg.subtitle,
+      arg.updated,
+      arg.generator,
+      arg.rights,
+      arg.authors,
+      arg.contributors,
+      arg.creator,
+      arg.publisher,
+      arg.categories,
+      arg.links)
+  }
+}
+

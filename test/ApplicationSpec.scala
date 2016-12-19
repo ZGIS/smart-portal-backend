@@ -163,14 +163,6 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
     }
   }
 
-  "CountController" should {
-    "return an increasing count" in {
-      contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "0"
-      contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "1"
-      contentAsString(route(app, FakeRequest(GET, "/count")).get) mustBe "2"
-    }
-  }
-
   "CswController" should {
     "return validValues JSON for 'topicCategories'" in {
       val topicCategories = route(app, FakeRequest(GET, "/api/v1/csw/get-valid-values-for/topicCategory"))

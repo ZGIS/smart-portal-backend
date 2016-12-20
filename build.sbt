@@ -34,6 +34,7 @@ lazy val root = (project in file(".")).enablePlugins(PlayScala, SiteScaladocPlug
 scalaVersion := "2.11.8"
 
 val googleVersion = "1.22.0"
+val googleCloudVersion = "0.8.0"
 val postgresDriver = "9.4.1211.jre7"
 val akkaVersion = "2.4.11"
 
@@ -48,16 +49,17 @@ libraryDependencies ++= Seq(
   "com.typesafe.play" %% "anorm" % "2.5.2",
   "org.postgresql" % "postgresql" % postgresDriver,
 
-  //  "com.vividsolutions" % "jts" 	% "1.14",
+  "com.vividsolutions" % "jts-core" % "1.14.0",
   "org.locationtech.spatial4j" % "spatial4j" % "0.6",
   "org.noggit" % "noggit" % "0.7",
-  "com.vividsolutions" % "jts-core" % "1.14.0",
 
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,
   "com.google.http-client" % "google-http-client" % googleVersion,
   "com.google.http-client" % "google-http-client-jackson2" % googleVersion,
   "com.google.api-client" % "google-api-client" % googleVersion,
+
+  "com.google.cloud" % "google-cloud" % "0.8.0",
 
   "com.typesafe.akka" %% "akka-http-core" % akkaVersion,
   "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,

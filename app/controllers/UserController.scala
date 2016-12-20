@@ -63,21 +63,20 @@ case class RegisterJs(email: String,
 
 /**
   *
-  * @param config
-  * @param cacheApi
+  * @param configuration
+  * @param cache
   * @param emailService
+  * @param userDAO
+  * @param passwordHashing
   */
 @Singleton
-class UserController @Inject()(config: Configuration,
-                               cacheApi: CacheApi,
+class UserController @Inject()(override val configuration: Configuration,
+                               override val cache: CacheApi,
                                emailService: EmailService,
                                userDAO: UserDAO,
                                override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-  //TODO SR why not as VAL in parameters? Like passwordHashing?
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
 
   /**
     * self registering for user accounts

@@ -85,4 +85,56 @@ trait Security { self: Controller =>
       } getOrElse Unauthorized(Json.obj("status" -> "ERR", "message" -> "No Token"))
     }
   }
+
+  /**
+    * Checks IF the token is:
+    * - present in the cookie header of the request,
+    * - either in the header or in the query string,
+    * - matches a token already stored in the play cache
+    * - WILL ALLOW also not auth authenticated ANONYMOUS user too
+    *
+    * @param p
+    * @param f
+    * @tparam A
+    * @return
+    */
+  def HasOptionalToken[A](p: BodyParser[A] = parse.anyContent)(
+    f: Option[String] => Request[A] => Result): Action[A] =
+    Action(p) { implicit request =>
+
+      request.cookies.get(AuthTokenCookieKey).fold {
+        // Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie"))
+        Logger.trace(s"optional cookie: Invalid XSRF-Token cookie")
+        f(None)(request)
+      } { xsrfTokenCookie =>
+        Logger.trace(s"cookie ${xsrfTokenCookie.value}")
+        val maybeToken = request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey))
+
+        maybeToken flatMap { token =>
+          // ua needed to differentiate between different devices/sessions
+          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+          Logger.trace(s"token: $token")
+          Logger.trace(s"ua: $uaIdentifier")
+          // cache token -> maps to a String username
+          cache.get[String](token) map { username =>
+            // lazy val passwordHashing = new PasswordHashing(configuration)
+            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, username, uaIdentifier)
+            Logger.trace(s"testcookie: $cookieForUSerAndDevice")
+            if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
+              Logger.trace(s"request for active session: $username / $token / $uaIdentifier")
+              f(Some(username))(request)
+            } else {
+              // Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
+              Logger.trace(s"optional cookie: Invalid Token")
+              f(None)(request)
+            }
+          }
+        } getOrElse {
+          // Unauthorized(Json.obj("status" -> "ERR", "message" -> "No Token"))
+          Logger.trace(s"optional cookie: No Token")
+          f(None)(request)
+        }
+
+      }
+    }
 }

@@ -49,6 +49,8 @@ class OwcDocumentDAO @Inject()(db: Database,
   private lazy val ctx = SpatialContext.GEO
   private lazy val wktReader = ctx.getFormats().getReader(ShapeIO.WKT)
 
+  logger.error("dao starting")
+
   /**
     * quick and dirty bbox from wkt stored in DB
     *

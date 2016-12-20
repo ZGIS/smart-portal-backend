@@ -36,6 +36,8 @@ import utils.{ClassnameLogger, PasswordHashing}
 @Singleton
 class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
 
+  logger.error("dao starting")
+
   /**
     * Parse a User from a ResultSet
     *

@@ -46,6 +46,8 @@ class HomeController @Inject()(config: Configuration,
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
 
+  logger.error("controller starting")
+
   /**
     * CORS needs preflight OPTION
     *

@@ -63,20 +63,24 @@ case class RegisterJs(email: String,
 
 /**
   *
-  * @param configuration
-  * @param cache
+  * @param config
+  * @param cacheApi
   * @param emailService
   * @param userDAO
   * @param passwordHashing
   */
 @Singleton
-class UserController @Inject()(override val configuration: Configuration,
-                               override val cache: CacheApi,
+class UserController @Inject()(config: Configuration,
+                               cacheApi: CacheApi,
                                emailService: EmailService,
                                userDAO: UserDAO,
                                override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
 
+  val cache: play.api.cache.CacheApi = cacheApi
+  val configuration: play.api.Configuration = config
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+
+  logger.error("controller starting")
 
   /**
     * self registering for user accounts

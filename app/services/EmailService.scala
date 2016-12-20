@@ -39,6 +39,8 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
   lazy val sg = new SendGrid(apikey)
 
+  logger.error("service starting")
+
   /**
     * send a Registration Email with a pre-generated unique link to confirm your account
     *

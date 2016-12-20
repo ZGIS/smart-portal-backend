@@ -39,6 +39,8 @@ import utils.ClassnameLogger
 @Singleton
 class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
 
+  logger.error("dao starting")
+
   /** *********
     * OwcOperation
     * **********/

@@ -34,4 +34,6 @@ object GAuthConfig {
 @Singleton
 class GoogleServicesDAO extends ClassnameLogger with WithConfigGoogleCredentials {
 
+  logger.error("service starting")
+
 }

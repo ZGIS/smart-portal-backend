@@ -39,6 +39,8 @@ import java.util.UUID
 @Singleton
 class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
 
+  logger.error("dao starting")
+
   /** *********
     * OwcAuthor
     * **********/

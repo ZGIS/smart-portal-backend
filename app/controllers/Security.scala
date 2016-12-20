@@ -98,7 +98,7 @@ trait Security { self: Controller =>
     * @tparam A
     * @return
     */
-  def HasOptionalToken[A](p: BodyParser[A] = parse.anyContent)(
+  /*def HasOptionalToken[A](p: BodyParser[A] = parse.anyContent)(
     f: Option[String] => Request[A] => Result): Action[A] =
     Action(p) { implicit request =>
 
@@ -136,5 +136,5 @@ trait Security { self: Controller =>
         }
 
       }
-    }
+    }*/
 }

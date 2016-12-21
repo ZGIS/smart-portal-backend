@@ -27,15 +27,15 @@ import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, Json}
 import play.api.mvc.Controller
-import services.{EmailService}
+import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class CollectionsController @Inject()(config: Configuration,
                                       cacheApi: CacheApi,
                                       emailService: EmailService,
-//                                      collectionsService: OwcCollectionsService,
-                                      override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
+                                      collectionsService: OwcCollectionsService,
+                                      override val passwordHashing: PasswordHashing) extends Controller with Security with ClassnameLogger {
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
@@ -48,13 +48,11 @@ class CollectionsController @Inject()(config: Configuration,
     * @param id
     * @return
     */
-  def getCollections(id: Option[String]) = HasToken(parse.empty) {
-    token =>
-      authUser =>
+  def getCollections(id: Option[String]) = HasOptionalToken(parse.empty) {
+    authUserOption =>
         implicit request =>
-//        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map( doc => doc.toJson)
-        //Ok(Json.obj("status" -> "OK", "count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
-      Ok("ok")
+        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map( doc => doc.toJson)
+        Ok(Json.obj("status" -> "OK", "count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
 
   }
 
@@ -72,7 +70,7 @@ class CollectionsController @Inject()(config: Configuration,
               BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
             },
             owcDocument => {
-//              val inserted = collectionsService.insertCollection(owcDocument, authUser)
+              val inserted = collectionsService.insertCollection(owcDocument, authUser)
               Ok(Json.obj("status" -> "OK", "message" -> "owcDocument inserted"))
             }
           )

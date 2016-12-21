@@ -13,8 +13,10 @@ import play.api.test.Helpers._
 class IntegrationSpec extends PlaySpec with OneServerPerTest with BeforeAndAfter with WithTestDatabase with OneBrowserPerTest with HtmlUnitFactory {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build()
+  implicit override def newAppForTest(testData: TestData): Application =
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build(
+
+      )
 
   "Application" should {
 

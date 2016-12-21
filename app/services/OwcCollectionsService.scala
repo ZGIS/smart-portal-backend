@@ -23,16 +23,7 @@ import javax.inject._
 
 import models.owc.{OwcDocument, OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
-import play.api.libs.json.{JsArray, Json}
 import utils.ClassnameLogger
-import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
-import models.users._
-import play.api.Configuration
-import play.api.cache.CacheApi
-import play.api.libs.json.{JsArray, Json}
-import play.api.mvc.Controller
-import services.{EmailService, OwcCollectionsService}
-import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class OwcCollectionsService @Inject()(userDAO: UserDAO,

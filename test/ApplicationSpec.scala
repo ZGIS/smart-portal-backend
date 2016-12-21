@@ -73,7 +73,7 @@ trait WithTestDatabase extends ClassnameLogger {
   * You can mock out a whole application including requests, plugins etc.
   * For more information, consult the wiki.
   */
-class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase  {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
@@ -131,7 +131,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
     }
 
     // TODO AK enable Filters module in test guice builder
-    @Ignore def `test: return preflight option headers`: Unit = {
+    "return preflight option headers" ignore {
 
       val preflight1 = route(app, FakeRequest(OPTIONS, "/api/v1/discovery")).get
 

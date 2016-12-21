@@ -19,16 +19,12 @@
 
 package models.gmd
 
-import java.time.LocalDate
 import java.util.UUID
 
 import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import utils.ClassnameLogger
-import javax.inject.Inject
-
-import services.MetadataService
 
 import scala.xml.Node
 
@@ -51,7 +47,7 @@ trait Jsonable {
   def toJson(): JsValue
 }
 
-trait JsonableCompagnion[A] extends ClassnameLogger {
+trait JsonableCompanion[A] extends ClassnameLogger {
   /**
     * parse object from Json
     * @param json
@@ -89,7 +85,7 @@ case class MdMetadata(val fileIdentifier: String,
   }
 }
 
-object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
+object MdMetadata extends ClassnameLogger with JsonableCompanion[MdMetadata] {
 
   implicit val reads: Reads[MdMetadata] = (
     (JsPath \ "fileIdentifier").read[String](Reads.filterNot[String](ValidationError("String empty"))(_.trim().isEmpty))

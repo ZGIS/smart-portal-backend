@@ -37,19 +37,19 @@ import utils.PasswordHashing
 class Module extends AbstractModule {
 
   override def configure(): Unit = {
-    //utils and services
+    // utils and services
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[MetadataService]).asEagerSingleton()
     bind(classOf[OwcCollectionsService]).asEagerSingleton()
 
-    //DAOs
+    // DAOs
     bind(classOf[UserDAO]).asEagerSingleton()
     bind(classOf[OwcPropertiesDAO]).asEagerSingleton()
     bind(classOf[OwcOfferingDAO]).asEagerSingleton()
     bind(classOf[OwcDocumentDAO]).asEagerSingleton()
 
-    //compagnion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
+    // companion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
     bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)
     bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)
   }

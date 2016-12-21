@@ -27,7 +27,7 @@ import services.{MetadataService, ValidValuesReadsAdditions}
 import scala.xml.Node
 
 /**
-  * this trait is only needed for dependency injection of [[MetadataService]] into the compagnion object
+  * this trait is only needed for dependency injection of [[MetadataService]] into the companion object
   */
 trait MdMetadataExtentTrait extends ValidValuesReadsAdditions {
   /* empty */
@@ -56,7 +56,7 @@ case class MdMetadataExtent(val description: String,
   override def toXml(): Node = ???
 }
 
-object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompagnion[MdMetadataExtent] {
+object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompanion[MdMetadataExtent] {
   /**
     * metadataService will be injected. for this to work you need to add
     * `bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)`

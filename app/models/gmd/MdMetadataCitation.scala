@@ -30,7 +30,7 @@ import utils.ClassnameLogger
 import scala.xml.Node
 
 /**
-  * this trait is only needed for dependency injection of [[MetadataService]] into the compagnion object
+  * this trait is only needed for dependency injection of [[MetadataService]] into the companion object
   */
 trait MdMetadataCitationTrait extends ValidValuesReadsAdditions {
   /* empty */
@@ -51,7 +51,7 @@ case class MdMetadataCitation(val ciDate: LocalDate,
 }
 
 object MdMetadataCitation extends ClassnameLogger with MdMetadataCitationTrait with
-  JsonableCompagnion[MdMetadataCitation] {
+  JsonableCompanion[MdMetadataCitation] {
   /**
     * metadataService will be injected. for this to work you need to add
     * `bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)`

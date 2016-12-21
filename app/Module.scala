@@ -18,10 +18,10 @@
  */
 
 import com.google.inject.AbstractModule
-import models.gmd.{MdMetadataCitation, MdMetadataCitationTrait, MdMetadataExtent, MdMetadataExtentTrait}
+import models.gmd._
 import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
-import services.{EmailService, MetadataService}
+import services.{EmailService, MetadataService, OwcCollectionsService}
 import utils.PasswordHashing
 
 /**
@@ -37,19 +37,22 @@ import utils.PasswordHashing
 class Module extends AbstractModule {
 
   override def configure(): Unit = {
-    //utils and services
+    // utils and services
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[MetadataService]).asEagerSingleton()
+    bind(classOf[OwcCollectionsService]).asEagerSingleton()
 
-    //DAOs
+    // DAOs
     bind(classOf[UserDAO]).asEagerSingleton()
     bind(classOf[OwcPropertiesDAO]).asEagerSingleton()
     bind(classOf[OwcOfferingDAO]).asEagerSingleton()
     bind(classOf[OwcDocumentDAO]).asEagerSingleton()
 
-    //compagnion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
+    // companion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
     bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)
     bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)
+    bind(classOf[MdMetadataResponsiblePartyTrait]).toInstance(MdMetadataResponsibleParty)
+    bind(classOf[MdMetadataDistributionTrait]).toInstance(MdMetadataDistribution)
   }
 }

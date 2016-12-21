@@ -19,55 +19,69 @@
 
 package models.gmd
 
-import java.time.LocalDate
 import javax.inject.Inject
 
-import play.api.libs.functional.syntax._
+import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import services.{MetadataService, ValidValuesReadsAdditions}
-import utils.ClassnameLogger
 
 import scala.xml.Node
 
 /**
   * this trait is only needed for dependency injection of [[MetadataService]] into the companion object
   */
-trait MdMetadataCitationTrait extends ValidValuesReadsAdditions {
+trait MdMetadataDistributionTrait extends ValidValuesReadsAdditions {
   /* empty */
 }
 
 /**
-  *
-  * @param ciDate
-  * @param ciDateType
+  * Created by steffen on 21.12.16.
   */
-case class MdMetadataCitation(ciDate: LocalDate,
-                              ciDateType: String) extends Jsonable with Xmlable {
-  def toXml(): Node = ???
-
-  def toJson(): JsValue = {
+case class MdMetadataDistribution(useLimitation: String,
+                                  formatName: String,
+                                  formatVersion: String,
+                                  onlineResourceLinkage: String
+                                 ) extends Jsonable with Xmlable {
+  /**
+    * creates JsValue from this class
+    *
+    * @return JsValue
+    */
+  override def toJson(): JsValue = {
     Json.toJson(this)
   }
+
+
+  /**
+    * creates JsValue from this class
+    *
+    * @return JsValue
+    */
+  override def toXml(): Node = ???
 }
 
-object MdMetadataCitation extends ClassnameLogger with MdMetadataCitationTrait with
-  JsonableCompanion[MdMetadataCitation] {
+object MdMetadataDistribution extends MdMetadataDistributionTrait with
+  JsonableCompanion[MdMetadataDistribution] {
   /**
     * metadataService will be injected. for this to work you need to add
-    * `bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)`
+    * `bind(classOf[MdMetadataDistributionTrait]).toInstance(MdMetadataDistribution)`
     * to your implementation of `com.google.inject.AbstractModule.configure()`
     */
-  @Inject() var metadataService: MetadataService = null
+  @Inject() override var metadataService: MetadataService = null
 
-  implicit val reads: Reads[MdMetadataCitation] = (
-    (JsPath \ "ciDate").read[LocalDate] and
-      (JsPath \ "ciDateType").read[String](validValue("ciDateType"))
-    ) (MdMetadataCitation.apply _)
+  override implicit val reads: Reads[MdMetadataDistribution] = (
+    (JsPath \ "useLimitation").read[String](validValue("useLimitation")) and
+      (JsPath \ "formatName").read[String] and
+      (JsPath \ "formatVersion").read[String](validValue("formatVersion")) and
+      (JsPath \ "onlineResourceLinkage").read[String]
+    ) (MdMetadataDistribution.apply _)
 
-  implicit val writes: Writes[MdMetadataCitation] = (
-    (JsPath \ "ciDate").write[LocalDate] and
-      (JsPath \ "ciDateType").write[String]
-    ) (unlift(MdMetadataCitation.unapply))
+  override implicit val writes: Writes[MdMetadataDistribution] = (
+    (JsPath \ "useLimitation").write[String] and
+      (JsPath \ "formatName").write[String] and
+      (JsPath \ "formatVersion").write[String] and
+      (JsPath \ "onlineResourceLinkage").write[String]
+    ) (unlift(MdMetadataDistribution.unapply))
 
   /**
     * parse object from Json
@@ -75,9 +89,9 @@ object MdMetadataCitation extends ClassnameLogger with MdMetadataCitationTrait w
     * @param json
     * @return Option if parsing error
     */
-  override def fromJson(json: JsValue): Option[MdMetadataCitation] = {
-    Json.fromJson[MdMetadataCitation](json) match {
-      case JsSuccess(r: MdMetadataCitation, path: JsPath) => Some(r)
+  override def fromJson(json: JsValue): Option[MdMetadataDistribution] = {
+    Json.fromJson[MdMetadataDistribution](json) match {
+      case JsSuccess(r: MdMetadataDistribution, path: JsPath) => Some(r)
       case e: JsError => {
         val lines = e.errors.map { tupleAction =>
           val jsPath = tupleAction._1

@@ -30,17 +30,20 @@ import scala.xml.Node
 /**
   * this trait is only needed for dependency injection of [[MetadataService]] into the companion object
   */
-trait MdMetadataExtentTrait extends ValidValuesReadsAdditions {
+trait MdMetadataResponsiblePartyTrait extends ValidValuesReadsAdditions {
   /* empty */
 }
 
 /**
   * Created by steffen on 21.12.16.
   */
-case class MdMetadataExtent(val description: String,
-                            val referenceSystem: String,
-                            val mapExtentCoordinates: List[Double],
-                            val temporalExtent: String) extends Jsonable with Xmlable {
+case class MdMetadataResponsibleParty(individualName: String,
+                                      telephone: String,
+                                      email: String,
+                                      pointOfContact: String,
+                                      orgName: String,
+                                      orgWebLinkage: String
+                                     ) extends Jsonable with Xmlable {
   /**
     * creates JsValue from this class
     *
@@ -59,28 +62,32 @@ case class MdMetadataExtent(val description: String,
   override def toXml(): Node = ???
 }
 
-object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompanion[MdMetadataExtent] {
+object MdMetadataResponsibleParty extends MdMetadataResponsiblePartyTrait with
+  JsonableCompanion[MdMetadataResponsibleParty] {
   /**
     * metadataService will be injected. for this to work you need to add
-    * `bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)`
+    * `bind(classOf[MdMetadataResponsiblePartyTrait]).toInstance(MdMetadataResponsibleParty)`
     * to your implementation of `com.google.inject.AbstractModule.configure()`
     */
   @Inject() override var metadataService: MetadataService = null
 
-  override implicit val reads: Reads[MdMetadataExtent] = (
-    (JsPath \ "description").read[String] and
-      (JsPath \ "referenceSystem").read[String](validValue("referenceSystem")) and
-      (JsPath \ "mapExtentCoordinates").read[List[Double]](
-        Reads.minLength[List[Double]](4) keepAnd Reads.maxLength[List[Double]](4)) and
-      (JsPath \ "temporalExtent").read[String]
-    ) (MdMetadataExtent.apply _)
+  override implicit val reads: Reads[MdMetadataResponsibleParty] = (
+    (JsPath \ "individualName").read[String] and
+      (JsPath \ "telephone").read[String] and
+      (JsPath \ "email").read[String](Reads.email) and
+      (JsPath \ "pointOfContact").read[String](validValue("pointOfContact")) and
+      (JsPath \ "orgName").read[String] and
+      (JsPath \ "orgWebLinkage").read[String]
+    ) (MdMetadataResponsibleParty.apply _)
 
-  override implicit val writes: Writes[MdMetadataExtent] = (
-    (JsPath \ "description").write[String] and
-      (JsPath \ "referenceSystem").write[String] and
-      (JsPath \ "mapExtentCoordinates").write[List[Double]] and
-      (JsPath \ "temporalExtent").write[String]
-    ) (unlift(MdMetadataExtent.unapply))
+  override implicit val writes: Writes[MdMetadataResponsibleParty] = (
+    (JsPath \ "individualName").write[String] and
+      (JsPath \ "telephone").write[String] and
+      (JsPath \ "email").write[String] and
+      (JsPath \ "pointOfContact").write[String] and
+      (JsPath \ "orgName").write[String] and
+      (JsPath \ "orgWebLinkage").write[String]
+    ) (unlift(MdMetadataResponsibleParty.unapply))
 
   /**
     * parse object from Json
@@ -88,9 +95,9 @@ object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompanion[MdM
     * @param json
     * @return Option if parsing error
     */
-  override def fromJson(json: JsValue): Option[MdMetadataExtent] = {
-    Json.fromJson[MdMetadataExtent](json) match {
-      case JsSuccess(r: MdMetadataExtent, path: JsPath) => Some(r)
+  override def fromJson(json: JsValue): Option[MdMetadataResponsibleParty] = {
+    Json.fromJson[MdMetadataResponsibleParty](json) match {
+      case JsSuccess(r: MdMetadataResponsibleParty, path: JsPath) => Some(r)
       case e: JsError => {
         val lines = e.errors.map { tupleAction =>
           val jsPath = tupleAction._1

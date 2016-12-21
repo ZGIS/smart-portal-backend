@@ -47,10 +47,10 @@ trait Jsonable {
   def toJson(): JsValue
 }
 
-trait JsonableCompagnion[A] extends ClassnameLogger {
-  implicit val reads: Reads[A]
-  implicit val writes: Writes[A]
-  implicit val format: Format[A] = Format(reads, writes)
+trait JsonableCompanion[A] extends ClassnameLogger {
+  val reads: Reads[A]
+  val writes: Writes[A]
+  val format: Format[A] = Format(reads, writes)
 
   /**
     * parse object from Json
@@ -72,16 +72,18 @@ trait JsonableCompagnion[A] extends ClassnameLogger {
   * @param scale
   * @param lineageStatement
   */
-case class MdMetadata(val fileIdentifier: String,
-                      val title: String,
-                      val abstrakt: String,
-                      val keywords: List[String],
-                      val topicCategoryCode: String,
-                      val hierarchyLevelName: String,
-                      val scale: String,
-                      val extent: MdMetadataExtent,
-                      val citation: MdMetadataCitation,
-                      val lineageStatement: String
+case class MdMetadata(fileIdentifier: String,
+                      title: String,
+                      abstrakt: String,
+                      keywords: List[String],
+                      topicCategoryCode: String,
+                      hierarchyLevelName: String,
+                      scale: String,
+                      extent: MdMetadataExtent,
+                      citation: MdMetadataCitation,
+                      lineageStatement: String,
+                      responsibleParty: MdMetadataResponsibleParty,
+                      distribution: MdMetadataDistribution
                      ) extends Jsonable with Xmlable {
 
   def toXml(): Node = ???
@@ -91,10 +93,10 @@ case class MdMetadata(val fileIdentifier: String,
   }
 }
 
-object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
+object MdMetadata extends ClassnameLogger with JsonableCompanion[MdMetadata] {
+
   override implicit val reads: Reads[MdMetadata] = (
-    (JsPath \ "fileIdentifier").read[String](
-      Reads.filterNot[String](ValidationError("fileIdentifier-String empty"))(_.trim().isEmpty))
+    (JsPath \ "fileIdentifier").read[String](Reads.filterNot[String](ValidationError("String empty"))(_.trim().isEmpty))
       or Reads.pure(UUID.randomUUID().toString)
       and
       (JsPath \ "title").read[String] and
@@ -105,10 +107,12 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
       (JsPath \ "scale").read[String] and
       (JsPath \ "extent").read[MdMetadataExtent] and
       (JsPath \ "citation").read[MdMetadataCitation] and
-      (JsPath \ "lineageStatement").read[String]
+      (JsPath \ "lineageStatement").read[String] and
+      (JsPath \ "responsibleParty").read[MdMetadataResponsibleParty] and
+      (JsPath \ "distribution").read[MdMetadataDistribution]
     ) (MdMetadata.apply _)
 
-  implicit val writes: Writes[MdMetadata] = (
+  override implicit val writes: Writes[MdMetadata] = (
     (JsPath \ "fileIdentifier").write[String] and
       (JsPath \ "title").write[String] and
       (JsPath \ "abstrakt").write[String] and
@@ -118,7 +122,9 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
       (JsPath \ "scale").write[String] and
       (JsPath \ "extent").write[MdMetadataExtent] and
       (JsPath \ "citation").write[MdMetadataCitation] and
-      (JsPath \ "lineageStatement").write[String]
+      (JsPath \ "lineageStatement").write[String] and
+      (JsPath \ "responsibleParty").write[MdMetadataResponsibleParty] and
+      (JsPath \ "distribution").write[MdMetadataDistribution]
     ) (unlift(MdMetadata.unapply))
 
   def fromJson(json: JsValue): Option[MdMetadata] = {
@@ -138,5 +144,4 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
   }
 
   def fromXml(node: Node): MdMetadata = ???
-
 }

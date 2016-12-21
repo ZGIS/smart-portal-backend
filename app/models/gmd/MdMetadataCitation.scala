@@ -20,42 +20,53 @@
 package models.gmd
 
 import java.time.LocalDate
-import java.util.UUID
+import javax.inject.Inject
 
-import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
+import services.{MetadataService, ValidValuesReadsAdditions}
 import utils.ClassnameLogger
 
 import scala.xml.Node
 
 /**
+  * this trait is only needed for dependency injection of [[MetadataService]] into the compagnion object
+  */
+trait MdMetadataCitationTrait extends ValidValuesReadsAdditions {
+  /* empty */
+}
+
+/**
   *
   * @param ciDate
-  * @param ciType
+  * @param ciDateType
   */
 case class MdMetadataCitation(val ciDate: LocalDate,
-                              val ciType: String) {
+                              val ciDateType: String) extends Jsonable with Xmlable  {
   def toXml(): Node = ???
 
-  /**
-    * creates JsValue from this class
-    * @return JsValue
-    */
   def toJson(): JsValue = {
     Json.toJson(this)
   }
 }
 
-object MdMetadataCitation extends ClassnameLogger with JsonableCompagnion[MdMetadataCitation] {
+object MdMetadataCitation extends ClassnameLogger with MdMetadataCitationTrait with
+  JsonableCompagnion[MdMetadataCitation] {
+  /**
+    * metadataService will be injected. for this to work you need to add
+    * `bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)`
+    * to your implementation of `com.google.inject.AbstractModule.configure()`
+    */
+  @Inject() var metadataService: MetadataService = null
+
   implicit val reads: Reads[MdMetadataCitation] = (
     (JsPath \ "ciDate").read[LocalDate] and
-      (JsPath \ "ciType").read[String]
+      (JsPath \ "ciDateType").read[String](validValue("ciDateType"))
     ) (MdMetadataCitation.apply _)
 
   implicit val writes: Writes[MdMetadataCitation] = (
     (JsPath \ "ciDate").write[LocalDate] and
-      (JsPath \ "ciType").write[String]
+      (JsPath \ "ciDateType").write[String]
     ) (unlift(MdMetadataCitation.unapply))
 
   implicit val format: Format[MdMetadataCitation] =
@@ -76,7 +87,6 @@ object MdMetadataCitation extends ClassnameLogger with JsonableCompagnion[MdMeta
           val valErrors = tupleAction._2.map(valErr => valErr.message).toList.mkString(" ; ")
           jsPath.toJsonString + " >> " + valErrors
         }
-
         logger.error(s"JsError info  ${lines.mkString(" | ")}")
         None
       }

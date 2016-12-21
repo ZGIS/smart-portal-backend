@@ -26,8 +26,21 @@ import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import utils.ClassnameLogger
+import javax.inject.Inject
+
+import services.MetadataService
 
 import scala.xml.Node
+
+
+trait Xmlable {
+  /**
+    * creates JsValue from this class
+    *
+    * @return JsValue
+    */
+  def toXml(): Node
+}
 
 trait Jsonable {
   /**
@@ -67,7 +80,7 @@ case class MdMetadata(val fileIdentifier: String,
                       val scale: String,
                       val citation: MdMetadataCitation,
                       val lineageStatement: String
-                     ) extends Jsonable {
+                     ) extends Jsonable with Xmlable {
 
   def toXml(): Node = ???
 
@@ -77,6 +90,7 @@ case class MdMetadata(val fileIdentifier: String,
 }
 
 object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
+
   implicit val reads: Reads[MdMetadata] = (
     (JsPath \ "fileIdentifier").read[String](Reads.filterNot[String](ValidationError("String empty"))(_.trim().isEmpty))
       or Reads.pure(UUID.randomUUID().toString)

@@ -34,7 +34,8 @@ import play.api.libs.json._
   * @param descriptions  optional list of descriptions
   */
 
-// TODO SR For more complicated things (like valid BBOXes or so) value needs to become an object See https://github.com/angular/angular/issues/4843#issuecomment-206583992
+// TODO SR For more complicated things (like valid BBOXes or so) value needs to become an
+// object See https://github.com/angular/angular/issues/4843#issuecomment-206583992
 class ValidValues(
                    val standardValue: Int,
                    val values: List[String],

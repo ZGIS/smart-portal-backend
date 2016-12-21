@@ -22,12 +22,12 @@ package controllers
 import java.util
 import javax.inject.{Inject, Provider}
 
-import models.metadata.{ValidValues}
-import play.api.{Application, Configuration, Play}
 import play.api.cache.CacheApi
-import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.libs.json._
-import play.api.mvc.{Action, AnyContent, Controller, Result}
+import play.api.libs.ws.{WSClient, WSResponse}
+import play.api.mvc.{Action, AnyContent, Controller}
+import play.api.{Application, Configuration}
+import services.MetadataService
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -57,7 +57,8 @@ class CswController @Inject()(val configuration: Configuration,
                               val passwordHashing: PasswordHashing,
                               wsClient: WSClient,
                               implicit val context: ExecutionContext,
-                              appProvider: Provider[Application]
+                              appProvider: Provider[Application],
+                              metadataService: MetadataService
                              )
   extends Controller with ClassnameLogger with Security {
 
@@ -66,9 +67,6 @@ class CswController @Inject()(val configuration: Configuration,
   lazy val cswtInsertResource = app.resource("csw/transaction.insert.xml").get
   lazy val cswtInsertXml = scala.xml.XML.load(cswtInsertResource)
   lazy val mdMetadata = scala.xml.XML.load(app.resource("csw/MD_Metadata.test.xml").get)
-
-  lazy val metadataValidValues: Option[util.List[Configuration]] = configuration.getConfigList(
-    "smart.metadata.validValues")
 
   val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
   val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
@@ -81,19 +79,14 @@ class CswController @Inject()(val configuration: Configuration,
     * @return
     */
   def getValidValuesFor(topic: String): Action[AnyContent] = Action { request =>
-    import scala.collection.JavaConversions._
-
     logger.debug(s"returning valid values for '${topic}'")
-    val configurations = metadataValidValues.get
-    val validValuesConf = configurations.filter(conf => conf.getString("for").getOrElse("").equals(topic))
-    if (validValuesConf.isEmpty()) {
+    val validValuesOption = metadataService.getValidValuesFor(topic)
+    if (validValuesOption.isEmpty) {
       //TODO SR should we have a generic error return object that we return as JSON?
       BadRequest(s"There are not valid values for '${topic}'")
     }
     else {
-      val conf = validValuesConf.head
-      val result = ValidValues.parseConfiguration(validValuesConf.head)
-      Ok(Json.toJson(result))
+      Ok(Json.toJson(validValuesOption.get))
     }
   }
 
@@ -121,7 +114,7 @@ class CswController @Inject()(val configuration: Configuration,
         //insert MDMEtadata in insert template
         val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata))
         val finalXML = rule.transform(cswtInsertXml)
-        logger.error(finalXML.toString())
+        logger.debug(s"finalXml: ${finalXML.toString()}")
         wsClient.url(CSW_URL).post(finalXML.toString())
       }
     } yield insertResponse

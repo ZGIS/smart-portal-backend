@@ -1,10 +1,3 @@
-import java.util.UUID
-
-import org.scalatestplus.play.PlaySpec
-import play.api.libs.json.{JsValue, Json}
-import models.gmd.MdMetadata
-import org.scalatest.GivenWhenThen
-
 /*
  * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
@@ -24,10 +17,28 @@ import org.scalatest.GivenWhenThen
  * limitations under the License.
  */
 
+import java.time.LocalDate
+import java.util.UUID
+
+import com.typesafe.config.ConfigFactory
+import models.gmd.{MdMetadata, MdMetadataCitation}
+import org.scalatest.GivenWhenThen
+import org.scalatestplus.play.{OneAppPerSuite, PlaySpec}
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.libs.json.{JsValue, Json}
+import play.api.{Application, Configuration}
+
+
 /**
-  * Created by steffen on 12.12.16.
+  *
   */
-class MdMetadataSpec extends PlaySpec with GivenWhenThen {
+class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
+
+  /**
+    * custom application config for testing
+    */
+  override lazy val app: Application = new
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build()
 
   /**
     * parses a resource into MdMetadata Option
@@ -37,11 +48,12 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen {
     */
   def parsedResource(name: String): Option[MdMetadata] = {
     val mdMetadataJsVal = parsedResourceAsJsValue(name)
-      MdMetadata.fromJson(mdMetadataJsVal)
+    MdMetadata.fromJson(mdMetadataJsVal)
   }
 
   /**
     * parses a resource into JsValue
+    *
     * @param name name of the resource to parse
     * @return JsValue
     */
@@ -53,29 +65,41 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen {
 
   "MdMetadataExtent" should {
     "parse correctly" in (pending)
-  /*
-          "extent": {
-            "description": "World",
-            "referenceSystem": "urn:ogc:def:crs:EPSG::4328",
-            "mapExtentCoordinates": [
-            160.7447453125,
-            -44.0115859375,
-            188.7818546875,
-            -29.6854140625
-            ],
-            "temporalExtent": ""
-          },
-  */
+    /*
+            "extent": {
+              "description": "World",
+              "referenceSystem": "urn:ogc:def:crs:EPSG::4328",
+              "mapExtentCoordinates": [
+              160.7447453125,
+              -44.0115859375,
+              188.7818546875,
+              -29.6854140625
+              ],
+              "temporalExtent": ""
+            },
+    */
   }
 
-  "MdMetadataCitation" should {
-    "parse correctly" in (pending)
-    /*
-    "citation": {
-      "ciDate": "2016-01-01",
-      "ciDateType": "publication"
-    },
-    */
+  "MdMetadataCitation" when {
+    "valid Json is parsed" in {
+      val mdMetadataCitation = MdMetadataCitation.fromJson(
+        (parsedResourceAsJsValue("gmd/MdMetadataFull.json") \ "citation").get)
+      Then("result should be defined")
+      mdMetadataCitation mustBe defined
+
+      And("ciDate must contain correct value")
+      mdMetadataCitation.get.ciDate mustBe LocalDate.of(2016, 1, 1)
+
+      And("ciDateType must contain correct value")
+      mdMetadataCitation.get.ciDateType mustBe "publication"
+    }
+
+    "invalid ciDateType is parsed" in {
+      val mdMetadataCitation = MdMetadataCitation.fromJson(
+        parsedResourceAsJsValue("gmd/MdMetadataCitationInvalidType.json"))
+      Then("result must be NONE")
+      mdMetadataCitation mustBe None
+    }
   }
 
   "MdMetadataResponsibleParty" should {
@@ -134,8 +158,10 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen {
 
         And("Extend must be defined")
         //        mdMetadata.get.extent mustBe defined
+
         And("Citation must be defined")
-        //        mdMetadata.get.citation mustBe defined
+        mdMetadata.get.citation.isInstanceOf[MdMetadataCitation] mustBe true
+
         And("lineageStatement must be filled correctly")
         mdMetadata.get.lineageStatement mustBe ""
 

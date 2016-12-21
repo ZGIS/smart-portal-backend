@@ -104,7 +104,7 @@ trait Security { self: Controller =>
 
       request.cookies.get(AuthTokenCookieKey).fold {
         // Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie"))
-        Logger.trace(s"optional cookie: Invalid XSRF-Token cookie")
+        Logger.trace("optional cookie: Invalid XSRF-Token cookie")
         f(None)(request)
       } { xsrfTokenCookie =>
         Logger.trace(s"cookie ${xsrfTokenCookie.value}")
@@ -125,13 +125,13 @@ trait Security { self: Controller =>
               f(Some(username))(request)
             } else {
               // Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
-              Logger.trace(s"optional cookie: Invalid Token")
+              Logger.trace("optional cookie: Invalid Token")
               f(None)(request)
             }
           }
         } getOrElse {
           // Unauthorized(Json.obj("status" -> "ERR", "message" -> "No Token"))
-          Logger.trace(s"optional cookie: No Token")
+          Logger.trace("optional cookie: No Token")
           f(None)(request)
         }
 

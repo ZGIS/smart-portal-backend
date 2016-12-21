@@ -45,82 +45,101 @@
 </span>21 <span style=''>
 </span>22 <span style=''>import javax.inject._
 </span>23 <span style=''>
-</span>24 <span style=''>import models.owc.{OwcDocument, OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
-</span>25 <span style=''>import models.users._
-</span>26 <span style=''>import play.api.Configuration
-</span>27 <span style=''>import play.api.cache.CacheApi
-</span>28 <span style=''>import play.api.libs.json.{JsArray, JsError, Json}
-</span>29 <span style=''>import play.api.mvc.Controller
-</span>30 <span style=''>import services.{EmailService, OwcCollectionsService}
-</span>31 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
-</span>32 <span style=''>
-</span>33 <span style=''>@Singleton
-</span>34 <span style=''>class CollectionsController @Inject()(config: Configuration,
-</span>35 <span style=''>                                      cacheApi: CacheApi,
-</span>36 <span style=''>                                      emailService: EmailService,
-</span>37 <span style=''>                                      collectionsService: OwcCollectionsService,
-</span>38 <span style=''>                                      override val passwordHashing: PasswordHashing) extends Controller with Security with ClassnameLogger {
-</span>39 <span style=''>
+</span>24 <span style=''>import models.owc.OwcDocument
+</span>25 <span style=''>import play.api.Configuration
+</span>26 <span style=''>import play.api.cache.CacheApi
+</span>27 <span style=''>import play.api.libs.json.{JsArray, JsError, Json}
+</span>28 <span style=''>import play.api.mvc.Controller
+</span>29 <span style=''>import services.{EmailService, OwcCollectionsService}
+</span>30 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>31 <span style=''>
+</span>32 <span style=''>@Singleton
+</span>33 <span style=''>class CollectionsController @Inject()(config: Configuration,
+</span>34 <span style=''>                                      cacheApi: CacheApi,
+</span>35 <span style=''>                                      emailService: EmailService,
+</span>36 <span style=''>                                      collectionsService: OwcCollectionsService,
+</span>37 <span style=''>                                      override val passwordHashing: PasswordHashing) extends Controller with Security with ClassnameLogger {
+</span>38 <span style=''>
+</span>39 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")</span><span style=''>
 </span>40 <span style=''>  val cache: play.api.cache.CacheApi = </span><span style='background: #AEF1AE'>cacheApi</span><span style=''>
 </span>41 <span style=''>  val configuration: play.api.Configuration = </span><span style='background: #AEF1AE'>config</span><span style=''>
-</span>42 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")</span><span style=''>
-</span>43 <span style=''>
-</span>44 <span style=''>  /**
-</span>45 <span style=''>    *
-</span>46 <span style=''>    * @param id
-</span>47 <span style=''>    * @return
-</span>48 <span style=''>    */
-</span>49 <span style=''>  def getCollections(id: Option[String]) = </span><span style='background: #F0ADAD'>HasOptionalToken(parse.empty) {
-</span>50 <span style=''></span><span style='background: #F0ADAD'>    authUserOption =>
-</span>51 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
-</span>52 <span style=''></span><span style='background: #F0ADAD'>        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map( doc => doc.toJson)
-</span>53 <span style=''></span><span style='background: #F0ADAD'>        Ok(Json.obj("status" -> "OK", "count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
-</span>54 <span style=''></span><span style='background: #F0ADAD'>
-</span>55 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>56 <span style=''>
-</span>57 <span style=''>  /**
-</span>58 <span style=''>    *
-</span>59 <span style=''>    * @return
-</span>60 <span style=''>    */
-</span>61 <span style=''>  def insertCollection = </span><span style='background: #F0ADAD'>HasToken(parse.json) {
-</span>62 <span style=''></span><span style='background: #F0ADAD'>    token =>
-</span>63 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
-</span>64 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
-</span>65 <span style=''></span><span style='background: #F0ADAD'>          request.body.validate[OwcDocument]fold(
-</span>66 <span style=''></span><span style='background: #F0ADAD'>            errors => {
-</span>67 <span style=''></span><span style='background: #F0ADAD'>              logger.error(JsError.toJson(errors).toString())
-</span>68 <span style=''></span><span style='background: #F0ADAD'>              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
-</span>69 <span style=''></span><span style='background: #F0ADAD'>            },
-</span>70 <span style=''></span><span style='background: #F0ADAD'>            owcDocument => {
-</span>71 <span style=''></span><span style='background: #F0ADAD'>              val inserted = collectionsService.insertCollection(owcDocument, authUser)
-</span>72 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj("status" -> "OK", "message" -> "owcDocument inserted"))
-</span>73 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>74 <span style=''></span><span style='background: #F0ADAD'>          )
-</span>75 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>76 <span style=''>
-</span>77 <span style=''>  /**
-</span>78 <span style=''>    *
-</span>79 <span style=''>    * @return
-</span>80 <span style=''>    */
-</span>81 <span style=''>  def updateCollection = </span><span style='background: #F0ADAD'>HasToken(parse.json) {
-</span>82 <span style=''></span><span style='background: #F0ADAD'>    token =>
-</span>83 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
-</span>84 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
-</span>85 <span style=''></span><span style='background: #F0ADAD'>          NotImplemented("Not yet implemented")
-</span>86 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>87 <span style=''>
-</span>88 <span style=''>  /**
-</span>89 <span style=''>    *
-</span>90 <span style=''>    * @param id id of the OwcDoc
-</span>91 <span style=''>    * @return
-</span>92 <span style=''>    */
-</span>93 <span style=''>  def deleteCollection(id: String) = </span><span style='background: #F0ADAD'>HasToken(parse.empty) {
-</span>94 <span style=''></span><span style='background: #F0ADAD'>    token =>
-</span>95 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
-</span>96 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
-</span>97 <span style=''></span><span style='background: #F0ADAD'>          NotImplemented("Not yet implemented")
-</span>98 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>99 <span style=''>}
+</span>42 <span style=''>
+</span>43 <span style=''>  /**
+</span>44 <span style=''>    *
+</span>45 <span style=''>    * @param id
+</span>46 <span style=''>    * @return
+</span>47 <span style=''>    */
+</span>48 <span style=''>  def getCollections(id: Option[String]) = </span><span style='background: #F0ADAD'>HasOptionalToken(parse.empty) {
+</span>49 <span style=''></span><span style='background: #F0ADAD'>    authUserOption =>
+</span>50 <span style=''></span><span style='background: #F0ADAD'>      implicit request =>
+</span>51 <span style=''></span><span style='background: #F0ADAD'>        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map(doc => doc.toJson)
+</span>52 <span style=''></span><span style='background: #F0ADAD'>        Ok(Json.obj("status" -> "OK", "count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
+</span>53 <span style=''></span><span style='background: #F0ADAD'>
+</span>54 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>55 <span style=''>
+</span>56 <span style=''>  /**
+</span>57 <span style=''>    *
+</span>58 <span style=''>    * @return
+</span>59 <span style=''>    */
+</span>60 <span style=''>  def getPersonalDefaultCollection = </span><span style='background: #F0ADAD'>HasToken(parse.empty) {
+</span>61 <span style=''></span><span style='background: #F0ADAD'>    token =>
+</span>62 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
+</span>63 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
+</span>64 <span style=''></span><span style='background: #F0ADAD'>        val owcJsDocs = collectionsService.getUserDefaultOwcDocument(authUser).map(doc => doc.toJson)
+</span>65 <span style=''></span><span style='background: #F0ADAD'>        Ok(owcJsDocs.getOrElse(Json.obj("status" -> "ERR", "message" -> "Not found :-(")))
+</span>66 <span style=''></span><span style='background: #F0ADAD'>
+</span>67 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>68 <span style=''>
+</span>69 <span style=''>  /**
+</span>70 <span style=''>    *
+</span>71 <span style=''>    * @return
+</span>72 <span style=''>    */
+</span>73 <span style=''>  def insertCollection = </span><span style='background: #F0ADAD'>HasToken(parse.json) {
+</span>74 <span style=''></span><span style='background: #F0ADAD'>    token =>
+</span>75 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
+</span>76 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
+</span>77 <span style=''></span><span style='background: #F0ADAD'>          request.body.validate[OwcDocument] fold(
+</span>78 <span style=''></span><span style='background: #F0ADAD'>            errors => {
+</span>79 <span style=''></span><span style='background: #F0ADAD'>              logger.error(JsError.toJson(errors).toString())
+</span>80 <span style=''></span><span style='background: #F0ADAD'>              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+</span>81 <span style=''></span><span style='background: #F0ADAD'>            },
+</span>82 <span style=''></span><span style='background: #F0ADAD'>            owcDocument => {
+</span>83 <span style=''></span><span style='background: #F0ADAD'>              val inserted = collectionsService.insertCollection(owcDocument, authUser)
+</span>84 <span style=''></span><span style='background: #F0ADAD'>              inserted.fold {
+</span>85 <span style=''></span><span style='background: #F0ADAD'>                BadRequest(Json.obj("status" -> "ERR", "message" -> "database insert failed"))
+</span>86 <span style=''></span><span style='background: #F0ADAD'>              } {
+</span>87 <span style=''></span><span style='background: #F0ADAD'>                theDoc => {
+</span>88 <span style=''></span><span style='background: #F0ADAD'>                  Ok(Json.obj("status" -> "OK", "message" -> "owcDocument inserted", "document" -> theDoc.toJson))
+</span>89 <span style=''></span><span style='background: #F0ADAD'>                }
+</span>90 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>91 <span style=''></span><span style='background: #F0ADAD'>
+</span>92 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>93 <span style=''></span><span style='background: #F0ADAD'>          )
+</span>94 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>95 <span style=''>
+</span>96 <span style=''>  /**
+</span>97 <span style=''>    *
+</span>98 <span style=''>    * @return
+</span>99 <span style=''>    */
+</span>100 <span style=''>  def updateCollection = </span><span style='background: #F0ADAD'>HasToken(parse.json) {
+</span>101 <span style=''></span><span style='background: #F0ADAD'>    token =>
+</span>102 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
+</span>103 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
+</span>104 <span style=''></span><span style='background: #F0ADAD'>          NotImplemented("Not yet implemented")
+</span>105 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>106 <span style=''>
+</span>107 <span style=''>  /**
+</span>108 <span style=''>    *
+</span>109 <span style=''>    * @param id id of the OwcDoc
+</span>110 <span style=''>    * @return
+</span>111 <span style=''>    */
+</span>112 <span style=''>  def deleteCollection(id: String) = </span><span style='background: #F0ADAD'>HasToken(parse.empty) {
+</span>113 <span style=''></span><span style='background: #F0ADAD'>    token =>
+</span>114 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
+</span>115 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
+</span>116 <span style=''></span><span style='background: #F0ADAD'>          NotImplemented("Not yet implemented")
+</span>117 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>118 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -134,15 +153,36 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          40
+          39
         </td>
         <td>
           21
         </td>
         <td>
-          1730
+          1658
           -
-          1738
+          1732
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.configuration.getString(&quot;datetime.timezone&quot;, CollectionsController.this.configuration.getString$default$2).getOrElse[String](&quot;Pacific/Auckland&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          22
+        </td>
+        <td>
+          1772
+          -
+          1780
         </td>
         <td>
           Select
@@ -158,12 +198,12 @@
           41
         </td>
         <td>
-          22
+          23
         </td>
         <td>
-          1785
+          1827
           -
-          1791
+          1833
         </td>
         <td>
           Select
@@ -176,36 +216,15 @@
         </td>
       </tr><tr>
         <td>
-          42
-        </td>
-        <td>
-          23
-        </td>
-        <td>
-          1833
-          -
-          1907
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          CollectionsController.this.configuration.getString(&quot;datetime.timezone&quot;, CollectionsController.this.configuration.getString$default$2).getOrElse[String](&quot;Pacific/Auckland&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          49
+          48
         </td>
         <td>
           47
         </td>
         <td>
-          2001
+          1927
           -
-          2305
+          2228
         </td>
         <td>
           Apply
@@ -221,15 +240,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          48
         </td>
         <td>
           24
         </td>
         <td>
-          2018
+          1944
           -
-          2029
+          1955
         </td>
         <td>
           Select
@@ -242,15 +261,15 @@
         </td>
       </tr><tr>
         <td>
-          52
+          51
         </td>
         <td>
           26
         </td>
         <td>
-          2177
+          2101
           -
-          2177
+          2101
         </td>
         <td>
           TypeApply
@@ -263,15 +282,15 @@
         </td>
       </tr><tr>
         <td>
-          52
+          51
         </td>
         <td>
           25
         </td>
         <td>
-          2186
+          2109
           -
-          2196
+          2119
         </td>
         <td>
           Select
@@ -284,15 +303,15 @@
         </td>
       </tr><tr>
         <td>
-          52
+          51
         </td>
         <td>
           27
         </td>
         <td>
-          2107
+          2031
           -
-          2197
+          2120
         </td>
         <td>
           ApplyToImplicitArgs
@@ -305,15 +324,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           32
         </td>
         <td>
-          2218
+          2141
           -
-          2234
+          2157
         </td>
         <td>
           Apply
@@ -326,15 +345,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           41
         </td>
         <td>
-          2280
+          2203
           -
-          2298
+          2221
         </td>
         <td>
           ApplyToImplicitArgs
@@ -347,15 +366,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           35
         </td>
         <td>
-          2257
+          2180
           -
-          2257
+          2180
         </td>
         <td>
           Select
@@ -368,15 +387,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           44
         </td>
         <td>
-          2208
+          2131
           -
-          2208
+          2131
         </td>
         <td>
           Select
@@ -389,15 +408,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           29
         </td>
         <td>
-          2230
+          2153
           -
-          2234
+          2157
         </td>
         <td>
           Literal
@@ -410,15 +429,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           38
         </td>
         <td>
-          2263
+          2186
           -
-          2276
+          2199
         </td>
         <td>
           Literal
@@ -431,15 +450,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           46
         </td>
         <td>
-          2206
+          2129
           -
-          2300
+          2223
         </td>
         <td>
           ApplyToImplicitArgs
@@ -452,15 +471,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           40
         </td>
         <td>
-          2287
+          2210
           -
-          2287
+          2210
         </td>
         <td>
           Select
@@ -473,15 +492,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           31
         </td>
         <td>
-          2230
+          2153
           -
-          2234
+          2157
         </td>
         <td>
           ApplyToImplicitArgs
@@ -494,15 +513,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           43
         </td>
         <td>
-          2209
+          2132
           -
-          2299
+          2222
         </td>
         <td>
           Apply
@@ -515,15 +534,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           34
         </td>
         <td>
-          2247
+          2170
           -
-          2261
+          2184
         </td>
         <td>
           Select
@@ -536,15 +555,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           37
         </td>
         <td>
-          2236
+          2159
           -
-          2261
+          2184
         </td>
         <td>
           Apply
@@ -557,15 +576,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           28
         </td>
         <td>
-          2218
+          2141
           -
-          2226
+          2149
         </td>
         <td>
           Literal
@@ -578,15 +597,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           45
         </td>
         <td>
-          2208
+          2131
           -
-          2208
+          2131
         </td>
         <td>
           ApplyToImplicitArgs
@@ -599,15 +618,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           36
         </td>
         <td>
-          2247
+          2170
           -
-          2261
+          2184
         </td>
         <td>
           ApplyToImplicitArgs
@@ -620,15 +639,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           30
         </td>
         <td>
-          2230
+          2153
           -
-          2230
+          2153
         </td>
         <td>
           Select
@@ -641,15 +660,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           39
         </td>
         <td>
-          2280
+          2203
           -
-          2298
+          2221
         </td>
         <td>
           Apply
@@ -662,15 +681,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           42
         </td>
         <td>
-          2263
+          2186
           -
-          2298
+          2221
         </td>
         <td>
           Apply
@@ -683,15 +702,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          52
         </td>
         <td>
           33
         </td>
         <td>
-          2236
+          2159
           -
-          2243
+          2166
         </td>
         <td>
           Literal
@@ -704,15 +723,438 @@
         </td>
       </tr><tr>
         <td>
+          60
+        </td>
+        <td>
+          48
+        </td>
+        <td>
+          2309
+          -
+          2320
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          66
+        </td>
+        <td>
+          2300
+          -
+          2580
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.Security.HasToken
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.HasToken[Unit](CollectionsController.this.parse.empty)(((token: String) =&gt; ((authUser: String) =&gt; ((implicit request: play.api.mvc.Request[Unit]) =&gt; {
+  val owcJsDocs: Option[play.api.libs.json.JsValue] = CollectionsController.this.collectionsService.getUserDefaultOwcDocument(authUser).map[play.api.libs.json.JsValue](((doc: models.owc.OwcDocument) =&gt; doc.toJson));
+  CollectionsController.this.Ok.apply[play.api.libs.json.JsValue](owcJsDocs.getOrElse[play.api.libs.json.JsValue](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites)))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+}))))
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          50
+        </td>
+        <td>
+          2407
+          -
+          2484
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.collectionsService.getUserDefaultOwcDocument(authUser).map[play.api.libs.json.JsValue](((doc: models.owc.OwcDocument) =&gt; doc.toJson))
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          49
+        </td>
+        <td>
+          2473
+          -
+          2483
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcDocument.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          doc.toJson
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          59
+        </td>
+        <td>
+          2557
+          -
+          2572
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          53
+        </td>
+        <td>
+          2537
+          -
+          2537
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          62
+        </td>
+        <td>
+          2496
+          -
+          2574
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          owcJsDocs.getOrElse[play.api.libs.json.JsValue](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites))))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          56
+        </td>
+        <td>
+          2544
+          -
+          2553
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          65
+        </td>
+        <td>
+          2493
+          -
+          2575
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.Ok.apply[play.api.libs.json.JsValue](owcJsDocs.getOrElse[play.api.libs.json.JsValue](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites)))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          55
+        </td>
+        <td>
+          2525
+          -
+          2542
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          64
+        </td>
+        <td>
+          2495
+          -
+          2495
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          58
+        </td>
+        <td>
+          2557
+          -
+          2557
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          52
+        </td>
+        <td>
+          2537
+          -
+          2542
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ERR&quot;
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
           61
         </td>
         <td>
-          82
+          2516
+          -
+          2573
         </td>
         <td>
-          2365
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          60
+        </td>
+        <td>
+          2544
           -
-          2917
+          2572
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Not found :-(&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          63
+        </td>
+        <td>
+          2495
+          -
+          2495
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          54
+        </td>
+        <td>
+          2537
+          -
+          2542
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          57
+        </td>
+        <td>
+          2557
+          -
+          2572
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Not found :-(&quot;
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          51
+        </td>
+        <td>
+          2525
+          -
+          2533
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          67
+        </td>
+        <td>
+          2649
+          -
+          2659
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          121
+        </td>
+        <td>
+          2640
+          -
+          3432
         </td>
         <td>
           Apply
@@ -726,41 +1168,20 @@
   CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
 }), ((owcDocument: models.owc.OwcDocument) =&gt; {
   val inserted: Option[models.owc.OwcDocument] = CollectionsController.this.collectionsService.insertCollection(owcDocument, authUser);
-  CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  inserted.fold[play.api.mvc.Result](CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((theDoc: models.owc.OwcDocument) =&gt; CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
 }))))))
         </td>
       </tr><tr>
         <td>
-          61
+          77
         </td>
         <td>
-          48
+          68
         </td>
         <td>
-          2374
+          2753
           -
-          2384
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.BodyParsers.parse.json
-        </td>
-        <td style="background: #F0ADAD">
-          CollectionsController.this.parse.json
-        </td>
-      </tr><tr>
-        <td>
-          65
-        </td>
-        <td>
-          49
-        </td>
-        <td>
-          2478
-          -
-          2478
+          2753
         </td>
         <td>
           Select
@@ -773,15 +1194,15 @@
         </td>
       </tr><tr>
         <td>
-          65
+          77
         </td>
         <td>
-          81
+          120
         </td>
         <td>
-          2457
+          2732
           -
-          2913
+          3428
         </td>
         <td>
           Apply
@@ -795,41 +1216,20 @@
   CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
 }), ((owcDocument: models.owc.OwcDocument) =&gt; {
   val inserted: Option[models.owc.OwcDocument] = CollectionsController.this.collectionsService.insertCollection(owcDocument, authUser);
-  CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  inserted.fold[play.api.mvc.Result](CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((theDoc: models.owc.OwcDocument) =&gt; CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
 }))
         </td>
       </tr><tr>
         <td>
-          67
+          79
         </td>
         <td>
-          50
+          70
         </td>
         <td>
-          2548
+          2811
           -
-          2581
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.JsValue.toString
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.JsError.toJson(errors).toString()
-        </td>
-      </tr><tr>
-        <td>
-          67
-        </td>
-        <td>
-          51
-        </td>
-        <td>
-          2535
-          -
-          2582
+          2858
         </td>
         <td>
           Apply
@@ -842,141 +1242,36 @@
         </td>
       </tr><tr>
         <td>
-          68
+          79
         </td>
         <td>
-          59
+          69
         </td>
         <td>
-          2663
+          2824
           -
-          2663
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.JsValueWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.JsValueWrites
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          53
-        </td>
-        <td>
-          2629
-          -
-          2634
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;ERR&quot;
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          62
-        </td>
-        <td>
-          2608
-          -
-          2672
+          2857
         </td>
         <td>
           Apply
         </td>
         <td>
-          play.api.libs.json.Json.obj
+          play.api.libs.json.JsValue.toString
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites)))
+          play.api.libs.json.JsError.toJson(errors).toString()
         </td>
       </tr><tr>
         <td>
-          68
+          80
         </td>
         <td>
-          56
+          83
         </td>
         <td>
-          2617
+          2883
           -
-          2634
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          65
-        </td>
-        <td>
-          2597
-          -
-          2673
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          55
-        </td>
-        <td>
-          2629
-          -
-          2634
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          64
-        </td>
-        <td>
-          2607
-          -
-          2607
+          2883
         </td>
         <td>
           ApplyToImplicitArgs
@@ -989,15 +1284,15 @@
         </td>
       </tr><tr>
         <td>
-          68
+          80
         </td>
         <td>
-          58
+          77
         </td>
         <td>
-          2649
+          2925
           -
-          2671
+          2947
         </td>
         <td>
           Apply
@@ -1010,36 +1305,15 @@
         </td>
       </tr><tr>
         <td>
-          68
+          80
         </td>
         <td>
-          52
+          80
         </td>
         <td>
-          2617
+          2912
           -
-          2625
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          61
-        </td>
-        <td>
-          2636
-          -
-          2671
+          2947
         </td>
         <td>
           Apply
@@ -1052,246 +1326,15 @@
         </td>
       </tr><tr>
         <td>
-          68
-        </td>
-        <td>
-          60
-        </td>
-        <td>
-          2649
-          -
-          2671
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites)
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          63
-        </td>
-        <td>
-          2607
-          -
-          2607
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          54
-        </td>
-        <td>
-          2629
-          -
-          2629
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          57
-        </td>
-        <td>
-          2636
-          -
-          2645
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          71
-        </td>
-        <td>
-          66
-        </td>
-        <td>
-          2747
-          -
-          2805
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          services.OwcCollectionsService.insertCollection
-        </td>
-        <td style="background: #F0ADAD">
-          CollectionsController.this.collectionsService.insertCollection(owcDocument, authUser)
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          77
-        </td>
-        <td>
-          2823
-          -
-          2886
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.Json.obj
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)))
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          68
-        </td>
-        <td>
-          2844
-          -
-          2848
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;OK&quot;
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
           80
         </td>
         <td>
-          2820
-          -
-          2887
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
           71
         </td>
         <td>
-          2832
+          2893
           -
-          2848
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          74
-        </td>
-        <td>
-          2863
-          -
-          2863
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          73
-        </td>
-        <td>
-          2863
-          -
-          2885
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;owcDocument inserted&quot;
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          67
-        </td>
-        <td>
-          2832
-          -
-          2840
+          2901
         </td>
         <td>
           Literal
@@ -1304,57 +1347,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          80
         </td>
         <td>
-          76
+          74
         </td>
         <td>
-          2850
+          2905
           -
-          2885
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          79
-        </td>
-        <td>
-          2822
-          -
-          2822
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          70
-        </td>
-        <td>
-          2844
-          -
-          2848
+          2910
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1363,19 +1364,40 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
         </td>
       </tr><tr>
         <td>
-          72
+          80
         </td>
         <td>
-          69
+          82
         </td>
         <td>
-          2844
+          2883
           -
-          2844
+          2883
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          73
+        </td>
+        <td>
+          2905
+          -
+          2905
         </td>
         <td>
           Select
@@ -1388,36 +1410,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          80
         </td>
         <td>
-          78
+          76
         </td>
         <td>
-          2822
+          2912
           -
-          2822
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          72
-        </td>
-        <td>
-          72
-        </td>
-        <td>
-          2850
-          -
-          2859
+          2921
         </td>
         <td>
           Literal
@@ -1430,15 +1431,792 @@
         </td>
       </tr><tr>
         <td>
+          80
+        </td>
+        <td>
+          79
+        </td>
+        <td>
+          2925
+          -
+          2947
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          78
+        </td>
+        <td>
+          2939
+          -
+          2939
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
           72
+        </td>
+        <td>
+          2905
+          -
+          2910
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ERR&quot;
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          81
+        </td>
+        <td>
+          2884
+          -
+          2948
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          84
+        </td>
+        <td>
+          2873
+          -
+          2949
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsObject](play.api.libs.json.JsError.toJson(errors))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          80
         </td>
         <td>
           75
         </td>
         <td>
-          2863
+          2893
           -
-          2885
+          2910
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          85
+        </td>
+        <td>
+          3023
+          -
+          3081
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.OwcCollectionsService.insertCollection
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.collectionsService.insertCollection(owcDocument, authUser)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          92
+        </td>
+        <td>
+          3180
+          -
+          3204
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;database insert failed&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          95
+        </td>
+        <td>
+          3167
+          -
+          3204
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          86
+        </td>
+        <td>
+          3148
+          -
+          3156
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          89
+        </td>
+        <td>
+          3160
+          -
+          3165
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          98
+        </td>
+        <td>
+          3138
+          -
+          3138
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          91
+        </td>
+        <td>
+          3167
+          -
+          3176
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          94
+        </td>
+        <td>
+          3180
+          -
+          3204
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          97
+        </td>
+        <td>
+          3138
+          -
+          3138
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          88
+        </td>
+        <td>
+          3160
+          -
+          3160
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          87
+        </td>
+        <td>
+          3160
+          -
+          3165
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ERR&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          96
+        </td>
+        <td>
+          3139
+          -
+          3205
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          90
+        </td>
+        <td>
+          3148
+          -
+          3165
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          99
+        </td>
+        <td>
+          3128
+          -
+          3206
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          93
+        </td>
+        <td>
+          3180
+          -
+          3180
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          119
+        </td>
+        <td>
+          3096
+          -
+          3401
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          inserted.fold[play.api.mvc.Result](CollectionsController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;database insert failed&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((theDoc: models.owc.OwcDocument) =&gt; CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          101
+        </td>
+        <td>
+          3295
+          -
+          3299
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          110
+        </td>
+        <td>
+          3338
+          -
+          3348
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;document&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          104
+        </td>
+        <td>
+          3283
+          -
+          3299
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          113
+        </td>
+        <td>
+          3352
+          -
+          3365
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          116
+        </td>
+        <td>
+          3273
+          -
+          3273
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          107
+        </td>
+        <td>
+          3314
+          -
+          3314
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          106
+        </td>
+        <td>
+          3314
+          -
+          3336
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;owcDocument inserted&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          115
+        </td>
+        <td>
+          3274
+          -
+          3366
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          118
+        </td>
+        <td>
+          3271
+          -
+          3367
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          CollectionsController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          100
+        </td>
+        <td>
+          3283
+          -
+          3291
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          109
+        </td>
+        <td>
+          3301
+          -
+          3336
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;owcDocument inserted&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          103
+        </td>
+        <td>
+          3295
+          -
+          3299
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          112
+        </td>
+        <td>
+          3359
+          -
+          3359
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          105
+        </td>
+        <td>
+          3301
+          -
+          3310
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          114
+        </td>
+        <td>
+          3338
+          -
+          3365
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;document&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](theDoc.toJson)(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          108
+        </td>
+        <td>
+          3314
+          -
+          3336
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1451,15 +2229,78 @@
         </td>
       </tr><tr>
         <td>
-          81
+          88
         </td>
         <td>
-          83
+          117
         </td>
         <td>
-          2986
+          3273
           -
-          2996
+          3273
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          102
+        </td>
+        <td>
+          3295
+          -
+          3295
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          111
+        </td>
+        <td>
+          3352
+          -
+          3365
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.OwcDocument.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          theDoc.toJson
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          122
+        </td>
+        <td>
+          3501
+          -
+          3511
         </td>
         <td>
           Select
@@ -1472,15 +2313,15 @@
         </td>
       </tr><tr>
         <td>
-          81
+          100
         </td>
         <td>
-          88
+          127
         </td>
         <td>
-          2977
+          3492
           -
-          3110
+          3625
         </td>
         <td>
           Apply
@@ -1493,15 +2334,15 @@
         </td>
       </tr><tr>
         <td>
-          85
+          104
         </td>
         <td>
-          86
+          125
         </td>
         <td>
-          3083
+          3598
           -
-          3083
+          3598
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1514,15 +2355,15 @@
         </td>
       </tr><tr>
         <td>
-          85
+          104
         </td>
         <td>
-          85
+          124
         </td>
         <td>
-          3083
+          3598
           -
-          3083
+          3598
         </td>
         <td>
           Select
@@ -1535,15 +2376,36 @@
         </td>
       </tr><tr>
         <td>
-          85
+          104
         </td>
         <td>
-          87
+          123
         </td>
         <td>
-          3069
+          3599
           -
-          3106
+          3620
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Not yet implemented&quot;
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          126
+        </td>
+        <td>
+          3584
+          -
+          3621
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1556,36 +2418,15 @@
         </td>
       </tr><tr>
         <td>
-          85
+          112
         </td>
         <td>
-          84
+          128
         </td>
         <td>
-          3084
+          3739
           -
-          3105
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;Not yet implemented&quot;
-        </td>
-      </tr><tr>
-        <td>
-          93
-        </td>
-        <td>
-          89
-        </td>
-        <td>
-          3224
-          -
-          3235
+          3750
         </td>
         <td>
           Select
@@ -1598,15 +2439,15 @@
         </td>
       </tr><tr>
         <td>
-          93
+          112
         </td>
         <td>
-          94
+          133
         </td>
         <td>
-          3215
+          3730
           -
-          3349
+          3864
         </td>
         <td>
           Apply
@@ -1619,15 +2460,15 @@
         </td>
       </tr><tr>
         <td>
-          97
+          116
         </td>
         <td>
-          92
+          131
         </td>
         <td>
-          3322
+          3837
           -
-          3322
+          3837
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1640,15 +2481,15 @@
         </td>
       </tr><tr>
         <td>
-          97
+          116
         </td>
         <td>
-          91
+          130
         </td>
         <td>
-          3322
+          3837
           -
-          3322
+          3837
         </td>
         <td>
           Select
@@ -1661,15 +2502,15 @@
         </td>
       </tr><tr>
         <td>
-          97
+          116
         </td>
         <td>
-          90
+          129
         </td>
         <td>
-          3323
+          3838
           -
-          3344
+          3859
         </td>
         <td>
           Literal
@@ -1682,15 +2523,15 @@
         </td>
       </tr><tr>
         <td>
-          97
+          116
         </td>
         <td>
-          93
+          132
         </td>
         <td>
-          3308
+          3823
           -
-          3345
+          3860
         </td>
         <td>
           ApplyToImplicitArgs

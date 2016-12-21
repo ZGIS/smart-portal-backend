@@ -1,0 +1,2291 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/gmd/MdMetadata.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.gmd
+</span>21 <span style=''>
+</span>22 <span style=''>import java.time.LocalDate
+</span>23 <span style=''>import java.util.UUID
+</span>24 <span style=''>
+</span>25 <span style=''>import play.api.data.validation.ValidationError
+</span>26 <span style=''>import play.api.libs.functional.syntax.{unlift, _}
+</span>27 <span style=''>import play.api.libs.json._
+</span>28 <span style=''>import utils.ClassnameLogger
+</span>29 <span style=''>import javax.inject.Inject
+</span>30 <span style=''>
+</span>31 <span style=''>import services.MetadataService
+</span>32 <span style=''>
+</span>33 <span style=''>import scala.xml.Node
+</span>34 <span style=''>
+</span>35 <span style=''>
+</span>36 <span style=''>trait Xmlable {
+</span>37 <span style=''>  /**
+</span>38 <span style=''>    * creates JsValue from this class
+</span>39 <span style=''>    *
+</span>40 <span style=''>    * @return JsValue
+</span>41 <span style=''>    */
+</span>42 <span style=''>  def toXml(): Node
+</span>43 <span style=''>}
+</span>44 <span style=''>
+</span>45 <span style=''>trait Jsonable {
+</span>46 <span style=''>  /**
+</span>47 <span style=''>    * creates JsValue from this class
+</span>48 <span style=''>    *
+</span>49 <span style=''>    * @return JsValue
+</span>50 <span style=''>    */
+</span>51 <span style=''>  def toJson(): JsValue
+</span>52 <span style=''>}
+</span>53 <span style=''>
+</span>54 <span style=''>trait JsonableCompagnion[A] extends ClassnameLogger {
+</span>55 <span style=''>  /**
+</span>56 <span style=''>    * parse object from Json
+</span>57 <span style=''>    * @param json
+</span>58 <span style=''>    * @return Option if parsing error
+</span>59 <span style=''>    */
+</span>60 <span style=''>  def fromJson(json: JsValue): Option[A]
+</span>61 <span style=''>}
+</span>62 <span style=''>
+</span>63 <span style=''>/**
+</span>64 <span style=''>  *
+</span>65 <span style=''>  * @param fileIdentifier
+</span>66 <span style=''>  * @param title
+</span>67 <span style=''>  * @param abstrakt
+</span>68 <span style=''>  * @param keywords
+</span>69 <span style=''>  * @param topicCategoryCode
+</span>70 <span style=''>  * @param hierarchyLevelName
+</span>71 <span style=''>  * @param scale
+</span>72 <span style=''>  * @param lineageStatement
+</span>73 <span style=''>  */
+</span>74 <span style=''>case class MdMetadata(val fileIdentifier: String,
+</span>75 <span style=''>                      val title: String,
+</span>76 <span style=''>                      val abstrakt: String,
+</span>77 <span style=''>                      val keywords: List[String],
+</span>78 <span style=''>                      val topicCategoryCode: String,
+</span>79 <span style=''>                      val hierarchyLevelName: String,
+</span>80 <span style=''>                      val scale: String,
+</span>81 <span style=''>                      val citation: MdMetadataCitation,
+</span>82 <span style=''>                      val lineageStatement: String
+</span>83 <span style=''>                     ) extends Jsonable with Xmlable {
+</span>84 <span style=''>
+</span>85 <span style=''>  def toXml(): Node = </span><span style='background: #F0ADAD'>???</span><span style=''>
+</span>86 <span style=''>
+</span>87 <span style=''>  def toJson(): JsValue = {
+</span>88 <span style=''>    </span><span style='background: #F0ADAD'>Json.toJson(this)</span><span style=''>
+</span>89 <span style=''>  }
+</span>90 <span style=''>}
+</span>91 <span style=''>
+</span>92 <span style=''>object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
+</span>93 <span style=''>
+</span>94 <span style=''>  implicit val reads: Reads[MdMetadata] = </span><span style='background: #AEF1AE'>(
+</span>95 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "fileIdentifier").read[String](Reads.filterNot[String](ValidationError("String empty"))(_.trim().isEmpty))
+</span>96 <span style=''></span><span style='background: #AEF1AE'>      or Reads.pure(UUID.randomUUID().toString)
+</span>97 <span style=''></span><span style='background: #AEF1AE'>      and
+</span>98 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "title").read[String] and
+</span>99 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "abstrakt").read[String] and
+</span>100 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "keywords").read[List[String]] and
+</span>101 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "topicCategoryCode").read[String] and
+</span>102 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "hierarchyLevelName").read[String] and
+</span>103 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "scale").read[String] and
+</span>104 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "citation").read[MdMetadataCitation] and
+</span>105 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "lineageStatement").read[String]
+</span>106 <span style=''></span><span style='background: #AEF1AE'>    ) (MdMetadata.apply _)</span><span style=''>
+</span>107 <span style=''>
+</span>108 <span style=''>  implicit val writes: Writes[MdMetadata] = </span><span style='background: #AEF1AE'>(
+</span>109 <span style=''></span><span style='background: #AEF1AE'>    (JsPath \ "fileIdentifier").write[String] and
+</span>110 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "title").write[String] and
+</span>111 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "abstrakt").write[String] and
+</span>112 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "keywords").write[List[String]] and
+</span>113 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "topicCategoryCode").write[String] and
+</span>114 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "hierarchyLevelName").write[String] and
+</span>115 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "scale").write[String] and
+</span>116 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "citation").write[MdMetadataCitation] and
+</span>117 <span style=''></span><span style='background: #AEF1AE'>      (JsPath \ "lineageStatement").write[String]
+</span>118 <span style=''></span><span style='background: #AEF1AE'>    ) (unlift(</span><span style='background: #F0ADAD'>MdMetadata.unapply</span><span style='background: #AEF1AE'>))</span><span style=''>
+</span>119 <span style=''>
+</span>120 <span style=''>  implicit val format: Format[MdMetadata] =
+</span>121 <span style=''>    </span><span style='background: #AEF1AE'>Format(reads, writes)</span><span style=''>
+</span>122 <span style=''>
+</span>123 <span style=''>  def fromJson(json: JsValue): Option[MdMetadata] = {
+</span>124 <span style=''>    </span><span style='background: #AEF1AE'>Json.fromJson[MdMetadata](json)</span><span style=''> match {
+</span>125 <span style=''>      case JsSuccess(r: MdMetadata, path: JsPath) => </span><span style='background: #AEF1AE'>Some(r)</span><span style=''>
+</span>126 <span style=''>      case e: JsError => {
+</span>127 <span style=''>        val lines = </span><span style='background: #F0ADAD'>e.errors.map { tupleAction =>
+</span>128 <span style=''></span><span style='background: #F0ADAD'>          val jsPath = tupleAction._1
+</span>129 <span style=''></span><span style='background: #F0ADAD'>          val valErrors = tupleAction._2.map(valErr => valErr.message).toList.mkString(" ; ")
+</span>130 <span style=''></span><span style='background: #F0ADAD'>          jsPath.toJsonString + " >> " + valErrors
+</span>131 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style=''>
+</span>132 <span style=''>
+</span>133 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(s"JsError info  ${lines.mkString(" | ")}")</span><span style=''>
+</span>134 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>135 <span style=''>      }
+</span>136 <span style=''>    }
+</span>137 <span style=''>  }
+</span>138 <span style=''>
+</span>139 <span style=''>  def fromXml(node: Node): MdMetadata = </span><span style='background: #F0ADAD'>???</span><span style=''>
+</span>140 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1107
+        </td>
+        <td>
+          2345
+          -
+          2348
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Predef.???
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.???
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          1109
+        </td>
+        <td>
+          2382
+          -
+          2399
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.gmd.MdMetadata](this)(gmd.this.MdMetadata.format)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          1108
+        </td>
+        <td>
+          2393
+          -
+          2393
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.format
+        </td>
+        <td style="background: #F0ADAD">
+          gmd.this.MdMetadata.format
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1115
+        </td>
+        <td>
+          2537
+          -
+          2652
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;fileIdentifier&quot;).read[String](play.api.libs.json.Reads.filterNot[String](play.api.data.validation.ValidationError.apply(&quot;String empty&quot;))(((x$1: String) =&gt; x$1.trim().isEmpty()))(json.this.Reads.StringReads))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1118
+        </td>
+        <td>
+          2576
+          -
+          2576
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.alternative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.alternative(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1117
+        </td>
+        <td>
+          2576
+          -
+          2576
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1111
+        </td>
+        <td>
+          2601
+          -
+          2632
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.data.validation.ValidationError.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.data.validation.ValidationError.apply(&quot;String empty&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1114
+        </td>
+        <td>
+          2577
+          -
+          2651
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.ConstraintReads.filterNot
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Reads.filterNot[String](play.api.data.validation.ValidationError.apply(&quot;String empty&quot;))(((x$1: String) =&gt; x$1.trim().isEmpty()))(json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1116
+        </td>
+        <td>
+          2576
+          -
+          2576
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1110
+        </td>
+        <td>
+          2546
+          -
+          2562
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;fileIdentifier&quot;
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1113
+        </td>
+        <td>
+          2633
+          -
+          2633
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1112
+        </td>
+        <td>
+          2634
+          -
+          2650
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          x$1.trim().isEmpty()
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1124
+        </td>
+        <td>
+          2659
+          -
+          2659
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalCanBuild.functionalCanBuildApplicative
+        </td>
+        <td style="background: #AEF1AE">
+          functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1120
+        </td>
+        <td>
+          2662
+          -
+          2700
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.ConstraintReads.pure
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Reads.pure[String](java.util.UUID.randomUUID().toString())
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1123
+        </td>
+        <td>
+          2659
+          -
+          2659
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1119
+        </td>
+        <td>
+          2673
+          -
+          2699
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.randomUUID().toString()
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1122
+        </td>
+        <td>
+          2659
+          -
+          2659
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1121
+        </td>
+        <td>
+          2537
+          -
+          2700
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.AlternativeOps.or
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toAlternativeOps[play.api.libs.json.Reads, String](play.api.libs.json.JsPath.\(&quot;fileIdentifier&quot;).read[String](play.api.libs.json.Reads.filterNot[String](play.api.data.validation.ValidationError.apply(&quot;String empty&quot;))(((x$1: String) =&gt; x$1.trim().isEmpty()))(json.this.Reads.StringReads)))(json.this.Reads.alternative(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).or[String](play.api.libs.json.Reads.pure[String](java.util.UUID.randomUUID().toString()))
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          1127
+        </td>
+        <td>
+          2718
+          -
+          2748
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;title&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          1126
+        </td>
+        <td>
+          2740
+          -
+          2740
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          1125
+        </td>
+        <td>
+          2727
+          -
+          2734
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;title&quot;
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1129
+        </td>
+        <td>
+          2785
+          -
+          2785
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1128
+        </td>
+        <td>
+          2769
+          -
+          2779
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;abstrakt&quot;
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1130
+        </td>
+        <td>
+          2760
+          -
+          2793
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;abstrakt&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1133
+        </td>
+        <td>
+          2830
+          -
+          2830
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1135
+        </td>
+        <td>
+          2805
+          -
+          2844
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;keywords&quot;).read[List[String]](json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1132
+        </td>
+        <td>
+          2830
+          -
+          2830
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.immutable.List.canBuildFrom
+        </td>
+        <td style="background: #AEF1AE">
+          immutable.this.List.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1134
+        </td>
+        <td>
+          2830
+          -
+          2830
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.LowPriorityDefaultReads.traversableReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1131
+        </td>
+        <td>
+          2814
+          -
+          2824
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;keywords&quot;
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          1136
+        </td>
+        <td>
+          2865
+          -
+          2884
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;topicCategoryCode&quot;
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          1138
+        </td>
+        <td>
+          2856
+          -
+          2898
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;topicCategoryCode&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          1137
+        </td>
+        <td>
+          2890
+          -
+          2890
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1141
+        </td>
+        <td>
+          2910
+          -
+          2953
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;hierarchyLevelName&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1140
+        </td>
+        <td>
+          2945
+          -
+          2945
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1139
+        </td>
+        <td>
+          2919
+          -
+          2939
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;hierarchyLevelName&quot;
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          1142
+        </td>
+        <td>
+          2974
+          -
+          2981
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;scale&quot;
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          1144
+        </td>
+        <td>
+          2965
+          -
+          2995
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;scale&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          1143
+        </td>
+        <td>
+          2987
+          -
+          2987
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1145
+        </td>
+        <td>
+          3016
+          -
+          3026
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;citation&quot;
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1147
+        </td>
+        <td>
+          3007
+          -
+          3052
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;citation&quot;).read[models.gmd.MdMetadataCitation](gmd.this.MdMetadataCitation.format)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1146
+        </td>
+        <td>
+          3032
+          -
+          3032
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadataCitation.format
+        </td>
+        <td style="background: #AEF1AE">
+          gmd.this.MdMetadataCitation.format
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1150
+        </td>
+        <td>
+          3064
+          -
+          3105
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.read
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;lineageStatement&quot;).read[String](json.this.Reads.StringReads)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1149
+        </td>
+        <td>
+          3097
+          -
+          3097
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.StringReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.StringReads
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1148
+        </td>
+        <td>
+          3073
+          -
+          3091
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;lineageStatement&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1151
+        </td>
+        <td>
+          3113
+          -
+          3129
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.gmd.MdMetadata.apply
+        </td>
+        <td style="background: #AEF1AE">
+          MdMetadata.apply(fileIdentifier, title, abstrakt, keywords, topicCategoryCode, hierarchyLevelName, scale, citation, lineageStatement)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1154
+        </td>
+        <td>
+          3112
+          -
+          3112
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.functorReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1153
+        </td>
+        <td>
+          3112
+          -
+          3112
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Reads.applicative
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1152
+        </td>
+        <td>
+          3112
+          -
+          3112
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsResult.applicativeJsResult
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsResult.applicativeJsResult
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1155
+        </td>
+        <td>
+          2530
+          -
+          3132
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild9.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.Reads, String](play.api.libs.functional.syntax.`package`.toAlternativeOps[play.api.libs.json.Reads, String](play.api.libs.json.JsPath.\(&quot;fileIdentifier&quot;).read[String](play.api.libs.json.Reads.filterNot[String](play.api.data.validation.ValidationError.apply(&quot;String empty&quot;))(((x$1: String) =&gt; x$1.trim().isEmpty()))(json.this.Reads.StringReads)))(json.this.Reads.alternative(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).or[String](play.api.libs.json.Reads.pure[String](java.util.UUID.randomUUID().toString())))(functional.this.FunctionalCanBuild.functionalCanBuildApplicative[play.api.libs.json.Reads](json.this.Reads.applicative(json.this.JsResult.applicativeJsResult))).and[String](play.api.libs.json.JsPath.\(&quot;title&quot;).read[String](json.this.Reads.StringReads)).and[String](play.api.libs.json.JsPath.\(&quot;abstrakt&quot;).read[String](json.this.Reads.StringReads)).and[List[String]](play.api.libs.json.JsPath.\(&quot;keywords&quot;).read[List[String]](json.this.Reads.traversableReads[List, String](immutable.this.List.canBuildFrom[String], json.this.Reads.StringReads))).and[String](play.api.libs.json.JsPath.\(&quot;topicCategoryCode&quot;).read[String](json.this.Reads.StringReads)).and[String](play.api.libs.json.JsPath.\(&quot;hierarchyLevelName&quot;).read[String](json.this.Reads.StringReads)).and[String](play.api.libs.json.JsPath.\(&quot;scale&quot;).read[String](json.this.Reads.StringReads)).and[models.gmd.MdMetadataCitation](play.api.libs.json.JsPath.\(&quot;citation&quot;).read[models.gmd.MdMetadataCitation](gmd.this.MdMetadataCitation.format)).and[String](play.api.libs.json.JsPath.\(&quot;lineageStatement&quot;).read[String](json.this.Reads.StringReads)).apply[models.gmd.MdMetadata]({
+  ((fileIdentifier: String, title: String, abstrakt: String, keywords: List[String], topicCategoryCode: String, hierarchyLevelName: String, scale: String, citation: models.gmd.MdMetadataCitation, lineageStatement: String) =&gt; MdMetadata.apply(fileIdentifier, title, abstrakt, keywords, topicCategoryCode, hierarchyLevelName, scale, citation, lineageStatement))
+})(json.this.Reads.functorReads(json.this.Reads.applicative(json.this.JsResult.applicativeJsResult)))
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1156
+        </td>
+        <td>
+          3194
+          -
+          3210
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;fileIdentifier&quot;
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1159
+        </td>
+        <td>
+          3217
+          -
+          3217
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.functionalCanBuildOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.functionalCanBuildOWrites
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1158
+        </td>
+        <td>
+          3185
+          -
+          3225
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;fileIdentifier&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1157
+        </td>
+        <td>
+          3217
+          -
+          3217
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1160
+        </td>
+        <td>
+          3246
+          -
+          3253
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;title&quot;
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1162
+        </td>
+        <td>
+          3237
+          -
+          3268
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;title&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1161
+        </td>
+        <td>
+          3260
+          -
+          3260
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1165
+        </td>
+        <td>
+          3280
+          -
+          3314
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;abstrakt&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1164
+        </td>
+        <td>
+          3306
+          -
+          3306
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1163
+        </td>
+        <td>
+          3289
+          -
+          3299
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;abstrakt&quot;
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1169
+        </td>
+        <td>
+          3326
+          -
+          3366
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;keywords&quot;).write[List[String]](json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1168
+        </td>
+        <td>
+          3352
+          -
+          3352
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.traversableWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1167
+        </td>
+        <td>
+          3352
+          -
+          3352
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1166
+        </td>
+        <td>
+          3335
+          -
+          3345
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;keywords&quot;
+        </td>
+      </tr><tr>
+        <td>
+          113
+        </td>
+        <td>
+          1171
+        </td>
+        <td>
+          3413
+          -
+          3413
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          113
+        </td>
+        <td>
+          1170
+        </td>
+        <td>
+          3387
+          -
+          3406
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;topicCategoryCode&quot;
+        </td>
+      </tr><tr>
+        <td>
+          113
+        </td>
+        <td>
+          1172
+        </td>
+        <td>
+          3378
+          -
+          3421
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;topicCategoryCode&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          1174
+        </td>
+        <td>
+          3469
+          -
+          3469
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          1173
+        </td>
+        <td>
+          3442
+          -
+          3462
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;hierarchyLevelName&quot;
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          1175
+        </td>
+        <td>
+          3433
+          -
+          3477
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;hierarchyLevelName&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1178
+        </td>
+        <td>
+          3489
+          -
+          3520
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;scale&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1177
+        </td>
+        <td>
+          3512
+          -
+          3512
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          1176
+        </td>
+        <td>
+          3498
+          -
+          3505
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;scale&quot;
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1180
+        </td>
+        <td>
+          3558
+          -
+          3558
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadataCitation.format
+        </td>
+        <td style="background: #AEF1AE">
+          gmd.this.MdMetadataCitation.format
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1179
+        </td>
+        <td>
+          3541
+          -
+          3551
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;citation&quot;
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          1181
+        </td>
+        <td>
+          3532
+          -
+          3578
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;citation&quot;).write[models.gmd.MdMetadataCitation](gmd.this.MdMetadataCitation.format)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1183
+        </td>
+        <td>
+          3624
+          -
+          3624
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1182
+        </td>
+        <td>
+          3599
+          -
+          3617
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;lineageStatement&quot;
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1184
+        </td>
+        <td>
+          3590
+          -
+          3632
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsPath.write
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsPath.\(&quot;lineageStatement&quot;).write[String](json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1187
+        </td>
+        <td>
+          3639
+          -
+          3639
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.OWrites.contravariantfunctorOWrites
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.OWrites.contravariantfunctorOWrites
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1186
+        </td>
+        <td>
+          3640
+          -
+          3666
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.functional.syntax.unlift
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.unlift[models.gmd.MdMetadata, (String, String, String, List[String], String, String, String, models.gmd.MdMetadataCitation, String)]({
+  ((x$0: models.gmd.MdMetadata) =&gt; MdMetadata.unapply(x$0))
+})
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1185
+        </td>
+        <td>
+          3647
+          -
+          3665
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.gmd.MdMetadata.unapply
+        </td>
+        <td style="background: #F0ADAD">
+          MdMetadata.unapply(x$0)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1188
+        </td>
+        <td>
+          3178
+          -
+          3667
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.functional.FunctionalBuilder.CanBuild9.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.functional.syntax.`package`.toFunctionalBuilderOps[play.api.libs.json.OWrites, String](play.api.libs.json.JsPath.\(&quot;fileIdentifier&quot;).write[String](json.this.Writes.StringWrites))(json.this.OWrites.functionalCanBuildOWrites).and[String](play.api.libs.json.JsPath.\(&quot;title&quot;).write[String](json.this.Writes.StringWrites)).and[String](play.api.libs.json.JsPath.\(&quot;abstrakt&quot;).write[String](json.this.Writes.StringWrites)).and[List[String]](play.api.libs.json.JsPath.\(&quot;keywords&quot;).write[List[String]](json.this.Writes.traversableWrites[String](json.this.Writes.StringWrites))).and[String](play.api.libs.json.JsPath.\(&quot;topicCategoryCode&quot;).write[String](json.this.Writes.StringWrites)).and[String](play.api.libs.json.JsPath.\(&quot;hierarchyLevelName&quot;).write[String](json.this.Writes.StringWrites)).and[String](play.api.libs.json.JsPath.\(&quot;scale&quot;).write[String](json.this.Writes.StringWrites)).and[models.gmd.MdMetadataCitation](play.api.libs.json.JsPath.\(&quot;citation&quot;).write[models.gmd.MdMetadataCitation](gmd.this.MdMetadataCitation.format)).and[String](play.api.libs.json.JsPath.\(&quot;lineageStatement&quot;).write[String](json.this.Writes.StringWrites)).apply[models.gmd.MdMetadata](play.api.libs.functional.syntax.`package`.unlift[models.gmd.MdMetadata, (String, String, String, List[String], String, String, String, models.gmd.MdMetadataCitation, String)]({
+  ((x$0: models.gmd.MdMetadata) =&gt; MdMetadata.unapply(x$0))
+}))(json.this.OWrites.contravariantfunctorOWrites)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1189
+        </td>
+        <td>
+          3724
+          -
+          3729
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.reads
+        </td>
+        <td style="background: #AEF1AE">
+          MdMetadata.this.reads
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1191
+        </td>
+        <td>
+          3717
+          -
+          3738
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Format.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Format.apply[models.gmd.MdMetadata](MdMetadata.this.reads, MdMetadata.this.writes)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1190
+        </td>
+        <td>
+          3731
+          -
+          3737
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.writes
+        </td>
+        <td style="background: #AEF1AE">
+          MdMetadata.this.writes
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1192
+        </td>
+        <td>
+          3823
+          -
+          3823
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.format
+        </td>
+        <td style="background: #AEF1AE">
+          MdMetadata.this.format
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1193
+        </td>
+        <td>
+          3798
+          -
+          3829
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.fromJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.fromJson[models.gmd.MdMetadata](json)(MdMetadata.this.format)
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1194
+        </td>
+        <td>
+          3891
+          -
+          3898
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.gmd.MdMetadata](r)
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          1198
+        </td>
+        <td>
+          3959
+          -
+          3959
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          1199
+        </td>
+        <td>
+          3946
+          -
+          4168
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          e.errors.map[String, Seq[String]](((tupleAction: (play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])) =&gt; {
+  val jsPath: play.api.libs.json.JsPath = tupleAction._1;
+  val valErrors: String = tupleAction._2.map[String, Seq[String]](((valErr: play.api.data.validation.ValidationError) =&gt; valErr.message))(collection.this.Seq.canBuildFrom[String]).toList.mkString(&quot; ; &quot;);
+  jsPath.toJsonString.+(&quot; &gt;&gt; &quot;).+(valErrors)
+}))(collection.this.Seq.canBuildFrom[String])
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          1195
+        </td>
+        <td>
+          3999
+          -
+          4013
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Tuple2._1
+        </td>
+        <td style="background: #F0ADAD">
+          tupleAction._1
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          1196
+        </td>
+        <td>
+          4040
+          -
+          4107
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          tupleAction._2.map[String, Seq[String]](((valErr: play.api.data.validation.ValidationError) =&gt; valErr.message))(collection.this.Seq.canBuildFrom[String]).toList.mkString(&quot; ; &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          130
+        </td>
+        <td>
+          1197
+        </td>
+        <td>
+          4118
+          -
+          4158
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          jsPath.toJsonString.+(&quot; &gt;&gt; &quot;).+(valErrors)
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          1204
+        </td>
+        <td>
+          4178
+          -
+          4233
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          MdMetadata.this.logger.error(scala.StringContext.apply(&quot;JsError info  &quot;, &quot;&quot;).s(lines.mkString(&quot; | &quot;)))
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          1201
+        </td>
+        <td>
+          4231
+          -
+          4232
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          1200
+        </td>
+        <td>
+          4193
+          -
+          4208
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;JsError info  &quot;
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          1203
+        </td>
+        <td>
+          4191
+          -
+          4232
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;JsError info  &quot;, &quot;&quot;).s(lines.mkString(&quot; | &quot;))
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          1202
+        </td>
+        <td>
+          4209
+          -
+          4230
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          lines.mkString(&quot; | &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          134
+        </td>
+        <td>
+          1205
+        </td>
+        <td>
+          4242
+          -
+          4246
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1206
+        </td>
+        <td>
+          4306
+          -
+          4309
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Predef.???
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.???
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

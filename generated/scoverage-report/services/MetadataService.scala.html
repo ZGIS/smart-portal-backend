@@ -1,0 +1,592 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          services/MetadataService.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package services
+</span>21 <span style=''>
+</span>22 <span style=''>import java.util
+</span>23 <span style=''>import javax.inject.Inject
+</span>24 <span style=''>
+</span>25 <span style=''>import models.metadata.ValidValues
+</span>26 <span style=''>import play.api.Configuration
+</span>27 <span style=''>import play.api.data.validation.ValidationError
+</span>28 <span style=''>import play.api.inject.ApplicationLifecycle
+</span>29 <span style=''>import play.api.libs.json.Reads
+</span>30 <span style=''>import utils.ClassnameLogger
+</span>31 <span style=''>
+</span>32 <span style=''>/**
+</span>33 <span style=''>  * provides an addition to [[Reads]] for checking valid values against [[MetadataService]]
+</span>34 <span style=''>  */
+</span>35 <span style=''>trait ValidValuesReadsAdditions extends ClassnameLogger {
+</span>36 <span style=''>  var metadataService: MetadataService
+</span>37 <span style=''>
+</span>38 <span style=''>  //TODO SR this is not really nice. Especially the error message should contain the value.
+</span>39 <span style=''>  def validValue(topic: String)(implicit reads: Reads[String]): Reads[String] =
+</span>40 <span style=''>    </span><span style='background: #AEF1AE'>Reads.filter[String](ValidationError(s"not a valid value for ${topic}"))(value => {
+</span>41 <span style=''></span><span style='background: #AEF1AE'>      logger.debug(s"looking for '${value}' in ${topic}")
+</span>42 <span style=''></span><span style='background: #AEF1AE'>      metadataService.getValidValuesFor(topic).get.values.contains(value)
+</span>43 <span style=''></span><span style='background: #AEF1AE'>    })(reads)</span><span style=''>
+</span>44 <span style=''>}
+</span>45 <span style=''>
+</span>46 <span style=''>/**
+</span>47 <span style=''>  * provides access to ValidValues configuration. You need to have `smart.metadata.validValues` configured in
+</span>48 <span style=''>  * your application configuration.
+</span>49 <span style=''>  * @param configuration
+</span>50 <span style=''>  */
+</span>51 <span style=''>class MetadataService @Inject()(configuration: Configuration) extends ClassnameLogger {
+</span>52 <span style=''>
+</span>53 <span style=''>  lazy val metadataValidValues: Option[util.List[Configuration]] =
+</span>54 <span style=''>    </span><span style='background: #AEF1AE'>configuration.getConfigList("smart.metadata.validValues")</span><span style=''>
+</span>55 <span style=''>
+</span>56 <span style=''>  /**
+</span>57 <span style=''>    * returns an Option of ValidValues for a given topic. If topic os not found,
+</span>58 <span style=''>    * it returns None.
+</span>59 <span style=''>    * @param topic
+</span>60 <span style=''>    * @return
+</span>61 <span style=''>    */
+</span>62 <span style=''>  def getValidValuesFor(topic: String): Option[ValidValues] = {
+</span>63 <span style=''>    import scala.collection.JavaConversions._
+</span>64 <span style=''>
+</span>65 <span style=''>    </span><span style='background: #AEF1AE'>logger.debug(s"returning valid values for '${topic}'")</span><span style=''>
+</span>66 <span style=''>    val configurations = </span><span style='background: #AEF1AE'>metadataValidValues.get</span><span style=''>
+</span>67 <span style=''>    val validValuesConf = </span><span style='background: #AEF1AE'>configurations.filter(conf => conf.getString("for").getOrElse("").equals(topic))</span><span style=''>
+</span>68 <span style=''>    if (</span><span style='background: #AEF1AE'>validValuesConf.isEmpty()</span><span style=''>) </span><span style='background: #AEF1AE'>{
+</span>69 <span style=''></span><span style='background: #AEF1AE'>      logger.warn(s"Could not find ValidValues for ${topic}")
+</span>70 <span style=''></span><span style='background: #AEF1AE'>      None
+</span>71 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>72 <span style=''>    else </span><span style='background: #AEF1AE'>{
+</span>73 <span style=''></span><span style='background: #AEF1AE'>      val conf = validValuesConf.head
+</span>74 <span style=''></span><span style='background: #AEF1AE'>      logger.debug(s"Found: ${validValuesConf.head}")
+</span>75 <span style=''></span><span style='background: #AEF1AE'>
+</span>76 <span style=''></span><span style='background: #AEF1AE'>      Some(ValidValues.parseConfiguration(validValuesConf.head))
+</span>77 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>78 <span style=''>  }
+</span>79 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          3012
+        </td>
+        <td>
+          1536
+          -
+          1765
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.ConstraintReads.filter
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Reads.filter[String](play.api.data.validation.ValidationError.apply(scala.StringContext.apply(&quot;not a valid value for &quot;, &quot;&quot;).s(topic)))(((value: String) =&gt; {
+  ValidValuesReadsAdditions.this.logger.debug(scala.StringContext.apply(&quot;looking for \'&quot;, &quot;\' in &quot;, &quot;&quot;).s(value, topic));
+  ValidValuesReadsAdditions.this.metadataService.getValidValuesFor(topic).get.values.contains[String](value)
+}))(reads)
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          3013
+        </td>
+        <td>
+          2109
+          -
+          2166
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.Configuration.getConfigList
+        </td>
+        <td style="background: #AEF1AE">
+          MetadataService.this.configuration.getConfigList(&quot;smart.metadata.validValues&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          3015
+        </td>
+        <td>
+          2433
+          -
+          2487
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          MetadataService.this.logger.debug(scala.StringContext.apply(&quot;returning valid values for \'&quot;, &quot;\'&quot;).s(topic))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          3014
+        </td>
+        <td>
+          2446
+          -
+          2486
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;returning valid values for \'&quot;, &quot;\'&quot;).s(topic)
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          3016
+        </td>
+        <td>
+          2513
+          -
+          2536
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          MetadataService.this.metadataValidValues.get
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          3017
+        </td>
+        <td>
+          2593
+          -
+          2642
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.equals
+        </td>
+        <td style="background: #AEF1AE">
+          conf.getString(&quot;for&quot;, conf.getString$default$2).getOrElse[String](&quot;&quot;).equals(topic)
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          3018
+        </td>
+        <td>
+          2563
+          -
+          2643
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableLike.filter
+        </td>
+        <td style="background: #AEF1AE">
+          scala.collection.JavaConversions.asScalaBuffer[play.api.Configuration](configurations).filter(((conf: play.api.Configuration) =&gt; conf.getString(&quot;for&quot;, conf.getString$default$2).getOrElse[String](&quot;&quot;).equals(topic)))
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          3019
+        </td>
+        <td>
+          2652
+          -
+          2677
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.List.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          scala.collection.JavaConversions.bufferAsJavaList[play.api.Configuration](validValuesConf).isEmpty()
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          3023
+        </td>
+        <td>
+          2679
+          -
+          2759
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  MetadataService.this.logger.warn(scala.StringContext.apply(&quot;Could not find ValidValues for &quot;, &quot;&quot;).s(topic));
+  scala.None
+}
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          3020
+        </td>
+        <td>
+          2699
+          -
+          2741
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;Could not find ValidValues for &quot;, &quot;&quot;).s(topic)
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          3021
+        </td>
+        <td>
+          2687
+          -
+          2742
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #AEF1AE">
+          MetadataService.this.logger.warn(scala.StringContext.apply(&quot;Could not find ValidValues for &quot;, &quot;&quot;).s(topic))
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          3022
+        </td>
+        <td>
+          2749
+          -
+          2753
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3033
+        </td>
+        <td>
+          2769
+          -
+          2934
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val conf: play.api.Configuration = validValuesConf.head;
+  MetadataService.this.logger.debug(scala.StringContext.apply(&quot;Found: &quot;, &quot;&quot;).s(validValuesConf.head));
+  scala.Some.apply[models.metadata.ValidValues](models.metadata.ValidValues.parseConfiguration(validValuesConf.head))
+}
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          3024
+        </td>
+        <td>
+          2788
+          -
+          2808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.IterableLike.head
+        </td>
+        <td style="background: #AEF1AE">
+          validValuesConf.head
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3026
+        </td>
+        <td>
+          2860
+          -
+          2861
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3029
+        </td>
+        <td>
+          2815
+          -
+          2862
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          MetadataService.this.logger.debug(scala.StringContext.apply(&quot;Found: &quot;, &quot;&quot;).s(validValuesConf.head))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3028
+        </td>
+        <td>
+          2828
+          -
+          2861
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;Found: &quot;, &quot;&quot;).s(validValuesConf.head)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3025
+        </td>
+        <td>
+          2830
+          -
+          2838
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;Found: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3027
+        </td>
+        <td>
+          2839
+          -
+          2859
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.IterableLike.head
+        </td>
+        <td style="background: #AEF1AE">
+          validValuesConf.head
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          3031
+        </td>
+        <td>
+          2875
+          -
+          2927
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.metadata.ValidValues.parseConfiguration
+        </td>
+        <td style="background: #AEF1AE">
+          models.metadata.ValidValues.parseConfiguration(validValuesConf.head)
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          3030
+        </td>
+        <td>
+          2906
+          -
+          2926
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.IterableLike.head
+        </td>
+        <td style="background: #AEF1AE">
+          validValuesConf.head
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          3032
+        </td>
+        <td>
+          2870
+          -
+          2928
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.metadata.ValidValues](models.metadata.ValidValues.parseConfiguration(validValuesConf.head))
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

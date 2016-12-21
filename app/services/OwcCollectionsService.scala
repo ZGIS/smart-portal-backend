@@ -182,7 +182,12 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     def upsertOk = defaultCollection.map{ owcDoc =>
       {
         val author1 = owcDoc.properties.authors.head
+        val contributor = OwcAuthor(UUID.randomUUID(),
+          mdMetadata.responsibleParty.individualName,
+          Some(mdMetadata.responsibleParty.email),
+          Some(mdMetadata.responsibleParty.orgWebLinkage))
 
+        // TODO fill up very much a lot of stuff
         val entryProps = OwcProperties(
           propsUuid,
           "en",
@@ -190,9 +195,9 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           Some(mdMetadata.abstrakt),
           Some(updatedTime),
           None,
-          Some("CC BY SA 4.0 NZ"),
+          Some(mdMetadata.distribution.useLimitation),
           List(author1),
-          List(),
+          List(contributor),
           None,
           Some("GNS Science"),
           List(),

@@ -19,10 +19,13 @@
 
 package services
 
+import java.time.{ZoneId, ZonedDateTime}
+import java.util.UUID
 import javax.inject._
 
-import models.owc.{OwcDocument, OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
-import models.users.UserDAO
+import models.gmd.MdMetadata
+import models.owc._
+import models.users._
 import utils.ClassnameLogger
 
 @Singleton
@@ -30,7 +33,15 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
                                       owcPropertiesDAO: OwcPropertiesDAO,
                                       owcOfferingDAO: OwcOfferingDAO,
                                       owcDocumentDAO: OwcDocumentDAO) extends ClassnameLogger {
-  logger.error("service starting")
+
+  /**
+    *
+    * @param username
+    * @return
+    */
+  def getUserDefaultOwcDocument(username: String) : Option[OwcDocument] = {
+    owcDocumentDAO.findUserDefaultOwcDocument(username)
+  }
 
   /**
     * get Owc Documents For optional username And owc doc Id
@@ -39,17 +50,17 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     * @param idOption
     * @return
     */
-  def getOwcDocumentsForUserAndId(authUserOption: Option[String], idOption: Option[String]) : Seq[OwcDocument] = {
+  def getOwcDocumentsForUserAndId(authUserOption: Option[String], idOption: Option[String]): Seq[OwcDocument] = {
 
     authUserOption.fold {
       // no username provided
       idOption.fold {
-        // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
-        owcDocumentDAO.getAllOwcDocuments
+        // TODO docs for anonymous, no id provided => all public docs (implies docs must be public)
+        owcDocumentDAO.getAllPublicOwcDocuments
       } {
-        // TODO find doc by id for anonymous, only one doc if available (later maybe check if public)
+        // TODO find doc by id for anonymous, only one doc if available (implies doc must be public)
         id => {
-          owcDocumentDAO.findOwcDocumentsById(id).toSeq
+          owcDocumentDAO.findPublicOwcDocumentsById(id).toSeq
         }
       }
     } { authUser => {
@@ -58,11 +69,11 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
         logger.warn("Provided user not found.")
         idOption.fold {
           // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
-          owcDocumentDAO.getAllOwcDocuments
+          owcDocumentDAO.getAllPublicOwcDocuments
         } {
           // docs for anonymous, but id provided only one doc if available (and only if public)
           id => {
-            owcDocumentDAO.findOwcDocumentsById(id).toSeq
+            owcDocumentDAO.findPublicOwcDocumentsById(id).toSeq
           }
         }
       } { user =>
@@ -70,11 +81,14 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
         idOption.fold {
           // docs for user, no id provided => all user visible docs
           // TODO technically would be more than "only" publicly visible at some point
-          owcDocumentDAO.getAllOwcDocuments
+          val publicDocs = owcDocumentDAO.getAllPublicOwcDocuments
+          val userDocs = owcDocumentDAO.findOwcDocumentByUser(user.username)
+
+          publicDocs ++ userDocs
         } {
           // TODO find doc by id for provided user if visible/available (later maybe check constraint)
           id => {
-            owcDocumentDAO.findOwcDocumentsById(id).toSeq
+            owcDocumentDAO.findOwcDocumentByIdAndUser(id, user.username).toSeq
           }
         }
       }
@@ -82,10 +96,120 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     }
   }
 
-  def addEntryToUserDefaultCollection = ???
+  /**
+    * creates the first personal default collection for a user, typically at the stage of user registration
+    * @param user
+    */
+  def createUserDefaultCollection(user: User): Unit = {
+
+    val propsUuid = UUID.randomUUID()
+    val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
+    val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/user/${propsUuid.toString}", None)
+
+    val author1 = OwcAuthor(UUID.randomUUID(), s"${user.firstname} ${user.lastname}", Some(user.email), None)
+
+    val defaultOwcProps = OwcProperties(
+      propsUuid,
+      "en",
+      "User Default Collection",
+      Some("Your personal collection"),
+      Some(ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())),
+      None,
+      Some("CC BY SA 4.0 NZ"),
+      List(author1),
+      List(),
+      None,
+      Some("GNS Science"),
+      List(),
+      List(link1, link2)
+    )
+
+    val defaultOwcDoc = OwcDocument(s"http://portal.smart-project.info/context/user/${propsUuid.toString}",
+      None, defaultOwcProps, List())
+
+    val ok = owcDocumentDAO.createUsersDefaultOwcDocument(defaultOwcDoc, user.username)
+    ok match {
+      case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}" )
+      case _ => logger.error("Something failed miserably")
+    }
+  }
+
+  /**
+    *
+    * @param mdMetadata
+    * @param username
+    * @return
+    */
+  def addEntryToUserDefaultCollection(mdMetadata: MdMetadata, username: String) : Boolean = {
+
+    val cswGetCapaOps = OwcOperation(UUID.randomUUID(),
+      "GetCapabilities",
+      "GET",
+      "application/xml",
+      "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
+      None, None)
+
+    val cswGetRecordOps = OwcOperation(UUID.randomUUID(),
+      "GetRecordsById", "POST", "application/xml",
+      "http://portal.smart-project.info/pycsw/csw",
+      Some(OwcPostRequestConfig(
+        Some("application/xml"),
+        Some(s"""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
+               |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
+               |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
+               |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
+               |service="CSW" version="2.0.2">
+               |<csw:Id>${mdMetadata.fileIdentifier}</csw:Id>
+               |<csw:ElementSetName>full</csw:ElementSetName>
+               |</csw:GetRecordById>""".stripMargin)
+        )
+      ), None)
+
+    val propsUuid = UUID.randomUUID()
+    val updatedTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+
+    val cswOffering = CswOffering(
+      UUID.randomUUID(),
+      "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
+      List(cswGetCapaOps, cswGetRecordOps),
+      List()
+    )
+
+    val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/${propsUuid.toString}", None)
+    val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(username)
+
+    def upsertOk = defaultCollection.map{ owcDoc =>
+      {
+        val author1 = owcDoc.properties.authors.head
+
+        val entryProps = OwcProperties(
+          propsUuid,
+          "en",
+          mdMetadata.title,
+          Some(mdMetadata.abstrakt),
+          Some(updatedTime),
+          None,
+          Some("CC BY SA 4.0 NZ"),
+          List(author1),
+          List(),
+          None,
+          Some("GNS Science"),
+          List(),
+          List(link1)
+        )
+        val owcEntry = OwcEntry("http://portal.smart-project.info/context/" + mdMetadata.fileIdentifier,
+          None, entryProps, List(cswOffering))
+        val entries = owcDoc.features ++ Seq(owcEntry)
+        val newDoc = owcDoc.copy(features = entries)
+        owcDocumentDAO.updateOwcDocument(newDoc, username).isDefined
+      }
+    }
+    upsertOk.getOrElse(false)
+  }
 
   def insertCollection(owcDocument: OwcDocument, username: String) = {
-    val owcOk = owcDocumentDAO.createOwcDocument(owcDocument)
+    val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, username)
     owcOk
   }
 

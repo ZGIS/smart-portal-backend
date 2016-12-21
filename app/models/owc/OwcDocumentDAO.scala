@@ -346,6 +346,61 @@ class OwcDocumentDAO @Inject()(db: Database,
   }
 
   /**
+    * get all publicly visible OwcDocuments
+    *
+    * @return
+    */
+  def getAllPublicOwcDocuments: Seq[OwcDocument] = {
+    findOwcDocumentsByVisibility(2)
+  }
+
+  /**
+    * find all OwcDocumenst by visibility
+    *
+    * @param visibility 0: user-owned/private, 1: organisation, 2: public
+    * @return
+    */
+  def findOwcDocumentsByVisibility(visibility: Int): Seq[OwcDocument] = {
+    db.withConnection { implicit connection =>
+
+      SQL(
+        s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
+           |where feature_type = {feature_type} AND u.visibility >= {visibility}""".stripMargin).on(
+        'feature_type -> "OwcDocument",
+        'visibility -> visibility
+      ).as(owcDocumentParser *)
+    }
+  }
+
+  /**
+    * find OwcDocumenst by user and type
+    *
+    * @param username
+    * @param collectionType DEFAULT: user personal default, CUSTOM: general purpose
+    * @return
+    */
+  def findOwcDocumentsByUserAndType(username: String, collectionType: String): Seq[OwcDocument] = {
+    db.withConnection { implicit connection =>
+
+      SQL(
+        s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           | FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
+           | where feature_type = {feature_type}
+           | AND u.users_username = {username}
+           | AND u.collection_type = {collection_type} """.stripMargin).on(
+        'feature_type -> "OwcDocument",
+        'username -> username,
+        'collection_type -> collectionType
+      ).as(owcDocumentParser *)
+    }
+  }
+
+  def findUserDefaultOwcDocument(username: String): Option[OwcDocument] = {
+    findOwcDocumentsByUserAndType(username, "DEFAULT").headOption
+  }
+
+  /**
     * find an OwcDocument by its id
     *
     * @param id
@@ -363,20 +418,93 @@ class OwcDocumentDAO @Inject()(db: Database,
   }
 
   /**
-    * Not yet implemented, might be useful to be able to search for owc collections (OwcDocument) based on spatial query
+    * find an OwcDocument by its id
     *
-    * @param bbox
-    * @param operation
+    * @param id
     * @return
     */
-  def findOwcDocumentsByBbox(bbox: Rectangle, operation: String = "Intersect") = ???
+  def findPublicOwcDocumentsById(id: String): Option[OwcDocument] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
+           |where ft.feature_type = {feature_type} AND ft.id = {id} AND u.visibility >= {visibility}""".stripMargin).on(
+        'feature_type -> "OwcDocument",
+        'id -> id,
+        'visibility -> 2
+      ).as(owcDocumentParser.singleOpt)
+    }
+  }
 
   /**
+    * find an OwcDocument by its id and user
+    *
+    * @param id
+    * @param username
+    * @return
+    */
+  def findOwcDocumentByIdAndUser(id: String, username: String): Option[OwcDocument] = {
+    db.withConnection { implicit connection =>
+
+      SQL(
+        s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
+           |where ft = {id} AND feature_type = {feature_type} AND u.users_username = {username}""".stripMargin).on(
+        'id -> id,
+        'feature_type -> "OwcDocument",
+        'username -> username
+      ).as(owcDocumentParser.singleOpt)
+    }
+  }
+
+  /**
+    * find an OwcDocument by user
+    *
+    * @param username
+    * @return
+    */
+  def findOwcDocumentByUser(username: String): Seq[OwcDocument] = {
+    db.withConnection { implicit connection =>
+
+      SQL(
+        s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
+           |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
+           |where feature_type = {feature_type} AND u.users_username = {username}""".stripMargin).on(
+        'feature_type -> "OwcDocument",
+        'username -> username
+      ).as(owcDocumentParser *)
+    }
+  }
+
+  /**
+    * create Users Default collection aka Owc Document, visibility 0 > private,
+    * collectionType "DEFAULT"
     *
     * @param owcDocument
     * @return
     */
-  def createOwcDocument(owcDocument: OwcDocument): Option[OwcDocument] = {
+  def createUsersDefaultOwcDocument(owcDocument: OwcDocument, username: String): Option[OwcDocument] = {
+    createOwcDocument(owcDocument, username, 0, "DEFAULT")
+  }
+
+  /**
+    * create Users Default collection aka Owc Document, visibility 0 > private,
+    * collectionType "CUSTOM"
+    *
+    * @param owcDocument
+    * @return
+    */
+  def createCustomOwcDocument(owcDocument: OwcDocument, username: String): Option[OwcDocument] = {
+    createOwcDocument(owcDocument, username, 0, "CUSTOM")
+  }
+
+  /**
+    * create/insert into db Owc Document
+    *
+    * @param owcDocument
+    * @return
+    */
+  def createOwcDocument(owcDocument: OwcDocument, username: String, visibility: Int, collectionType: String): Option[OwcDocument] = {
     db.withTransaction {
       implicit connection => {
 
@@ -422,6 +550,16 @@ class OwcDocumentDAO @Inject()(db: Database,
           'owc_properties_uuid -> owcDocument.properties.uuid.toString
         ).executeUpdate()
 
+        SQL(
+          s"""insert into $tableUserHasOwcDocuments values (
+             |{username}, {owcDocumentId}, {collection_type}, {visibility}
+             |)""".stripMargin).on(
+          'username -> username,
+          'owcDocumentId -> owcDocument.id,
+          'collection_type -> collectionType,
+          'visibility -> visibility
+        ).executeUpdate()
+
         rowCount match {
           case 1 => Some(owcDocument)
           case _ => None
@@ -436,7 +574,43 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param owcDocument
     * @return
     */
-  def updateOwcDocument(owcDocument: OwcDocument): Option[OwcDocument] = ???
+  def updateOwcDocumentTypeAndVisibility(owcDocument: OwcDocument,
+                                         username: String,
+                                         visibility: Int,
+                                         collectionType: String): Option[OwcDocument] = {
+
+    db.withTransaction {
+      implicit connection => {
+        val rowCount = SQL(
+          s"""UPDATE $tableUserHasOwcDocuments SET
+             |collection_type = {collection_type},
+             |visibility = {visibility}
+             |WHERE username = {username} AND owcDocumentId = {owcDocumentId}
+             |""".stripMargin).on(
+          'collection_type -> collectionType,
+          'visibility -> visibility,
+          'username -> username,
+          'owcDocumentId -> owcDocument.id
+        ).executeUpdate()
+
+        rowCount match {
+          case 1 => Some(owcDocument)
+          case _ => None
+        }
+      }
+    }
+
+  }
+
+  /**
+    *
+    * @param owcDocument
+    * @param username
+    * @return
+    */
+  def updateOwcDocument(owcDocument: OwcDocument, username: String) : Option[OwcDocument] = {
+    None
+  }
 
   /**
     * delete a full owc document hierarchically
@@ -453,6 +627,10 @@ class OwcDocumentDAO @Inject()(db: Database,
         ).executeUpdate()
 
         SQL(s"""delete from $tableOwcFeatureTypesHasOwcProperties where owc_feature_types_id = {id}""").on(
+          'id -> owcDocument.id
+        ).executeUpdate()
+
+        SQL(s"""delete from $tableUserHasOwcDocuments where owc_feature_types_as_document_id = {id}""").on(
           'id -> owcDocument.id
         ).executeUpdate()
 

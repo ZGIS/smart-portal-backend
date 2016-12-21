@@ -21,8 +21,7 @@ package controllers
 
 import javax.inject._
 
-import models.owc.{OwcDocument, OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
-import models.users._
+import models.owc.OwcDocument
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, Json}
@@ -37,11 +36,9 @@ class CollectionsController @Inject()(config: Configuration,
                                       collectionsService: OwcCollectionsService,
                                       override val passwordHashing: PasswordHashing) extends Controller with Security with ClassnameLogger {
 
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-
-  logger.error("controller starting")
 
   /**
     *
@@ -50,9 +47,22 @@ class CollectionsController @Inject()(config: Configuration,
     */
   def getCollections(id: Option[String]) = HasOptionalToken(parse.empty) {
     authUserOption =>
-        implicit request =>
-        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map( doc => doc.toJson)
+      implicit request =>
+        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map(doc => doc.toJson)
         Ok(Json.obj("status" -> "OK", "count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
+
+  }
+
+  /**
+    *
+    * @return
+    */
+  def getPersonalDefaultCollection = HasToken(parse.empty) {
+    token =>
+      authUser =>
+        implicit request =>
+        val owcJsDocs = collectionsService.getUserDefaultOwcDocument(authUser).map(doc => doc.toJson)
+        Ok(owcJsDocs.getOrElse(Json.obj("status" -> "ERR", "message" -> "Not found :-(")))
 
   }
 
@@ -64,14 +74,21 @@ class CollectionsController @Inject()(config: Configuration,
     token =>
       authUser =>
         implicit request =>
-          request.body.validate[OwcDocument]fold(
+          request.body.validate[OwcDocument] fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
               BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
             },
             owcDocument => {
               val inserted = collectionsService.insertCollection(owcDocument, authUser)
-              Ok(Json.obj("status" -> "OK", "message" -> "owcDocument inserted"))
+              inserted.fold {
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "database insert failed"))
+              } {
+                theDoc => {
+                  Ok(Json.obj("status" -> "OK", "message" -> "owcDocument inserted", "document" -> theDoc.toJson))
+                }
+              }
+
             }
           )
   }

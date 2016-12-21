@@ -176,10 +176,10 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
         'method -> owcOperation.method,
         'content_type -> owcOperation.contentType,
         'href -> owcOperation.href,
-        'request_content_type -> owcOperation.request.map(_.contentType.get),
-        'request_post_data -> owcOperation.request.map(_.postData.get),
-        'result_content_type -> owcOperation.result.map(_.contentType.get),
-        'result_data -> owcOperation.result.map(_.resultData.get)
+        'request_content_type -> owcOperation.request.map(_.contentType.orNull),
+        'request_post_data -> owcOperation.request.map(_.postData.orNull),
+        'result_content_type -> owcOperation.result.map(_.contentType.orNull),
+        'result_data -> owcOperation.result.map(_.resultData.orNull)
       ).executeUpdate()
 
       rowCount match {
@@ -214,10 +214,10 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
         'method -> owcOperation.method,
         'content_type -> owcOperation.contentType,
         'href -> owcOperation.href,
-        'request_content_type -> owcOperation.request.map(_.contentType.get),
-        'request_post_data -> owcOperation.request.map(_.postData.get),
-        'result_content_type -> owcOperation.result.map(_.contentType.get),
-        'result_data -> owcOperation.result.map(_.resultData.get),
+        'request_content_type -> owcOperation.request.map(_.contentType.orNull),
+        'request_post_data -> owcOperation.request.map(_.postData.orNull),
+        'result_content_type -> owcOperation.result.map(_.contentType.orNull),
+        'result_data -> owcOperation.result.map(_.resultData.orNull),
         'uuid -> owcOperation.uuid.toString
       ).executeUpdate()
 

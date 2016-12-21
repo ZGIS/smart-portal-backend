@@ -4,7 +4,7 @@
 
 -- # trait OwcFeatureType, impl are OwcEntry (which contains Offerings), and OwcDocument (which contains OwcEntries)
 CREATE TABLE owc_feature_types (
-  id varchar(255) NOT NULL,
+  id varchar(2047) NOT NULL,
   feature_type varchar(255) NOT NULL,
   bbox varchar(255),
   PRIMARY KEY (id)
@@ -12,17 +12,16 @@ CREATE TABLE owc_feature_types (
 
 -- # can have owc_feature_type (if feature_type is 'OwcDocument'): foreign key owc_feature_type -> owc_feature_type n:n,
 CREATE TABLE owc_feature_types_as_document_has_owc_entries (
-  owc_feature_types_as_document_id varchar(255) REFERENCES owc_feature_types(id),
-  owc_feature_types_as_entry_id varchar(255) REFERENCES owc_feature_types(id)
+  owc_feature_types_as_document_id varchar(2047) REFERENCES owc_feature_types(id),
+  owc_feature_types_as_entry_id varchar(2047) REFERENCES owc_feature_types(id)
 );
 
 CREATE TABLE owc_authors (
   uuid varchar(255) NOT NULL,
   name varchar(255) NOT NULL,
   email varchar(255),
-  uri varchar(255),
-  PRIMARY KEY (uuid),
-  UNIQUE (name)
+  uri varchar(2047),
+  PRIMARY KEY (uuid)
 );
 -- # belongs to owc_properties_has_owc_authors: owc_author -> owc_properties (authors) n:n,
 -- # belongs to owc_properties_has_owc_authors_as_contributors: owc_author -> owc_properties (contributors) n:n,
@@ -35,19 +34,17 @@ CREATE TABLE owc_categories (
   PRIMARY KEY (uuid)
 );
 
--- CONSTRAINT u_constraint UNIQUE (scheme, term)
 -- # belongs to owc_properties_has_owc_category: foreign key owc_category -> owc_properties (categories)  n:n,
 
 CREATE TABLE owc_links (
   uuid varchar(255) NOT NULL,
   rel varchar(255) NOT NULL,
   mime_type varchar(255),
-  href varchar(255) NOT NULL,
+  href varchar(2047) NOT NULL,
   title varchar(255),
   PRIMARY KEY (uuid)
 );
 
--- CONSTRAINT u_constraint UNIQUE (rel, href)
 -- # belongs to owc_properties_has_owc_links: foreign key owc_links -> owc_properties (links) n:n,
 
 CREATE TABLE owc_properties (
@@ -60,13 +57,12 @@ CREATE TABLE owc_properties (
   rights varchar(255),
   creator varchar(255),
   publisher varchar(255),
-  PRIMARY KEY (uuid),
-  UNIQUE (title)
+  PRIMARY KEY (uuid)
 );
 -- # belongs to owc_feature_type_has_owc_properties: foreign key owc_properties -> owc_feature_type n:n,
 -- # has properties: foreign key owc_feature_type -> owc_properties n:n,
 CREATE TABLE owc_feature_types_has_owc_properties (
-  owc_feature_types_id varchar(255) REFERENCES owc_feature_types(id),
+  owc_feature_types_id varchar(2047) REFERENCES owc_feature_types(id),
   owc_properties_uuid varchar(255) REFERENCES owc_properties(uuid)
 );
 
@@ -105,7 +101,7 @@ CREATE TABLE owc_offerings (
 -- # belongs to owc_feature_type_as_entry_has_owc_offerings: foreign key owc_offering -> owc_feature_type n:n,
 -- # can have owc_offerings (if feature_type is 'OwcEntry'): foreign key owc_feature_type -> owc_offering n:n,
 CREATE TABLE owc_feature_types_as_entry_has_owc_offerings (
-  owc_feature_types_as_entry_id varchar(255) REFERENCES owc_feature_types(id),
+  owc_feature_types_as_entry_id varchar(2047) REFERENCES owc_feature_types(id),
   owc_offerings_uuid varchar(255) REFERENCES owc_offerings(uuid)
 );
 
@@ -114,7 +110,7 @@ CREATE TABLE owc_operations (
   code varchar(255) NOT NULL,
   method varchar(255) NOT NULL,
   content_type varchar(255) NOT NULL,
-  href varchar(255) NOT NULL,
+  href varchar(2047) NOT NULL,
   request_content_type varchar(255),
   request_post_data text,
   result_content_type varchar(255),

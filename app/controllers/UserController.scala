@@ -27,7 +27,7 @@ import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, Json}
 import play.api.mvc.{Action, Controller, Cookie}
-import services.EmailService
+import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.util.{Failure, Success, Try}
@@ -66,6 +66,7 @@ case class RegisterJs(email: String,
   * @param config
   * @param cacheApi
   * @param emailService
+  * @param collectionsService
   * @param userDAO
   * @param passwordHashing
   */
@@ -73,14 +74,13 @@ case class RegisterJs(email: String,
 class UserController @Inject()(config: Configuration,
                                cacheApi: CacheApi,
                                emailService: EmailService,
+                               collectionsService: OwcCollectionsService,
                                userDAO: UserDAO,
                                override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-
-  logger.error("controller starting")
 
   /**
     * self registering for user accounts
@@ -118,6 +118,7 @@ class UserController @Inject()(config: Configuration,
             } { user =>
               val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
               logger.info(s"New user registered. Email went out $emailWentOut")
+              // creating default collection only after registration, account is only barely usable here
               Ok(Json.toJson(user.asProfileJs()))
             }
           } { user =>
@@ -170,7 +171,8 @@ class UserController @Inject()(config: Configuration,
             Redirect("/#/register")
           } { user =>
             val emailWentOut = emailService.sendConfirmationEmail(user.email, "Your GW HUB account is now active", user.firstname)
-            // all good here
+            // all good here, creating default collection (Unit)
+            collectionsService.createUserDefaultCollection(user)
             // maybe should also do the full login thing here? how does that relate with the alternative Google Oauth thing
             logger.info(s"Registered user ${user.username} confirmed email ${user.email}. Email went out $emailWentOut")
             Redirect("/#/login")

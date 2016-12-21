@@ -21,13 +21,16 @@
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
+import anorm.{SQL, SqlParser}
 import com.typesafe.config.ConfigFactory
 import models.owc._
+import models.users.{User, UserDAO}
 import org.locationtech.spatial4j.context.SpatialContext
 import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
+import utils.PasswordHashing
 
 /**
   * Test Spec for [[OwcDocumentDAO]] with [[OwcDocument]] and [[OwcEntry]]
@@ -47,6 +50,11 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
   }
 
   private lazy val ctx = SpatialContext.GEO
+  private lazy val owcResource1 = this.getClass().getResource("owc/smart-nz.owc.json")
+  private lazy val owcResource2 = this.getClass().getResource("owc/smart-sac.owc.json")
+  private lazy val owcResource3 = this.getClass().getResource("owc/smart-mond.owc.json")
+  private lazy val owcResource4 = this.getClass().getResource("owc/csw_10entries.owc.json")
+  private lazy val owcResource5 = this.getClass().getResource("owc/wps_52north.owc.json")
 
   "OwcDocument " can {
 
@@ -210,17 +218,30 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val owcOfferingDAO = new OwcOfferingDAO(database)
         val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val userDao = new UserDAO(database, passwordHashing)
+
+        val testUser1 = User("test@blubb.com",
+          "test",
+          "Hans",
+          "Wurst",
+          passwordHashing.createHash("testpass123"),
+          "ACTIVE:REGCONFIRMED",
+          ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault()))
+
+        userDao.create(testUser1)
+
         val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100", None, featureProps1, List(offering1, offering2))
         val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac_add-nz_aquifers", Some(world), featureProps2, List(offering3, offering4))
 
         val owcDocument1 = OwcDocument("http://portal.smart-project.info/context/smart-sac", Some(world), documentProps1, List(owcEntry1, owcEntry2))
 
-        owcDocumentDAO.createOwcDocument(owcDocument1) mustEqual Some(owcDocument1)
+        owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.username, 2, "CUSTOM") mustEqual Some(owcDocument1)
 
         owcDocumentDAO.getAllOwcDocuments.size mustEqual 1
         owcDocumentDAO.getAllOwcEntries.size mustEqual 2
 
-        val thrown1 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcDocument(owcDocument1)
+        val thrown1 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.username, 2, "CUSTOM")
         thrown1.getErrorCode mustEqual 23505
 
         val thrown2 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcEntry(owcEntry2)
@@ -241,11 +262,82 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         owcDocumentDAO.deleteOwcDocument(owcDocument1) mustBe true
 
+        database.withConnection( implicit connecttion =>
+          SQL(s"""select owc_feature_types_as_document_id from $tableUserHasOwcDocuments""").as(
+            SqlParser.str("owc_feature_types_as_document_id") *
+          ).isEmpty
+        ) mustBe true
+
         owcDocumentDAO.getAllOwcDocuments.size mustEqual 0
         owcDocumentDAO.getAllOwcEntries.size mustEqual 0
         owcPropertiesDAO.getAllOwcProperties.size mustBe 0
         owcPropertiesDAO.getAllOwcCategories.size mustBe 0
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 0
+      }
+    }
+
+    "handle Users having OwcDocuments with DB" in {
+      withTestDatabase { database =>
+
+        val jsonTestCollection1 = scala.io.Source.fromURL(owcResource1).getLines.mkString
+        val jsonTestCollection2 = scala.io.Source.fromURL(owcResource2).getLines.mkString
+        val jsonTestCollection3 = scala.io.Source.fromURL(owcResource3).getLines.mkString
+        val jsonTestCollection4 = scala.io.Source.fromURL(owcResource4).getLines.mkString
+        val jsonTestCollection5 = scala.io.Source.fromURL(owcResource5).getLines.mkString
+
+        val owcDoc1 = OwcDocument.parseJson(jsonTestCollection1).get
+        val owcDoc2 = OwcDocument.parseJson(jsonTestCollection2).get
+        val owcDoc3 = OwcDocument.parseJson(jsonTestCollection3).get
+        val owcDoc4 = OwcDocument.parseJson(jsonTestCollection4).get
+        val owcDoc5 = OwcDocument.parseJson(jsonTestCollection5).get
+
+        val owcPropertiesDAO = new OwcPropertiesDAO(database)
+        val owcOfferingDAO = new OwcOfferingDAO(database)
+        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val userDao = new UserDAO(database, passwordHashing)
+
+        val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+        val cryptPass = passwordHashing.createHash("testpass123")
+
+        val testUser1 = User("test@blubb.com",
+          "test",
+          "Hans",
+          "Wurst",
+          cryptPass,
+          "ACTIVE:REGCONFIRMED",
+          testTime)
+
+        val testUser2 = User("test2@blubb.com",
+          "test2",
+          "Hans",
+          "Wurst",
+          cryptPass,
+          "REGISTERED:XYZ123",
+          testTime)
+
+        userDao.create(testUser1) mustEqual Some(testUser1)
+        userDao.create(testUser2) mustEqual Some(testUser2)
+
+        owcDocumentDAO.createUsersDefaultOwcDocument(owcDoc1, testUser1.username)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc2, testUser1.username)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc3, testUser1.username)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc4, testUser1.username)
+        owcDocumentDAO.createOwcDocument(owcDoc5, testUser2.username, 2, "CUSTOM")
+
+        owcDocumentDAO.getAllOwcDocuments.size mustEqual 5
+        owcDocumentDAO.getAllOwcEntries.size mustEqual 70
+        owcPropertiesDAO.getAllOwcProperties.size mustBe 75
+        owcPropertiesDAO.getAllOwcCategories.size mustBe 79
+        owcOfferingDAO.getAllOwcOfferings.size mustEqual 139
+
+        database.withConnection( implicit connecttion =>
+          SQL(s"""select owc_feature_types_as_document_id from $tableUserHasOwcDocuments""").as(
+            SqlParser.str("owc_feature_types_as_document_id") *
+          ).size
+        ) mustBe 5
+
       }
     }
 

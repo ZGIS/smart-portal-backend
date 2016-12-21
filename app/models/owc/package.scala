@@ -38,4 +38,6 @@ package object owc {
   implicit val tableOwcAuthors = "owc_authors"
   implicit val tableOwcFeatureTypes = "owc_feature_types"
 
+  implicit val tableUserHasOwcDocuments = "user_has_owc_feature_types_as_document"
+
 }

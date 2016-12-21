@@ -59,7 +59,7 @@ libraryDependencies ++= Seq(
   "com.google.http-client" % "google-http-client-jackson2" % googleVersion,
   "com.google.api-client" % "google-api-client" % googleVersion,
 
-  "com.google.cloud" % "google-cloud" % "0.8.0",
+  "com.google.cloud" % "google-cloud" % "0.8.0" excludeAll(ExclusionRule(organization = "io.netty")),
 
   "com.typesafe.akka" %% "akka-http-core" % akkaVersion,
   "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,

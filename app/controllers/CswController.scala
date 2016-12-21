@@ -71,8 +71,6 @@ class CswController @Inject()(val configuration: Configuration,
   val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
   val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
 
-  logger.error("controller starting")
-
 
   /**
     * returns valid values for different topics used in metadata editor of webgui

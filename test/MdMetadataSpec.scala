@@ -21,7 +21,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import models.gmd.{MdMetadata, MdMetadataCitation}
+import models.gmd._
 import org.scalatest.GivenWhenThen
 import org.scalatestplus.play.{OneAppPerSuite, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -63,21 +63,40 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
   }
 
 
-  "MdMetadataExtent" should {
-    "parse correctly" in (pending)
-    /*
-            "extent": {
-              "description": "World",
-              "referenceSystem": "urn:ogc:def:crs:EPSG::4328",
-              "mapExtentCoordinates": [
-              160.7447453125,
-              -44.0115859375,
-              188.7818546875,
-              -29.6854140625
-              ],
-              "temporalExtent": ""
-            },
-    */
+  "MdMetadataExtent" when {
+    "valid Json is parsed" in {
+      val mdMetadataExtent = MdMetadataExtent.fromJson(
+        (parsedResourceAsJsValue("gmd/MdMetadataFull.json") \ "extent").get)
+      Then("result must be defined")
+      mdMetadataExtent mustBe defined
+
+      And("description must be filled correctly")
+      mdMetadataExtent.get.description mustEqual "World"
+
+      And("referenceSystem must be filled correctly")
+      mdMetadataExtent.get.referenceSystem mustEqual "urn:ogc:def:crs:EPSG::4328"
+
+      And("mapExtentCoordinates must be filled correctly")
+      mdMetadataExtent.get.mapExtentCoordinates mustEqual
+        List(160.7447453125, -44.0115859375, 188.7818546875, -29.6854140625)
+
+      And("temporalExtent must be filled correctly")
+      mdMetadataExtent.get.temporalExtent mustEqual ""
+    }
+
+    "invalid referenceSystem is parsed" in {
+      val mdMetadataExtent = MdMetadataExtent.fromJson(
+        parsedResourceAsJsValue("gmd/MdMetadataExtentInvalidReferenceSystem.json"))
+      Then("result must be NONE")
+      mdMetadataExtent mustBe None
+    }
+
+    "invalid mapExtentCoordinates is parsed" in {
+      val mdMetadataExtent = MdMetadataExtent.fromJson(
+        parsedResourceAsJsValue("gmd/MdMetadataExtentInvalidExtentCoordinates.json"))
+      Then("result must be NONE")
+      mdMetadataExtent mustBe None
+    }
   }
 
   "MdMetadataCitation" when {
@@ -88,10 +107,10 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
       mdMetadataCitation mustBe defined
 
       And("ciDate must contain correct value")
-      mdMetadataCitation.get.ciDate mustBe LocalDate.of(2016, 1, 1)
+      mdMetadataCitation.get.ciDate mustEqual LocalDate.of(2016, 1, 1)
 
       And("ciDateType must contain correct value")
-      mdMetadataCitation.get.ciDateType mustBe "publication"
+      mdMetadataCitation.get.ciDateType mustEqual "publication"
     }
 
     "invalid ciDateType is parsed" in {
@@ -102,29 +121,66 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
     }
   }
 
-  "MdMetadataResponsibleParty" should {
-    "parse correctly" in (pending)
-    /*
-    "responsibleParty": {
-      "individualName": "Hans Wurst",
-      "telephone": "+01 2334 5678910",
-      "email": "wurst.hans@test.com",
-      "pointOfContact": "publisher",
-      "orgName": "Test Org",
-      "orgWebLinkage": "http://www.test.com"
-    },
-    */
+  "MdMetadataResponsibleParty" when {
+    "valid Json is parsed" in {
+      val mdMetadataResponsibleParty = MdMetadataResponsibleParty.fromJson(
+        (parsedResourceAsJsValue("gmd/MdMetadataFull.json") \ "responsibleParty").get)
+      Then("result must be defined")
+      mdMetadataResponsibleParty mustBe defined
+
+      And("individualName must be filled correctly")
+      mdMetadataResponsibleParty.get.individualName mustEqual "Hans Wurst"
+
+      And("telephone must be filled correctly")
+      mdMetadataResponsibleParty.get.telephone mustEqual "+01 2334 5678910"
+
+      And("email must be filled correctly")
+      mdMetadataResponsibleParty.get.email mustEqual "wurst.hans@test.com"
+
+      And("pointOfContact must be filled correctly")
+      mdMetadataResponsibleParty.get.pointOfContact mustEqual "publisher"
+
+      And("orgName must be filled correctly")
+      mdMetadataResponsibleParty.get.orgName mustEqual "Test Org"
+
+      And("orgWebLinkage must be filled correctly")
+      mdMetadataResponsibleParty.get.orgWebLinkage mustEqual "http://www.test.com"
+    }
+
+    "invalid Json is parsed" in {
+      (pending)
+    }
   }
 
-  "MdMetadataDistribution" should {
-    "parse correctly" in (pending)
-    /*
-    "distribution": {
-      "useLimitation": "I don't know",
-      "formatName": "CSW",
-      "formatVersion": "web service type",
-      "onlineResourceLinkage": "http://www.test.com/?service=CSW&version=2.0.2&request=GetCapabilities"
-    }*/
+  "MdMetadataDistribution"  when {
+    "valid Json is parsed" in {
+      val mdMetadataDistribution = MdMetadataDistribution.fromJson(
+        (parsedResourceAsJsValue("gmd/MdMetadataFull.json") \ "distribution").get)
+      Then("result must be defined")
+      mdMetadataDistribution mustBe defined
+
+      And("useLimitation must be filled correctly")
+      mdMetadataDistribution.get.useLimitation mustEqual "I don't know"
+
+      And("formatName must be filled correctly")
+      mdMetadataDistribution.get.formatName mustEqual "CSW"
+
+      And("formatVersion must be filled correctly")
+      mdMetadataDistribution.get.formatVersion mustEqual "web service type"
+
+      And("onlineResourceLinkage must be filled correctly")
+      mdMetadataDistribution.get.onlineResourceLinkage mustEqual "http://www.test.com/?service=CSW&version=2.0.2&request=GetCapabilities"
+    }
+    "invalid Json is parsed" in {
+      (pending)
+      /*
+      "distribution": {
+        "useLimitation": "I don't know",
+        "formatName": "CSW",
+        "formatVersion": "web service type",
+        "onlineResourceLinkage": "http://www.test.com/?service=CSW&version=2.0.2&request=GetCapabilities"
+      }*/
+    }
   }
 
   "MdMetadata" should {
@@ -139,38 +195,37 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
         mdMetadata.get.fileIdentifier mustBe "weird-fileIdentifier"
 
         And("Title must be filled correctly")
-        mdMetadata.get.title mustBe "Test Title"
+        mdMetadata.get.title mustEqual "Test Title"
 
         And("Abstrakt must be filled correctly")
-        mdMetadata.get.abstrakt mustBe "This is an abstract abstract"
+        mdMetadata.get.abstrakt mustEqual "This is an abstract abstract"
 
         And("Keyword List must have two entries")
-        mdMetadata.get.keywords.size mustBe 2
+        mdMetadata.get.keywords.size mustEqual 2
 
         And("TopicCategory must be filled correctly")
-        mdMetadata.get.topicCategoryCode mustBe "boundaries"
+        mdMetadata.get.topicCategoryCode mustEqual "boundaries"
 
         And("HierarchyLevelName must be filled correctly")
-        mdMetadata.get.hierarchyLevelName mustBe "nonGeographicDataset"
+        mdMetadata.get.hierarchyLevelName mustEqual "nonGeographicDataset"
 
         And("Scale must be filled correctly")
-        mdMetadata.get.scale mustBe "1000000"
+        mdMetadata.get.scale mustEqual "1000000"
 
         And("Extend must be defined")
-        //        mdMetadata.get.extent mustBe defined
+        mdMetadata.get.extent.isInstanceOf[MdMetadataExtent] mustBe true
 
         And("Citation must be defined")
         mdMetadata.get.citation.isInstanceOf[MdMetadataCitation] mustBe true
 
         And("lineageStatement must be filled correctly")
-        mdMetadata.get.lineageStatement mustBe ""
+        mdMetadata.get.lineageStatement mustEqual ""
 
         And("ResponsibleParty must be defined")
-        //        mdMetadata.get.responsibleParty mustBe defined
+        mdMetadata.get.responsibleParty.isInstanceOf[MdMetadataResponsibleParty] mustBe true
 
         And("Distribution must be defined")
-        //        mdMetadata.get.distribution mustBe defined
-        (pending)
+        mdMetadata.get.distribution.isInstanceOf[MdMetadataDistribution] mustBe true
       }
 
       "fileIdentifier is empty" in {
@@ -196,9 +251,9 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
       }
     }
 
-    "reproduce parsed document" ignore {
+    "reproduce parsed document" in {
       val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
-      mdMetadata.get.toJson() mustBe parsedResourceAsJsValue("gmd/MdMetadataFull.json")
+      mdMetadata.get.toJson() mustEqual parsedResourceAsJsValue("gmd/MdMetadataFull.json")
     }
   }
 }

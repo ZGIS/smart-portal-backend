@@ -18,7 +18,7 @@
  */
 
 import com.google.inject.AbstractModule
-import models.gmd.{MdMetadataCitation, MdMetadataCitationTrait, MdMetadataExtent, MdMetadataExtentTrait}
+import models.gmd._
 import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
 import services.{EmailService, MetadataService, OwcCollectionsService}
@@ -52,5 +52,7 @@ class Module extends AbstractModule {
     // companion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
     bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)
     bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)
+    bind(classOf[MdMetadataResponsiblePartyTrait]).toInstance(MdMetadataResponsibleParty)
+    bind(classOf[MdMetadataDistributionTrait]).toInstance(MdMetadataDistribution)
   }
 }

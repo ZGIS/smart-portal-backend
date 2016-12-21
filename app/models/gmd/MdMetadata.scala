@@ -19,16 +19,12 @@
 
 package models.gmd
 
-import java.time.LocalDate
 import java.util.UUID
 
 import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import utils.ClassnameLogger
-import javax.inject.Inject
-
-import services.MetadataService
 
 import scala.xml.Node
 
@@ -52,8 +48,13 @@ trait Jsonable {
 }
 
 trait JsonableCompagnion[A] extends ClassnameLogger {
+  implicit val reads: Reads[A]
+  implicit val writes: Writes[A]
+  implicit val format: Format[A] = Format(reads, writes)
+
   /**
     * parse object from Json
+    *
     * @param json
     * @return Option if parsing error
     */
@@ -78,6 +79,7 @@ case class MdMetadata(val fileIdentifier: String,
                       val topicCategoryCode: String,
                       val hierarchyLevelName: String,
                       val scale: String,
+                      val extent: MdMetadataExtent,
                       val citation: MdMetadataCitation,
                       val lineageStatement: String
                      ) extends Jsonable with Xmlable {
@@ -90,9 +92,9 @@ case class MdMetadata(val fileIdentifier: String,
 }
 
 object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
-
-  implicit val reads: Reads[MdMetadata] = (
-    (JsPath \ "fileIdentifier").read[String](Reads.filterNot[String](ValidationError("String empty"))(_.trim().isEmpty))
+  override implicit val reads: Reads[MdMetadata] = (
+    (JsPath \ "fileIdentifier").read[String](
+      Reads.filterNot[String](ValidationError("fileIdentifier-String empty"))(_.trim().isEmpty))
       or Reads.pure(UUID.randomUUID().toString)
       and
       (JsPath \ "title").read[String] and
@@ -101,6 +103,7 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
       (JsPath \ "topicCategoryCode").read[String] and
       (JsPath \ "hierarchyLevelName").read[String] and
       (JsPath \ "scale").read[String] and
+      (JsPath \ "extent").read[MdMetadataExtent] and
       (JsPath \ "citation").read[MdMetadataCitation] and
       (JsPath \ "lineageStatement").read[String]
     ) (MdMetadata.apply _)
@@ -113,12 +116,10 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
       (JsPath \ "topicCategoryCode").write[String] and
       (JsPath \ "hierarchyLevelName").write[String] and
       (JsPath \ "scale").write[String] and
+      (JsPath \ "extent").write[MdMetadataExtent] and
       (JsPath \ "citation").write[MdMetadataCitation] and
       (JsPath \ "lineageStatement").write[String]
     ) (unlift(MdMetadata.unapply))
-
-  implicit val format: Format[MdMetadata] =
-    Format(reads, writes)
 
   def fromJson(json: JsValue): Option[MdMetadata] = {
     Json.fromJson[MdMetadata](json) match {
@@ -137,4 +138,5 @@ object MdMetadata extends ClassnameLogger with JsonableCompagnion[MdMetadata] {
   }
 
   def fromXml(node: Node): MdMetadata = ???
+
 }

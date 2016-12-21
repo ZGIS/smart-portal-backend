@@ -157,7 +157,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
         mdMetadata.get.scale mustBe "1000000"
 
         And("Extend must be defined")
-        //        mdMetadata.get.extent mustBe defined
+                mdMetadata.get. mustBe defined
 
         And("Citation must be defined")
         mdMetadata.get.citation.isInstanceOf[MdMetadataCitation] mustBe true

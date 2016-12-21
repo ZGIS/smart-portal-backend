@@ -69,8 +69,8 @@ object MdMetadataCitation extends ClassnameLogger with MdMetadataCitationTrait w
       (JsPath \ "ciDateType").write[String]
     ) (unlift(MdMetadataCitation.unapply))
 
-  implicit val format: Format[MdMetadataCitation] =
-    Format(reads, writes)
+//  implicit val format: Format[MdMetadataCitation] =
+//    Format(reads, writes)
 
   /**
     * parse object from Json

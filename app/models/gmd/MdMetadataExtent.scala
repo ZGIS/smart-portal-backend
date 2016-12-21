@@ -21,7 +21,8 @@ package models.gmd
 
 import javax.inject.Inject
 
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.functional.syntax.{unlift, _}
+import play.api.libs.json._
 import services.{MetadataService, ValidValuesReadsAdditions}
 
 import scala.xml.Node
@@ -45,7 +46,9 @@ case class MdMetadataExtent(val description: String,
     *
     * @return JsValue
     */
-  override def toJson(): JsValue = ??? //Json.toJson(this)
+  override def toJson(): JsValue = {
+    Json.toJson(this)
+  }
 
 
   /**
@@ -64,11 +67,38 @@ object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompagnion[Md
     */
   @Inject() override var metadataService: MetadataService = null
 
+  override implicit val reads: Reads[MdMetadataExtent] = (
+    (JsPath \ "description").read[String] and
+      (JsPath \ "referenceSystem").read[String](validValue("referenceSystem")) and
+      (JsPath \ "mapExtentCoordinates").read[List[Float]] and
+      (JsPath \ "temporalExtent").read[String]
+    ) (MdMetadataExtent.apply _)
+
+  override implicit val writes: Writes[MdMetadataExtent] = (
+    (JsPath \ "description").write[String] and
+      (JsPath \ "referenceSystem").write[String] and
+      (JsPath \ "mapExtentCoordinates").write[List[Float]] and
+      (JsPath \ "temporalExtent").write[String]
+    ) (unlift(MdMetadataExtent.unapply))
+
   /**
     * parse object from Json
     *
     * @param json
     * @return Option if parsing error
     */
-  override def fromJson(json: JsValue): Option[MdMetadataExtent] = ???
+  override def fromJson(json: JsValue): Option[MdMetadataExtent] = {
+    Json.fromJson[MdMetadataExtent](json) match {
+      case JsSuccess(r: MdMetadataExtent, path: JsPath) => Some(r)
+      case e: JsError => {
+        val lines = e.errors.map { tupleAction =>
+          val jsPath = tupleAction._1
+          val valErrors = tupleAction._2.map(valErr => valErr.message).toList.mkString(" ; ")
+          jsPath.toJsonString + " >> " + valErrors
+        }
+        logger.error(s"JsError info  ${lines.mkString(" | ")}")
+        None
+      }
+    }
+  }
 }

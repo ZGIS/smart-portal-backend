@@ -42,7 +42,7 @@ trait WithTestDatabase extends ClassnameLogger {
     * @return
     */
   def withTestDatabase[T](block: Database => T): T = {
-    val config = new Configuration(ConfigFactory.load("application.testdev.conf"))
+    val config = new Configuration(ConfigFactory.load("application.test.conf"))
 
     val driver = config.getString("db.default.driver").get
     val url = config.getString("db.default.url").get
@@ -77,7 +77,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build()
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
 
   before {
     // EMPTY

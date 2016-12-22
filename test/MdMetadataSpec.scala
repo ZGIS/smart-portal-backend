@@ -38,7 +38,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
     * custom application config for testing
     */
   override lazy val app: Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build()
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
 
   /**
     * parses a resource into MdMetadata Option

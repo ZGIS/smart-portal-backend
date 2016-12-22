@@ -14,7 +14,7 @@ class IntegrationSpec extends PlaySpec with OneServerPerTest with BeforeAndAfter
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application =
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.testdev.conf"))).build(
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build(
 
       )
 

@@ -19,6 +19,8 @@
 
 package models.gmd
 
+import java.time.format.DateTimeFormatter
+import java.time.{LocalDateTime, ZoneId, ZoneOffset, ZonedDateTime}
 import java.util.UUID
 
 import play.api.data.validation.ValidationError
@@ -86,7 +88,167 @@ case class MdMetadata(fileIdentifier: String,
                       distribution: MdMetadataDistribution
                      ) extends Jsonable with Xmlable {
 
-  def toXml(): Node = ???
+  def toXml(): Node = {
+    val mdMetadataTemplate =
+      <gmd:MD_Metadata xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gco="http://www.isotc211.org/2005/gco">
+        <gmd:fileIdentifier>{this.fileIdentifier}</gmd:fileIdentifier>
+        <gmd:language><gco:CharacterString>eng</gco:CharacterString></gmd:language>
+        <gmd:characterSet><gmd:MD_CharacterSetCode codeListValue="utf8" codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_CharacterSetCode">utf8</gmd:MD_CharacterSetCode></gmd:characterSet>
+        <gmd:hierarchyLevel><gmd:MD_ScopeCode codeListValue={this.hierarchyLevelName} codeList="http://asdd.ga.gov.au/asdd/profileinfo/GAScopeCodeList.xml#MD_ScopeCode">{this.hierarchyLevelName}</gmd:MD_ScopeCode></gmd:hierarchyLevel>
+        <gmd:hierarchyLevelName><gco:CharacterString>{this.hierarchyLevelName}</gco:CharacterString></gmd:hierarchyLevelName>
+
+        <gmd:contact><!-- TODO FILL THIS WITH TRANSFORMATOR - SAME AS RESPONSIBLE PARTY? -->
+          <gmd:CI_ResponsibleParty>
+            <gmd:individualName><gco:CharacterString>{this.responsibleParty.individualName}</gco:CharacterString></gmd:individualName>
+            <gmd:organisationName><gco:CharacterString>{this.responsibleParty.orgName}</gco:CharacterString></gmd:organisationName>
+            <gmd:positionName><gco:CharacterString></gco:CharacterString></gmd:positionName>
+            <gmd:contactInfo><gmd:CI_Contact>
+              <gmd:phone><gmd:CI_Telephone>
+                <gmd:voice><gco:CharacterString>{this.responsibleParty.telephone}</gco:CharacterString></gmd:voice>
+                <gmd:facsimile><gco:CharacterString></gco:CharacterString></gmd:facsimile>
+              </gmd:CI_Telephone></gmd:phone>
+              <gmd:address><gmd:CI_Address>
+                <gmd:deliveryPoint><gco:CharacterString></gco:CharacterString></gmd:deliveryPoint>
+                <gmd:city><gco:CharacterString></gco:CharacterString></gmd:city>
+                <gmd:administrativeArea><gco:CharacterString/></gmd:administrativeArea>
+                <gmd:postalCode><gco:CharacterString></gco:CharacterString></gmd:postalCode>
+                <gmd:country><gco:CharacterString>New Zealand</gco:CharacterString></gmd:country>
+                <gmd:electronicMailAddress><gco:CharacterString>{this.responsibleParty.email}</gco:CharacterString></gmd:electronicMailAddress>
+              </gmd:CI_Address></gmd:address>
+            </gmd:CI_Contact>
+            </gmd:contactInfo>
+            <gmd:role>
+              <gmd:CI_RoleCode codeListValue={this.responsibleParty.pointOfContact}
+                               codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode">
+                {this.responsibleParty.pointOfContact}
+              </gmd:CI_RoleCode>
+            </gmd:role>
+          </gmd:CI_ResponsibleParty>
+        </gmd:contact>
+        <gmd:dateStamp><gco:DateTime>{ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssVV"))}</gco:DateTime></gmd:dateStamp>
+        <gmd:metadataStandardName><gco:CharacterString>ANZLIC Metadata Profile: An Australian/New Zealand Profile of AS/NZS ISO 19115:2005, Geographic information - Metadata</gco:CharacterString></gmd:metadataStandardName>
+        <gmd:metadataStandardVersion><gco:CharacterString>1.1</gco:CharacterString></gmd:metadataStandardVersion>
+        <gmd:identificationInfo>
+          <gmd:MD_DataIdentification>
+            <gmd:citation><gmd:CI_Citation>
+                <gmd:title><gco:CharacterString>{this.title}</gco:CharacterString></gmd:title>
+                <gmd:date><gmd:CI_Date>
+                    <gmd:date><gco:Date>{ZonedDateTime.of(citation.ciDate.atStartOfDay(),ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssVV"))}</gco:Date></gmd:date>
+                    <gmd:dateType><gmd:CI_DateTypeCode codeListValue={this.citation.ciDateType}
+                                             codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_DateTypeCode">
+                      {this.citation.ciDateType}
+                    </gmd:CI_DateTypeCode></gmd:dateType>
+                </gmd:CI_Date></gmd:date>
+            </gmd:CI_Citation></gmd:citation>
+            <gmd:abstract><gco:CharacterString>{this.abstrakt}</gco:CharacterString></gmd:abstract>
+            <!-- gmd:purpose??? -->
+            <!-- gmd:status??? -->
+            <gmd:pointOfContact><!-- TODO FILL THIS WITH TRANSFORMATOR - SAME AS gmd:contact? --><gmd:CI_ResponsibleParty>
+                <gmd:individualName><gco:CharacterString>{this.responsibleParty.individualName}</gco:CharacterString></gmd:individualName>
+                <gmd:organisationName><gco:CharacterString>{this.responsibleParty.orgName}</gco:CharacterString></gmd:organisationName>
+                <gmd:positionName><gco:CharacterString></gco:CharacterString></gmd:positionName>
+                <gmd:contactInfo><gmd:CI_Contact>
+                    <gmd:phone><gmd:CI_Telephone>
+                        <gmd:voice><gco:CharacterString>{this.responsibleParty.telephone}</gco:CharacterString></gmd:voice>
+                        <gmd:facsimile><gco:CharacterString></gco:CharacterString></gmd:facsimile>
+                    </gmd:CI_Telephone></gmd:phone>
+                    <gmd:address><gmd:CI_Address>
+                        <gmd:deliveryPoint><gco:CharacterString></gco:CharacterString></gmd:deliveryPoint>
+                        <gmd:city><gco:CharacterString></gco:CharacterString></gmd:city>
+                        <gmd:administrativeArea><gco:CharacterString/></gmd:administrativeArea>
+                        <gmd:postalCode><gco:CharacterString></gco:CharacterString></gmd:postalCode>
+                        <gmd:country><gco:CharacterString>New Zealand</gco:CharacterString></gmd:country>
+                        <gmd:electronicMailAddress><gco:CharacterString>{this.responsibleParty.email}</gco:CharacterString></gmd:electronicMailAddress>
+                    </gmd:CI_Address></gmd:address>
+                  </gmd:CI_Contact>
+                </gmd:contactInfo>
+                <gmd:role>
+                  <gmd:CI_RoleCode codeListValue={this.responsibleParty.pointOfContact}
+                                   codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode">
+                    {this.responsibleParty.pointOfContact}
+                  </gmd:CI_RoleCode>
+                </gmd:role>
+            </gmd:CI_ResponsibleParty></gmd:pointOfContact>
+            <!-- gmd:resourceMaintainance -->
+            <!-- gmd:resourceFormat -->
+            <gmd:descriptiveKeywords><gmd:MD_Keywords><!-- TODO FILL THIS WITH TRANSFORMATOR --></gmd:MD_Keywords></gmd:descriptiveKeywords>
+            <gmd:resourceConstraints>
+              <gmd:MD_SecurityConstraints><gmd:classification>
+                  <gmd:MD_ClassificationCode codeListValue="unclassified"
+                                             codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ClassificationCode">
+                    unclassified
+                  </gmd:MD_ClassificationCode>
+              </gmd:classification></gmd:MD_SecurityConstraints>
+            </gmd:resourceConstraints>
+            <gmd:resourceConstraints>
+              <gmd:MD_LegalConstraints>
+                <gmd:useLimitation><gco:CharacterString><!-- TODO WHICH VALUE HERE?! --></gco:CharacterString></gmd:useLimitation>
+                <gmd:useConstraints>
+                  <gmd:MD_RestrictionCode codeListValue="copyright"
+                                          codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode">
+                    copyright
+                  </gmd:MD_RestrictionCode>
+                </gmd:useConstraints>
+              </gmd:MD_LegalConstraints>
+            </gmd:resourceConstraints>
+            <gmd:resourceConstraints>
+              <gmd:MD_LegalConstraints>
+                <gmd:useLimitation><gco:CharacterString>{this.distribution.useLimitation}</gco:CharacterString></gmd:useLimitation>
+                <gmd:useConstraints>
+                  <gmd:MD_RestrictionCode codeListValue="license"
+                                          codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode">
+                    license
+                  </gmd:MD_RestrictionCode>
+                </gmd:useConstraints>
+              </gmd:MD_LegalConstraints>
+            </gmd:resourceConstraints>
+            <!-- gmd:spatialRepresentationType ??? -->
+            <gmd:spatialResolution>
+              <gmd:MD_Resolution>
+                <gmd:equivalentScale>
+                  <gmd:MD_RepresentativeFraction><gmd:denominator><gco:Integer>{this.scale}</gco:Integer></gmd:denominator></gmd:MD_RepresentativeFraction>
+                </gmd:equivalentScale>
+              </gmd:MD_Resolution>
+            </gmd:spatialResolution>
+            <gmd:language>
+              <gco:CharacterString>eng</gco:CharacterString>
+            </gmd:language>
+            <gmd:characterSet>
+              <gmd:MD_CharacterSetCode codeListValue="utf8"
+                                       codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_CharacterSetCode">
+                utf8
+              </gmd:MD_CharacterSetCode>
+            </gmd:characterSet>
+            <gmd:topicCategory><gmd:MD_TopicCategoryCode>{this.topicCategoryCode}</gmd:MD_TopicCategoryCode></gmd:topicCategory>
+            <gmd:extent>
+              <gmd:EX_Extent>
+                <gmd:geographicElement>
+                  <gmd:EX_GeographicBoundingBox>
+                    <gmd:westBoundLongitude><gco:Decimal>{this.extent.mapExtentCoordinates(0)}</gco:Decimal></gmd:westBoundLongitude>
+                    <gmd:eastBoundLongitude><gco:Decimal>{this.extent.mapExtentCoordinates(2)}</gco:Decimal></gmd:eastBoundLongitude>
+                    <gmd:southBoundLatitude><gco:Decimal>{this.extent.mapExtentCoordinates(1)}</gco:Decimal></gmd:southBoundLatitude>
+                    <gmd:northBoundLatitude><gco:Decimal>{this.extent.mapExtentCoordinates(3)}</gco:Decimal></gmd:northBoundLatitude>
+                  </gmd:EX_GeographicBoundingBox>
+                </gmd:geographicElement>
+              </gmd:EX_Extent>
+            </gmd:extent>
+          </gmd:MD_DataIdentification>
+        </gmd:identificationInfo>
+        <gmd:distributionInfo><!-- TODO FILL THIS WITH TRANSFORMATOR FROM MdMetadataDistribution --></gmd:distributionInfo>
+        <gmd:dataQualityInfo>
+          <gmd:DQ_DataQuality>
+            <gmd:scope>
+              <gmd:DQ_Scope>
+                <gmd:level><gmd:MD_ScopeCode codeListValue={this.hierarchyLevelName} codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ScopeCode">{this.hierarchyLevelName}</gmd:MD_ScopeCode></gmd:level>
+                <gmd:levelDescription><gmd:MD_ScopeDescription><gmd:other><gco:CharacterString>{this.hierarchyLevelName}</gco:CharacterString></gmd:other></gmd:MD_ScopeDescription></gmd:levelDescription>
+              </gmd:DQ_Scope>
+            </gmd:scope>
+            <gmd:lineage><gmd:LI_Lineage><gmd:statement><gco:CharacterString>{this.lineageStatement}</gco:CharacterString></gmd:statement></gmd:LI_Lineage></gmd:lineage>
+          </gmd:DQ_DataQuality>
+        </gmd:dataQualityInfo>
+      </gmd:MD_Metadata>
+    mdMetadataTemplate
+  }
 
   def toJson(): JsValue = {
     Json.toJson(this)

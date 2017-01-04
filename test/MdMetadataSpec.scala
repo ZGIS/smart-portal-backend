@@ -27,12 +27,13 @@ import org.scalatestplus.play.{OneAppPerSuite, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.{JsValue, Json}
 import play.api.{Application, Configuration}
+import utils.ClassnameLogger
 
 
 /**
   *
   */
-class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
+class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite with ClassnameLogger {
 
   /**
     * custom application config for testing
@@ -254,6 +255,12 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite {
     "reproduce parsed document" in {
       val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
       mdMetadata.get.toJson() mustEqual parsedResourceAsJsValue("gmd/MdMetadataFull.json")
+    }
+
+    "create valid XML" in {
+      val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
+      logger.error(mdMetadata.get.toXml().toString)
+      (pending)
     }
   }
 }

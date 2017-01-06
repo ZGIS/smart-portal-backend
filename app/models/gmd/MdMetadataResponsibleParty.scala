@@ -59,7 +59,32 @@ case class MdMetadataResponsibleParty(individualName: String,
     *
     * @return JsValue
     */
-  override def toXml(): Node = ???
+  override def toXml(): Node = <gmd:CI_ResponsibleParty>
+    <gmd:individualName><gco:CharacterString>{this.individualName}</gco:CharacterString></gmd:individualName>
+    <gmd:organisationName><gco:CharacterString>{this.orgName}</gco:CharacterString></gmd:organisationName>
+    <gmd:positionName><gco:CharacterString></gco:CharacterString></gmd:positionName>
+    <gmd:contactInfo><gmd:CI_Contact>
+      <gmd:phone><gmd:CI_Telephone>
+        <gmd:voice><gco:CharacterString>{this.telephone}</gco:CharacterString></gmd:voice>
+        <gmd:facsimile><gco:CharacterString></gco:CharacterString></gmd:facsimile>
+      </gmd:CI_Telephone></gmd:phone>
+      <gmd:address><gmd:CI_Address>
+        <gmd:deliveryPoint><gco:CharacterString></gco:CharacterString></gmd:deliveryPoint>
+        <gmd:city><gco:CharacterString></gco:CharacterString></gmd:city>
+        <gmd:administrativeArea><gco:CharacterString/></gmd:administrativeArea>
+        <gmd:postalCode><gco:CharacterString></gco:CharacterString></gmd:postalCode>
+        <gmd:country><gco:CharacterString>New Zealand</gco:CharacterString></gmd:country>
+        <gmd:electronicMailAddress><gco:CharacterString>{this.email}</gco:CharacterString></gmd:electronicMailAddress>
+      </gmd:CI_Address></gmd:address>
+    </gmd:CI_Contact>
+    </gmd:contactInfo>
+    <gmd:role>
+      <gmd:CI_RoleCode codeListValue={this.pointOfContact}
+                       codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode">
+        {this.pointOfContact}
+      </gmd:CI_RoleCode>
+    </gmd:role>
+  </gmd:CI_ResponsibleParty>
 }
 
 object MdMetadataResponsibleParty extends MdMetadataResponsiblePartyTrait with

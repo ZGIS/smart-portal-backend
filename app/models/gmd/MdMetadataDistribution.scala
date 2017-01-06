@@ -57,7 +57,24 @@ case class MdMetadataDistribution(useLimitation: String,
     *
     * @return JsValue
     */
-  override def toXml(): Node = ???
+  override def toXml(): Node = <gmd:MD_Distribution>
+    <gmd:distributionFormat><gmd:MD_Format>
+      <gmd:name><gco:CharacterString>{this.formatName}</gco:CharacterString></gmd:name>
+      <gmd:version><gco:CharacterString>{this.formatVersion}</gco:CharacterString></gmd:version>
+    </gmd:MD_Format></gmd:distributionFormat>
+    <gmd:transferOptions>
+      <gmd:MD_DigitalTransferOptions>
+        <gmd:onLine>
+          <gmd:CI_OnlineResource>
+            <gmd:linkage>
+              <gmd:URL>{this.onlineResourceLinkage}</gmd:URL>
+            </gmd:linkage>
+          </gmd:CI_OnlineResource>
+        </gmd:onLine>
+      </gmd:MD_DigitalTransferOptions>
+    </gmd:transferOptions>
+  </gmd:MD_Distribution>
+
 }
 
 object MdMetadataDistribution extends MdMetadataDistributionTrait with

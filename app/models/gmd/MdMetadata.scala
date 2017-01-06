@@ -28,8 +28,37 @@ import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import utils.ClassnameLogger
 
-import scala.xml.Node
+import scala.xml.{Elem, Node}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
 
+/**
+  * inserts the CIResponsibleParty into the MDMetadata XML (where needed)
+  *
+  * @param xml
+  */
+private class AddCIResponsiblePartyToMDMetadata(xml: Node) extends RewriteRule {
+  override def transform(n: Node): Seq[Node] = n match {
+    case e: Elem if (e.label == "contact" && e.prefix == "gmd")
+      || (e.label == "pointOfContact" && e.prefix == "gmd") => {
+      new Elem(e.prefix, e.label, e.attributes, e.scope, e.minimizeEmpty, (xml).toSeq: _*)
+    }
+    case x => x
+  }
+}
+
+/**
+  * inserts the distributionInfo into the MDMetadata XML (where needed)
+  *
+  * @param xml
+  */
+private class AddMDDistributionToMDMetadata(xml: Node) extends RewriteRule {
+  override def transform(n: Node): Seq[Node] = n match {
+    case e: Elem if (e.label == "distributionInfo" && e.prefix == "gmd") => {
+      new Elem(e.prefix, e.label, e.attributes, e.scope, e.minimizeEmpty, (xml).toSeq: _*)
+    }
+    case x => x
+  }
+}
 
 trait Xmlable {
   /**
@@ -86,45 +115,21 @@ case class MdMetadata(fileIdentifier: String,
                       lineageStatement: String,
                       responsibleParty: MdMetadataResponsibleParty,
                       distribution: MdMetadataDistribution
-                     ) extends Jsonable with Xmlable {
+                     ) extends Jsonable with Xmlable with ClassnameLogger {
 
   def toXml(): Node = {
     val mdMetadataTemplate =
-      <gmd:MD_Metadata xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gco="http://www.isotc211.org/2005/gco">
-        <gmd:fileIdentifier>{this.fileIdentifier}</gmd:fileIdentifier>
+      <gmd:MD_Metadata xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gco="http://www.isotc211.org/2005/gco"
+                       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                       xsi:schemaLocation="http://www.isotc211.org/2005/gco http://www.isotc211.org/2005/gco/gco.xsd
+                                     http://www.isotc211.org/2005/gmd http://www.isotc211.org/2005/gmd/gmd.xsd">
+        <gmd:fileIdentifier><gco:CharacterString>{this.fileIdentifier}</gco:CharacterString></gmd:fileIdentifier>
         <gmd:language><gco:CharacterString>eng</gco:CharacterString></gmd:language>
         <gmd:characterSet><gmd:MD_CharacterSetCode codeListValue="utf8" codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_CharacterSetCode">utf8</gmd:MD_CharacterSetCode></gmd:characterSet>
         <gmd:hierarchyLevel><gmd:MD_ScopeCode codeListValue={this.hierarchyLevelName} codeList="http://asdd.ga.gov.au/asdd/profileinfo/GAScopeCodeList.xml#MD_ScopeCode">{this.hierarchyLevelName}</gmd:MD_ScopeCode></gmd:hierarchyLevel>
         <gmd:hierarchyLevelName><gco:CharacterString>{this.hierarchyLevelName}</gco:CharacterString></gmd:hierarchyLevelName>
 
-        <gmd:contact><!-- TODO FILL THIS WITH TRANSFORMATOR - SAME AS RESPONSIBLE PARTY? -->
-          <gmd:CI_ResponsibleParty>
-            <gmd:individualName><gco:CharacterString>{this.responsibleParty.individualName}</gco:CharacterString></gmd:individualName>
-            <gmd:organisationName><gco:CharacterString>{this.responsibleParty.orgName}</gco:CharacterString></gmd:organisationName>
-            <gmd:positionName><gco:CharacterString></gco:CharacterString></gmd:positionName>
-            <gmd:contactInfo><gmd:CI_Contact>
-              <gmd:phone><gmd:CI_Telephone>
-                <gmd:voice><gco:CharacterString>{this.responsibleParty.telephone}</gco:CharacterString></gmd:voice>
-                <gmd:facsimile><gco:CharacterString></gco:CharacterString></gmd:facsimile>
-              </gmd:CI_Telephone></gmd:phone>
-              <gmd:address><gmd:CI_Address>
-                <gmd:deliveryPoint><gco:CharacterString></gco:CharacterString></gmd:deliveryPoint>
-                <gmd:city><gco:CharacterString></gco:CharacterString></gmd:city>
-                <gmd:administrativeArea><gco:CharacterString/></gmd:administrativeArea>
-                <gmd:postalCode><gco:CharacterString></gco:CharacterString></gmd:postalCode>
-                <gmd:country><gco:CharacterString>New Zealand</gco:CharacterString></gmd:country>
-                <gmd:electronicMailAddress><gco:CharacterString>{this.responsibleParty.email}</gco:CharacterString></gmd:electronicMailAddress>
-              </gmd:CI_Address></gmd:address>
-            </gmd:CI_Contact>
-            </gmd:contactInfo>
-            <gmd:role>
-              <gmd:CI_RoleCode codeListValue={this.responsibleParty.pointOfContact}
-                               codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode">
-                {this.responsibleParty.pointOfContact}
-              </gmd:CI_RoleCode>
-            </gmd:role>
-          </gmd:CI_ResponsibleParty>
-        </gmd:contact>
+        <gmd:contact><!-- FILLED WITH TRANSFORMATOR - SAME AS gmd:pointOfContact --></gmd:contact>
         <gmd:dateStamp><gco:DateTime>{ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssVV"))}</gco:DateTime></gmd:dateStamp>
         <gmd:metadataStandardName><gco:CharacterString>ANZLIC Metadata Profile: An Australian/New Zealand Profile of AS/NZS ISO 19115:2005, Geographic information - Metadata</gco:CharacterString></gmd:metadataStandardName>
         <gmd:metadataStandardVersion><gco:CharacterString>1.1</gco:CharacterString></gmd:metadataStandardVersion>
@@ -133,7 +138,7 @@ case class MdMetadata(fileIdentifier: String,
             <gmd:citation><gmd:CI_Citation>
                 <gmd:title><gco:CharacterString>{this.title}</gco:CharacterString></gmd:title>
                 <gmd:date><gmd:CI_Date>
-                    <gmd:date><gco:Date>{ZonedDateTime.of(citation.ciDate.atStartOfDay(),ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssVV"))}</gco:Date></gmd:date>
+                    <gmd:date><gco:Date>{ZonedDateTime.of(citation.ciDate.atStartOfDay(),ZoneId.of("UTC")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))}</gco:Date></gmd:date>
                     <gmd:dateType><gmd:CI_DateTypeCode codeListValue={this.citation.ciDateType}
                                              codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_DateTypeCode">
                       {this.citation.ciDateType}
@@ -143,35 +148,33 @@ case class MdMetadata(fileIdentifier: String,
             <gmd:abstract><gco:CharacterString>{this.abstrakt}</gco:CharacterString></gmd:abstract>
             <!-- gmd:purpose??? -->
             <!-- gmd:status??? -->
-            <gmd:pointOfContact><!-- TODO FILL THIS WITH TRANSFORMATOR - SAME AS gmd:contact? --><gmd:CI_ResponsibleParty>
-                <gmd:individualName><gco:CharacterString>{this.responsibleParty.individualName}</gco:CharacterString></gmd:individualName>
-                <gmd:organisationName><gco:CharacterString>{this.responsibleParty.orgName}</gco:CharacterString></gmd:organisationName>
-                <gmd:positionName><gco:CharacterString></gco:CharacterString></gmd:positionName>
-                <gmd:contactInfo><gmd:CI_Contact>
-                    <gmd:phone><gmd:CI_Telephone>
-                        <gmd:voice><gco:CharacterString>{this.responsibleParty.telephone}</gco:CharacterString></gmd:voice>
-                        <gmd:facsimile><gco:CharacterString></gco:CharacterString></gmd:facsimile>
-                    </gmd:CI_Telephone></gmd:phone>
-                    <gmd:address><gmd:CI_Address>
-                        <gmd:deliveryPoint><gco:CharacterString></gco:CharacterString></gmd:deliveryPoint>
-                        <gmd:city><gco:CharacterString></gco:CharacterString></gmd:city>
-                        <gmd:administrativeArea><gco:CharacterString/></gmd:administrativeArea>
-                        <gmd:postalCode><gco:CharacterString></gco:CharacterString></gmd:postalCode>
-                        <gmd:country><gco:CharacterString>New Zealand</gco:CharacterString></gmd:country>
-                        <gmd:electronicMailAddress><gco:CharacterString>{this.responsibleParty.email}</gco:CharacterString></gmd:electronicMailAddress>
-                    </gmd:CI_Address></gmd:address>
-                  </gmd:CI_Contact>
-                </gmd:contactInfo>
-                <gmd:role>
-                  <gmd:CI_RoleCode codeListValue={this.responsibleParty.pointOfContact}
-                                   codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode">
-                    {this.responsibleParty.pointOfContact}
-                  </gmd:CI_RoleCode>
-                </gmd:role>
-            </gmd:CI_ResponsibleParty></gmd:pointOfContact>
-            <!-- gmd:resourceMaintainance -->
-            <!-- gmd:resourceFormat -->
-            <gmd:descriptiveKeywords><gmd:MD_Keywords><!-- TODO FILL THIS WITH TRANSFORMATOR --></gmd:MD_Keywords></gmd:descriptiveKeywords>
+            <gmd:pointOfContact><!-- FILLED WITH TRANSFORMATOR - SAME AS gmd:contact --></gmd:pointOfContact>
+            <!-- gmd:resourceMaintainance??? -->
+            <!-- gmd:resourceFormat??? -->
+            <gmd:descriptiveKeywords>
+              <gmd:MD_Keywords>
+                <!-- TODO FILL THIS WITH TRANSFORMATOR -->
+                {this.keywords.map(k=> <gmd:keyword><gco:CharacterString>{k}</gco:CharacterString></gmd:keyword>)}
+                <gmd:type>
+                  <!-- TODO WHAT TYPE HERE? -->
+                  <gmd:MD_KeywordTypeCode codeListValue="theme"
+                                          codeList="http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_KeywordTypeCode">
+                    theme
+                  </gmd:MD_KeywordTypeCode>
+                </gmd:type>
+              </gmd:MD_Keywords>
+            </gmd:descriptiveKeywords>
+            <gmd:descriptiveKeywords>
+              <gmd:MD_Keywords>
+                <gmd:keyword><gco:CharacterString>SMART CATEGORY</gco:CharacterString></gmd:keyword>
+                <gmd:type>
+                  <gmd:MD_KeywordTypeCode codeListValue="SMART"
+                                          codeList="http://smart">
+                    SMART
+                  </gmd:MD_KeywordTypeCode>
+                </gmd:type>
+              </gmd:MD_Keywords>
+            </gmd:descriptiveKeywords>
             <gmd:resourceConstraints>
               <gmd:MD_SecurityConstraints><gmd:classification>
                   <gmd:MD_ClassificationCode codeListValue="unclassified"
@@ -234,7 +237,7 @@ case class MdMetadata(fileIdentifier: String,
             </gmd:extent>
           </gmd:MD_DataIdentification>
         </gmd:identificationInfo>
-        <gmd:distributionInfo><!-- TODO FILL THIS WITH TRANSFORMATOR FROM MdMetadataDistribution --></gmd:distributionInfo>
+        <gmd:distributionInfo><!-- THIS IS FILLED BY TRANSFORMATOR FROM MdMetadataDistribution --></gmd:distributionInfo>
         <gmd:dataQualityInfo>
           <gmd:DQ_DataQuality>
             <gmd:scope>
@@ -247,7 +250,11 @@ case class MdMetadata(fileIdentifier: String,
           </gmd:DQ_DataQuality>
         </gmd:dataQualityInfo>
       </gmd:MD_Metadata>
-    mdMetadataTemplate
+
+    val rule = new RuleTransformer(new AddCIResponsiblePartyToMDMetadata(this.responsibleParty.toXml()),
+      new AddMDDistributionToMDMetadata(this.distribution.toXml()))
+    val finalXml = rule.transform(mdMetadataTemplate)
+    finalXml.asInstanceOf[Node]
   }
 
   def toJson(): JsValue = {

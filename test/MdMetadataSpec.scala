@@ -259,8 +259,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite wit
 
     "create valid XML" in {
       val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
-      logger.error(mdMetadata.get.toXml().toString)
-      (pending)
+      noException should be thrownBy mdMetadata.get.toXml()
     }
   }
 }

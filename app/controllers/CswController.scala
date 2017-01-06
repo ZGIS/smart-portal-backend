@@ -19,15 +19,16 @@
 
 package controllers
 
-import java.util
+//import java.util
 import javax.inject.{Inject, Provider}
 
+import models.gmd.MdMetadata
 import play.api.cache.CacheApi
 import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
 import play.api.{Application, Configuration}
-import services.MetadataService
+import services.{MetadataService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -58,7 +59,8 @@ class CswController @Inject()(val configuration: Configuration,
                               wsClient: WSClient,
                               implicit val context: ExecutionContext,
                               appProvider: Provider[Application],
-                              metadataService: MetadataService
+                              metadataService: MetadataService,
+                              collectionsService: OwcCollectionsService
                              )
   extends Controller with ClassnameLogger with Security {
 
@@ -66,7 +68,6 @@ class CswController @Inject()(val configuration: Configuration,
   lazy val app = appProvider.get()
   lazy val cswtInsertResource = app.resource("csw/transaction.insert.xml").get
   lazy val cswtInsertXml = scala.xml.XML.load(cswtInsertResource)
-  lazy val mdMetadata = scala.xml.XML.load(app.resource("csw/MD_Metadata.test.xml").get)
 
   val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
   val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
@@ -97,6 +98,11 @@ class CswController @Inject()(val configuration: Configuration,
     logger.debug(request.body.asJson.toString)
 
     //TODO parse JSON to MDMetadataSet and convert that to XML
+    if (request.body.asJson.isEmpty) {
+      BadRequest("Posted data was no valid JSON document")
+    }
+
+    val mdMetadata = MdMetadata.fromJson(((request.body.asJson.get) \ "metadata").get)
 
     val futureResponse: Future[WSResponse] = for {
       getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
@@ -112,7 +118,8 @@ class CswController @Inject()(val configuration: Configuration,
         }
 
         //insert MDMEtadata in insert template
-        val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata))
+        logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
+        val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
         val finalXML = rule.transform(cswtInsertXml)
         logger.debug(s"finalXml: ${finalXML.toString()}")
         wsClient.url(CSW_URL).post(finalXML.toString())
@@ -130,6 +137,7 @@ class CswController @Inject()(val configuration: Configuration,
       response.xml match {
         case e: Elem if e.label == "TransactionResponse" => {
           val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
+          //TODO collectionsService.addEntryToUserDefaultCollection(mdMetadata, cachedSecUser)
           Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
             "message" -> s"Inserted as ${fileIdentifier}."))
         }

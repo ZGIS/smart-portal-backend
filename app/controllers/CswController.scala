@@ -133,7 +133,7 @@ class CswController @Inject()(val configuration: Configuration,
     }
 
     futureResponse.map(response => {
-      logger.error(response.xml.toString())
+      logger.debug(response.xml.toString())
       response.xml match {
         case e: Elem if e.label == "TransactionResponse" => {
           val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text

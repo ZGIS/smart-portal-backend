@@ -1,4 +1,6 @@
-# SMART Portal Backend Play [![Build Status](https://travis-ci.org/ZGIS/smart-portal-backend.svg)](https://travis-ci.org/ZGIS/smart-portal-backend)
+# SMART Portal Backend Play [![OpenHUB](https://www.openhub.net/p/smart-portal-backend/widgets/project_thin_badge.gif)](https://www.openhub.net/p/smart-portal-backend)
+
+
 
 - app to manage OWC collections of CSW metadata records
 - up - and download of datasets, models and reports and add them to case studies (maintained as OWC collections)
@@ -10,7 +12,7 @@
 
 <p><a href="https://api.travis-ci.org/repos/ZGIS/smart-portal-backend/builds.atom"><img src="https://upload.wikimedia.org/wikipedia/en/4/43/Feed-icon.svg" align="left" height="32" width="32" alt="Builds Feed"></a></p>
 
-[Travis CI Build](https://travis-ci.org/ZGIS/smart-portal-backend)
+[Travis CI Build](https://travis-ci.org/ZGIS/smart-portal-backend) [![Build Status](https://travis-ci.org/ZGIS/smart-portal-backend.svg)](https://travis-ci.org/ZGIS/smart-portal-backend)
 
 [Site Docs](https://zgis.github.io/smart-portal-backend/)
 

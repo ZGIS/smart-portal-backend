@@ -24,11 +24,14 @@ import javax.inject._
 import models.users._
 import play.api.Configuration
 import play.api.cache._
+import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.libs.json.Writes._
 import play.api.libs.json._
+import play.api.libs.ws._
 import play.api.mvc._
 import utils.{ClassnameLogger, PasswordHashing}
 
+import scala.concurrent.duration._
 
 /**
   * HomeController, maybe rename? Provides login and logout
@@ -41,10 +44,15 @@ import utils.{ClassnameLogger, PasswordHashing}
 class HomeController @Inject()(config: Configuration,
                                cacheApi: CacheApi,
                                override val passwordHashing: PasswordHashing,
-                               userDAO: UserDAO) extends Controller with Security with ClassnameLogger {
+                               userDAO: UserDAO,
+                               ws: WSClient) extends Controller with Security with ClassnameLogger {
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
+
+  lazy private val reCaptchaSecret: String = configuration.getString("google.recaptcha.secret")
+    .getOrElse("secret api key")
+  val recaptcaVerifyUrl = "https://www.google.com/recaptcha/api/siteverify"
 
   /**
     * CORS needs preflight OPTION
@@ -119,6 +127,36 @@ class HomeController @Inject()(config: Configuration,
             .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
         }
       })
+  }
+
+  /**
+    * https://developers.google.com/recaptcha/docs/verify
+    *
+    * @param recaptcaChallenge
+    * @return
+    */
+  def recaptchaValidate(recaptcaChallenge: String) = Action.async(parse.json) { implicit request =>
+
+    // TODO check from where URL referer comes from
+    ws.url(recaptcaVerifyUrl)
+      .withHeaders("Accept" -> "application/json")
+      .withRequestTimeout(10000.millis)
+      .withQueryString("secret" -> reCaptchaSecret,
+        "response" -> recaptcaChallenge).get().map {
+      response =>
+        val success = (response.json \ "success").as[Boolean]
+        if (success) {
+          Ok(Json.obj("status" -> "OK", "message" -> "granted", "success" -> JsBoolean(true)))
+        } else {
+          val errors = (response.json \ "error-codes")
+          val jsErrors = errors.getOrElse(JsString("No further errors"))
+          BadRequest(Json.obj("status" -> "OK", "message" -> jsErrors, "success" -> JsBoolean(false)))
+        }
+    }.recover {
+      case e: Exception =>
+        val exceptionData = Map("error" -> Seq(e.getMessage))
+        Ok(Json.obj("status" -> "ERR", "message" -> exceptionData), "success" -> JsBoolean(false))
+    }
   }
 
   /**

@@ -36,9 +36,9 @@ class CollectionsController @Inject()(config: Configuration,
                                       collectionsService: OwcCollectionsService,
                                       override val passwordHashing: PasswordHashing) extends Controller with Security with ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   /**
     *

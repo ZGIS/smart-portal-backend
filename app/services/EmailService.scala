@@ -36,6 +36,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
   lazy private val apikey: String = configuration.getString("email.sendgrid.apikey").getOrElse("empty-api-key")
   lazy private val emailFrom: String = configuration.getString("email.sendgrid.from").getOrElse("allixender@googlemail.com")
+  lazy private val portalApiHost: String = "https://dev.smart-project.info"
 
   lazy val sg = new SendGrid(apikey)
 
@@ -55,12 +56,12 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
         |thank you for registering on the GW HUB.
         |Please click on the following link to confirm your registration:
         |
-        |http://dev.smart-project.info/api/v1/users/register/%s
+        |%s/api/v1/users/register/%s
         |
         |If you have any question please email us to %s.
         |
         |Your GW HUB Team
-      """.format(usernameTo, linkId, emailFrom).stripMargin
+      """.format(usernameTo, portalApiHost, linkId, emailFrom).stripMargin
 
     val from = new Email(emailFrom)
     val to = new Email(emailTo)
@@ -105,12 +106,13 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
     val emailText =
       """Hello %s,
         |thank you for registering on the GW HUB, your account is now active.
-        |Please click on the following link to confirm your registration:
+        |
+        |Login with your active account: %s
         |
         |If you have any question please email us to %s.
         |
         |Your GW HUB Team
-      """.format(usernameTo, emailFrom).stripMargin
+      """.format(usernameTo, portalApiHost, emailFrom).stripMargin
 
     val from = new Email(emailFrom)
     val to = new Email(emailTo)

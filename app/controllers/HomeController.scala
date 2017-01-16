@@ -135,7 +135,7 @@ class HomeController @Inject()(config: Configuration,
     * @param recaptcaChallenge
     * @return
     */
-  def recaptchaValidate(recaptcaChallenge: String) = Action.async(parse.json) { implicit request =>
+  def recaptchaValidate(recaptcaChallenge: String) = Action.async { implicit request =>
 
     // TODO check from where URL referer comes from
     ws.url(recaptcaVerifyUrl)

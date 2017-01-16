@@ -155,7 +155,7 @@ class HomeController @Inject()(config: Configuration,
     }.recover {
       case e: Exception =>
         val exceptionData = Map("error" -> Seq(e.getMessage))
-        Ok(Json.obj("status" -> "ERR", "message" -> exceptionData), "success" -> JsBoolean(false))
+        Ok(Json.obj("status" -> "ERR", "message" -> exceptionData, "success" -> JsBoolean(false)))
     }
   }
 

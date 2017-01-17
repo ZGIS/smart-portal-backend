@@ -27,13 +27,13 @@ import play.api.libs.json._
 
 package object controllers {
 
-  /**
-    *  JSON reader for [[LoginCredentials]].
-    *  github.com/mariussoutier/play-angular-require-seed
-    */
   implicit val LoginCredentialsFromJson = (
     (JsPath \ "username").read[String](minLength[String](3)) and
       (JsPath \ "password").read[String](minLength[String](6)))((username, password) => LoginCredentials(username, password))
+
+  implicit val GAuthCredentialsFromJson = (
+    (JsPath \ "authcode").read[String] and
+      (JsPath \ "accesstype").read[String])((authcode, accesstype) => GAuthCredentials(authcode, accesstype))
 
   implicit val registerJsReads: Reads[RegisterJs] = (
     (JsPath \ "email").read[String](email) and

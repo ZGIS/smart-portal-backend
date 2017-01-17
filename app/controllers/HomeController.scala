@@ -47,11 +47,11 @@ class HomeController @Inject()(config: Configuration,
                                userDAO: UserDAO,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {
 
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
-
   lazy private val reCaptchaSecret: String = configuration.getString("google.recaptcha.secret")
     .getOrElse("secret api key")
+
+  val cache: play.api.cache.CacheApi = cacheApi
+  val configuration: play.api.Configuration = config
   val recaptcaVerifyUrl = "https://www.google.com/recaptcha/api/siteverify"
 
   /**
@@ -169,31 +169,6 @@ class HomeController @Inject()(config: Configuration,
     username =>
       implicit request =>
         cache.remove(token)
-        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-  }
-
-  /**
-    * part of OAuth2 Flow for Google Login in
-    *
-    * @return
-    */
-  def gconnect = Action { implicit request =>
-    val data = request.body.asJson.getOrElse(Json.obj("status" -> "ERR", "message" -> "gconnect went south"))
-    logger.debug(data.toString())
-    // do lots of Google OAuth2 stuff
-    Unauthorized(data)
-  }
-
-  /**
-    * Disconnect the Google login
-    *
-    * @return
-    */
-  def gdisconnect = HasToken(parse.empty) { token =>
-    username =>
-      implicit request =>
-        cache.remove(token)
-        // do some Google OAuth2 unregisteR
         Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 }

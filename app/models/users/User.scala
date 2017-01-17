@@ -78,3 +78,10 @@ case class User(email: String,
   *  from github.com/mariussoutier/play-angular-require-seed
   */
 case class LoginCredentials(username: String, password: String)
+
+/**
+  *  Used for obtaining the gauth flow code and login/register action from the HTTP google login request
+  *
+  *  accesstype should only be of LOGIN or REGISTER
+  */
+case class GAuthCredentials(authcode: String, accesstype: String)

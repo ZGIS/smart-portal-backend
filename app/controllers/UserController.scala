@@ -19,14 +19,18 @@
 
 package controllers
 
+import java.io.FileReader
 import java.time.{ZoneId, ZonedDateTime}
 import javax.inject._
 
+import com.google.api.client.googleapis.auth.oauth2._
+import com.google.api.client.http.javanet.NetHttpTransport
+import com.google.api.client.json.jackson2.JacksonFactory
 import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, Json}
-import play.api.mvc.{Action, Controller, Cookie}
+import play.api.mvc.{Action, Controller, Cookie, DiscardingCookie}
 import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
@@ -78,9 +82,12 @@ class UserController @Inject()(config: Configuration,
                                userDAO: UserDAO,
                                override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
 
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val googleClientSecret: String = configuration.getString("google.client.secret")
+    .getOrElse("client_secret.json")
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  val gauthRedirectUrl = "postmessage"
 
   /**
     * self registering for user accounts
@@ -365,5 +372,150 @@ class UserController @Inject()(config: Configuration,
   def deleteUser(username: String) = Action { request =>
     val message = "some auth flow going on here"
     NotImplemented(Json.obj("status" -> "NA", "message" -> message))
+  }
+
+  /**
+    * part of OAuth2 Flow for Google Login in
+    *
+    * @return
+    */
+  def gconnect = Action(parse.json) { implicit request =>
+    request.body.validate[GAuthCredentials].fold(
+      errors => {
+        logger.error(JsError.toJson(errors).toString())
+        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+      },
+      valid = credentials => {
+        // find user in db and compare password stuff
+
+        logger.debug(credentials.accesstype)
+
+        // Set path to the Web application client_secret_*.json file you downloaded from the
+        // Google API Console: https://console.developers.google.com/apis/credentials
+        // You can also find your Web application client ID and client secret from the
+        // console and specify them directly when you create the GoogleAuthorizationCodeTokenRequest
+        // object.
+        if (!new java.io.File(googleClientSecret).exists) {
+          BadRequest(Json.obj("status" -> "ERR", "message" -> "service json file not available"))
+        } else {
+          // do lots of Google OAuth2 stuff
+          val clientSecrets = GoogleClientSecrets.load(
+            JacksonFactory.getDefaultInstance(), new FileReader(googleClientSecret))
+
+          // 988846878323-bkja0j1tgep5ojthfr2e92ao8n7iksab.apps.googleusercontent.com
+          val clientId = clientSecrets.getDetails().getClientId()
+          logger.debug(s"clientId $clientId")
+          // Specify the same redirect URI that you use with your web
+          // app. If you don't have a web version of your app, you can
+          // specify an empty string.
+          val tokenResponse: GoogleTokenResponse = new GoogleAuthorizationCodeTokenRequest(
+            new NetHttpTransport(),
+            JacksonFactory.getDefaultInstance(),
+            "https://www.googleapis.com/oauth2/v4/token",
+            clientId,
+            clientSecrets.getDetails().getClientSecret(),
+            credentials.authcode,
+            gauthRedirectUrl).execute()
+
+          val accessToken = tokenResponse.getAccessToken()
+          logger.debug(s"accessToken: $accessToken")
+
+          // Use access token to call API
+          val credential = new GoogleCredential().setAccessToken(accessToken)
+
+          // Get profile info from ID token
+          val idToken: GoogleIdToken = tokenResponse.parseIdToken()
+          val payload = idToken.getPayload()
+          // Use this value as a key to identify a user.
+          val userId = payload.getSubject()
+          val email = payload.getEmail()
+          val emailVerified = payload.getEmailVerified()
+
+          // get further payload things that is easy in java but needs to work in scala too
+          val name = payload.get("name").asInstanceOf[String]
+          val pictureUrl = payload.get("picture").asInstanceOf[String]
+          val locale = payload.get("locale").asInstanceOf[String]
+          val familyName = payload.get("family_name").asInstanceOf[String]
+          val givenName = payload.get("given_name").asInstanceOf[String]
+
+          credentials.accesstype match {
+            case "LOGIN" => {
+              userDAO.findUserByEmail(email).fold {
+                logger.error("User not known.")
+                Unauthorized(Json.obj("status" -> "ERR", "message" -> "User not known yet, please register first."))
+              } { user =>
+                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+                // logger.debug(s"Logging in username from $uaIdentifier")
+                val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+                cache.set(token, user.email)
+                Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.email, "userprofile" -> user.asProfileJs()))
+                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+              }
+            }
+            case "REGISTER" => {
+              userDAO.findByUsername(userId).fold {
+                // found none, good, but need to check for email address too
+                userDAO.findUserByEmail(email).fold {
+                  // found none, good, create user
+                  val regLinkId = java.util.UUID.randomUUID().toString()
+                  val cryptPass = passwordHashing.createHash(regLinkId)
+
+                  val newUser = User(email,
+                    userId,
+                    givenName,
+                    familyName,
+                    cryptPass,
+                    s"REGISTERED:$regLinkId",
+                    ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+                  userDAO.createWithNps(newUser).fold {
+                    logger.error("User create error.")
+                    BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+                  } { user =>
+                    val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName, regLinkId)
+                    logger.info(s"New user registered. Email went out $emailWentOut")
+                    // creating default collection only after registration, account is only barely usable here
+                    Ok(Json.toJson(user.asProfileJs()))
+                  }
+                } { user =>
+                  // found user with that email already
+                  logger.error("Email already in use.")
+                  BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
+                }
+              } { user =>
+                // found username already?! BAD
+                logger.error("User not found.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "Username already in use."))
+              }
+            }
+
+            case _ => BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
+          }
+        }
+      }
+    )
+  }
+
+
+  /**
+    * Disconnect the Google login
+    *
+    * @return
+    */
+  def gdisconnect = HasToken(parse.empty) {
+    token =>
+      username =>
+        implicit request =>
+          cache.remove(token)
+          // do some Google OAuth2 unregisteR
+          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+  }
+
+  /**
+    *
+    * @return
+    */
+  def oauth2callback = Action {
+    Redirect("/#/account")
   }
 }

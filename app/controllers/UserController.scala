@@ -356,6 +356,26 @@ class UserController @Inject()(config: Configuration,
             })
   }
 
+  def resetPass = Action(parse.json) { request =>
+    request.body.validate[LoginCredentials].fold(
+      errors => {
+        logger.error(JsError.toJson(errors).toString())
+        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+      },
+      valid = credentials => {
+        // find user in db and compare password stuff
+        userDAO.findUserByEmail(credentials.email).fold {
+          logger.error("User email not found.")
+          BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
+        } { user =>
+          // emailserver
+          // generate new pass,
+          logger.info(s"Registered user ${user.email} requested reset password. Email went out")
+          Ok(Json.obj("status" -> "OK", "email" -> user.email, "message" -> ""))
+        }
+      })
+  }
+
   /**
     * should be really used function only except user really wants to delete own account
     * TODO should we remove email param or add additional check with HasToken?

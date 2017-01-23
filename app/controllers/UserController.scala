@@ -345,6 +345,7 @@ class UserController @Inject()(config: Configuration,
                   val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                   // logger.info(s"Logging in email from $uaIdentifier")
                   cache.remove(token)
+                  emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
                   val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
                   cache.set(newtoken, user.email)
                   Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email))
@@ -356,7 +357,11 @@ class UserController @Inject()(config: Configuration,
             })
   }
 
-  def resetPass = Action(parse.json) { request =>
+  /**
+    *
+    * @return
+    */
+  def resetPasswordRequest = Action(parse.json) { request =>
     request.body.validate[LoginCredentials].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
@@ -368,12 +373,83 @@ class UserController @Inject()(config: Configuration,
           logger.error("User email not found.")
           BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
         } { user =>
-          // emailserver
-          // generate new pass,
-          logger.info(s"Registered user ${user.email} requested reset password. Email went out")
-          Ok(Json.obj("status" -> "OK", "email" -> user.email, "message" -> ""))
+          val resetLink = java.util.UUID.randomUUID().toString()
+
+          // good, update regstatus and send confirmation email
+          val updateUser = User(
+            user.email,
+            user.accountSubject,
+            user.firstname,
+            user.lastname,
+            "***",
+            s"PASSWORDRESET:$resetLink",
+            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+          userDAO.updateNoPass(updateUser).fold {
+            logger.error("User reset password request update error.")
+            // flash error message?
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "User reset password request update error."))
+            // Redirect("/#/register")
+          } { user =>
+            emailService.sendResetPasswordRequestEmail(user.email, "Password Update on GW HUB", user.firstname, resetLink)
+            logger.info(s"Registered user ${user.email} requested reset password. Email went out")
+            Ok(Json.obj("status" -> "OK", "email" -> user.email, "message" -> ""))
+          }
         }
       })
+  }
+
+  /**
+    *
+    * @param linkId
+    * @return
+    */
+  def resetPasswordRedeem(linkId: String) = Action(parse.json) { request =>
+    // check db laststatustoken, get user etc, update status
+    val uuidTest = Try(java.util.UUID.fromString(linkId))
+    uuidTest match {
+      case Success(v) => {
+        userDAO.findRegisteredUsersByPassResetLink(linkId).headOption.fold {
+          logger.error("Unknown password reset link.")
+          Redirect("/#/register")
+        } { user =>
+          // good, update password and status and send confirmation email
+          request.body.validate[LoginCredentials].fold(
+            errors => {
+              logger.error(JsError.toJson(errors).toString())
+              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+            },
+            valid = credentials => {
+              val cryptPass = passwordHashing.createHash(credentials.password)
+              val updateUser = User(
+                user.email,
+                user.accountSubject,
+                user.firstname,
+                user.lastname,
+                cryptPass,
+                "ACTIVE:PASSWORDUPDATED",
+                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+              userDAO.updatePassword(updateUser).fold {
+                logger.error("User update error.")
+                // flash error message?
+                // BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
+                Redirect("/#/login")
+              } { user =>
+                val emailWentOut = emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
+                Redirect("/#/login")
+              }
+            })
+
+        }
+      }
+      case Failure(e) => {
+        // wrong uuid format even
+        logger.error("Info from the exception: " + e.getMessage)
+        // maybe flash error message
+        Redirect("/#/register")
+      }
+    }
   }
 
   /**

@@ -37,6 +37,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
   lazy private val apikey: String = configuration.getString("email.sendgrid.apikey").getOrElse("empty-api-key")
   lazy private val emailFrom: String = configuration.getString("email.sendgrid.from").getOrElse("allixender@googlemail.com")
   lazy private val portalApiHost: String = "https://dev.smart-project.info"
+  lazy private val portalWebguiHost: String = "https://dev.smart-project.info"
 
   lazy val sg = new SendGrid(apikey)
 
@@ -107,12 +108,119 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
       """Hello %s,
         |thank you for registering on the GW HUB, your account is now active.
         |
-        |Login with your active account: %s
+        |Login with your active account on:
+        |
+        |%s/#/login
         |
         |If you have any question please email us to %s.
         |
         |Your GW HUB Team
-      """.format(usernameTo, portalApiHost, emailFrom).stripMargin
+      """.format(usernameTo, portalWebguiHost, emailFrom).stripMargin
+
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
+    try {
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
+
+      true
+    } catch {
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
+        false
+      }
+      case e: Exception => {
+        logger.error("Other email problem: " + e.getLocalizedMessage)
+        false
+      }
+    }
+  }
+
+  /**
+    * sends a password reset Email, with the special reset token
+    *
+    * @param emailTo
+    * @param subject
+    * @param usernameTo
+    * @param linkId
+    * @return
+    */
+  def sendResetPasswordRequestEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean = {
+
+    val emailText =
+      """Hello %s,
+        |you requested to reset your password for the GW HUB.
+        |Please click on the following link to reset your password:
+        |
+        |%s/#/resetpass/%s
+        |
+        |If you have any question please email us to %s.
+        |
+        |Your GW HUB Team
+      """.format(usernameTo, portalWebguiHost, linkId, emailFrom).stripMargin
+
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
+    try {
+
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
+
+      true
+    } catch {
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
+        false
+      }
+      case e: Exception => {
+        logger.error("Other email problem: " + e.getLocalizedMessage)
+        false
+      }
+    }
+  }
+
+  /**
+    * sends a Confirmation Email, Your account is now active
+    *
+    * @param emailTo
+    * @param subject
+    * @param usernameTo
+    * @return
+    */
+  def sendPasswordUpdateEmail(emailTo: String, subject: String, usernameTo: String): Boolean = {
+
+    val emailText =
+      """Hello %s,
+        |you updated your password on the GW HUB, your account is now active again.
+        |
+        |Login with your account on:
+        |
+        |%s/#/login
+        |
+        |If you have any question please email us to %s.
+        |
+        |Your GW HUB Team
+      """.format(usernameTo, portalWebguiHost, emailFrom).stripMargin
 
     val from = new Email(emailFrom)
     val to = new Email(emailTo)

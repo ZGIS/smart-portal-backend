@@ -285,6 +285,16 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   }
 
   /**
+    * find Users By their status token "PASSWORDRESET" and their uniqu reset link id
+    *
+    * @param resetLink
+    * @return
+    */
+  def findRegisteredUsersByPassResetLink(resetLink: String) : Seq[User] = {
+    findUsersByToken(s"PASSWORDRESET:$resetLink")
+  }
+
+  /**
     * find Users By their status token "REGISTERED"
     *
     * @return

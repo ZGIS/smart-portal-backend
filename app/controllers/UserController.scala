@@ -457,7 +457,7 @@ class UserController @Inject()(config: Configuration,
                 val cryptPass = passwordHashing.createHash(regLinkId)
 
                 val newUser = User(email,
-                  userId,
+                  s"google:${userId}",
                   givenName.getOrElse(name.getOrElse(email)),
                   familyName.getOrElse(""),
                   cryptPass,

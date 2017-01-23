@@ -70,14 +70,14 @@ trait Security { self: Controller =>
         val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
         Logger.trace(s"token: $token")
         Logger.trace(s"ua: $uaIdentifier")
-        // cache token -> maps to a String username
-        cache.get[String](token) map { username =>
+        // cache token -> maps to a String email
+        cache.get[String](token) map { email =>
           // lazy val passwordHashing = new PasswordHashing(configuration)
-          val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, username, uaIdentifier)
+          val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
           Logger.trace(s"testcookie: $cookieForUSerAndDevice")
           if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
-            Logger.trace(s"request for active session: $username / $token / $uaIdentifier")
-            f(token)(username)(request)
+            Logger.trace(s"request for active session: $email / $token / $uaIdentifier")
+            f(token)(email)(request)
           } else {
             Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
           }
@@ -115,14 +115,14 @@ trait Security { self: Controller =>
           val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
           Logger.trace(s"token: $token")
           Logger.trace(s"ua: $uaIdentifier")
-          // cache token -> maps to a String username
-          cache.get[String](token) map { username =>
+          // cache token -> maps to a String email
+          cache.get[String](token) map { email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)
-            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, username, uaIdentifier)
+            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
             Logger.trace(s"testcookie: $cookieForUSerAndDevice")
             if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
-              Logger.trace(s"request for active session: $username / $token / $uaIdentifier")
-              f(Some(username))(request)
+              Logger.trace(s"request for active session: $email / $token / $uaIdentifier")
+              f(Some(email))(request)
             } else {
               // Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
               Logger.trace("optional cookie: Invalid Token")

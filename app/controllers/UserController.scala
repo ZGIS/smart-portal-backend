@@ -40,12 +40,12 @@ import scala.util.{Failure, Success, Try}
   * typical profile / account json exchange format, we could add picture and some other nice stuff?
   *
   * @param email
-  * @param username
+  * @param accountSubject
   * @param firstname
   * @param lastname
   */
 case class ProfileJs(email: String,
-                     username: String,
+                     accountSubject: String,
                      firstname: String,
                      lastname: String)
 
@@ -53,13 +53,13 @@ case class ProfileJs(email: String,
   * here password is compulsory
   *
   * @param email
-  * @param username
+  * @param accountSubject
   * @param firstname
   * @param lastname
   * @param password
   */
 case class RegisterJs(email: String,
-                      username: String,
+                      accountSubject: String,
                       firstname: String,
                       lastname: String,
                       password: String)
@@ -104,39 +104,33 @@ class UserController @Inject()(config: Configuration,
         BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
       },
       jsuser => {
-        userDAO.findByUsername(jsuser.username).fold {
-          // found none, good, but need to check for email address too
-          userDAO.findUserByEmail(jsuser.username).fold {
-            // found none, good, create user
-            val regLinkId = java.util.UUID.randomUUID().toString()
-            val cryptPass = passwordHashing.createHash(jsuser.password)
+        // found none, good ...
+        userDAO.findUserByEmail(jsuser.email).fold {
+          // found none, good, create user
+          val regLinkId = java.util.UUID.randomUUID().toString()
+          val cryptPass = passwordHashing.createHash(jsuser.password)
 
-            val newUser = User(jsuser.email,
-              jsuser.username,
-              jsuser.firstname,
-              jsuser.lastname,
-              cryptPass,
-              s"REGISTERED:$regLinkId",
-              ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+          val newUser = User(jsuser.email,
+            s"local:${jsuser.email}",
+            jsuser.firstname,
+            jsuser.lastname,
+            cryptPass,
+            s"REGISTERED:$regLinkId",
+            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-            userDAO.createWithNps(newUser).fold {
-              logger.error("User create error.")
-              BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
-            } { user =>
-              val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
-              logger.info(s"New user registered. Email went out $emailWentOut")
-              // creating default collection only after registration, account is only barely usable here
-              Ok(Json.toJson(user.asProfileJs()))
-            }
+          userDAO.createWithNps(newUser).fold {
+            logger.error("User create error.")
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
           } { user =>
-            // found user with that email already
-            logger.error("Email already in use.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
+            val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
+            logger.info(s"New user registered. Email went out $emailWentOut")
+            // creating default collection only after registration, account is only barely usable here
+            Ok(Json.toJson(user.asProfileJs()))
           }
         } { user =>
-          // found username already?! BAD
-          logger.error("User not found.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "Username already in use."))
+          // found user with that email already
+          logger.error("Email already in use.")
+          BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
         }
       })
   }
@@ -164,7 +158,7 @@ class UserController @Inject()(config: Configuration,
           // good, update regstatus and send confirmation email
           val updateUser = User(
             user.email,
-            user.username,
+            user.accountSubject,
             user.firstname,
             user.lastname,
             "***",
@@ -181,7 +175,7 @@ class UserController @Inject()(config: Configuration,
             // all good here, creating default collection (Unit)
             collectionsService.createUserDefaultCollection(user)
             // maybe should also do the full login thing here? how does that relate with the alternative Google Oauth thing
-            logger.info(s"Registered user ${user.username} confirmed email ${user.email}. Email went out $emailWentOut")
+            logger.info(s"Registered user ${user.accountSubject} confirmed email ${user.email}. Email went out $emailWentOut")
             Redirect("/#/login")
           }
         }
@@ -202,12 +196,12 @@ class UserController @Inject()(config: Configuration,
     */
   def userSelf = HasToken(parse.empty) {
     token =>
-      cachedSecUser =>
+      cachedSecUserEmail =>
         implicit request =>
 
-          userDAO.findByUsername(cachedSecUser).fold {
-            logger.error("User not found.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+          userDAO.findUserByEmail(cachedSecUserEmail).fold {
+            logger.error("User email not found.")
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
           } { user =>
             Ok(Json.toJson(user.asProfileJs()))
           }
@@ -216,38 +210,38 @@ class UserController @Inject()(config: Configuration,
   /**
     * get user's profle, currently only one's own profile (token match)
     *
-    * @param username
+    * @param email
     * @return
     */
-  def getProfile(username: String) = HasToken(parse.empty) {
+  def getProfile(email: String) = HasToken(parse.empty) {
     token =>
-      cachedSecUser =>
+      cachedSecUserEmail =>
         implicit request =>
 
-          userDAO.findByUsername(username).fold {
-            logger.error("User not found.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+          userDAO.findUserByEmail(email).fold {
+            logger.error("User email not found.")
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
           } { user =>
             // too much checking here?
-            if (user.username.equals(username) && cachedSecUser.equals(username)) {
+            if (user.email.equals(email) && cachedSecUserEmail.equals(email)) {
               Ok(Json.toJson(user.asProfileJs()))
             } else {
-              logger.error("Username Security Token mismatch.")
-              Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+              logger.error("User email Security Token mismatch.")
+              Forbidden(Json.obj("status" -> "ERR", "message" -> "User email Security Token mismatch."))
             }
           }
   }
 
   /**
     * update user's profile, can "never" touch password, password update is separate
-    * TODO should we remove username param or add additional check with HasToken?
+    * TODO should we remove email param or add additional check with HasToken?
     *
-    * @param username
+    * @param email
     * @return
     */
-  def updateProfile(username: String) = HasToken(parse.json) {
+  def updateProfile(email: String) = HasToken(parse.json) {
     token =>
-      cachedSecUser =>
+      cachedSecUserEmail =>
         implicit request =>
 
           val profileResult = request.body.validate[ProfileJs]
@@ -256,18 +250,18 @@ class UserController @Inject()(config: Configuration,
               BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
             },
             jsuser => {
-              userDAO.findByUsername(jsuser.username).fold {
-                logger.error("User not found.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "Username not found."))
+              userDAO.findUserByEmail(jsuser.email).fold {
+                logger.error("User email not found.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
               } { dbuser =>
-                // is it really you? by the way you shouldn't / can't (?!) change your username!!!
-                if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
+                // is it really you? by the way you shouldn't / can't (?!) change your email!!!
+                if (dbuser.email.equals(jsuser.email) && cachedSecUserEmail.equals(jsuser.email)) {
 
                   // check if new email is used already by another user than yourself
-                  userDAO.findUserByEmail(jsuser.username).fold {
+                  userDAO.findUserByEmail(jsuser.email).fold {
                     // found none, good
                     val updateUser = User(jsuser.email,
-                      dbuser.username,
+                      dbuser.accountSubject,
                       jsuser.firstname,
                       jsuser.lastname,
                       "***",
@@ -282,10 +276,10 @@ class UserController @Inject()(config: Configuration,
                     }
                   } { dbuser =>
                     // found one, is it yourself or somebody else?
-                    if (dbuser.username.equals(jsuser.username) && cachedSecUser.equals(jsuser.username)) {
+                    if (dbuser.email.equals(jsuser.email) && cachedSecUserEmail.equals(jsuser.email)) {
                       // it is you, so we can update you
                       val updateUser = User(jsuser.email,
-                        dbuser.username,
+                        dbuser.accountSubject,
                         jsuser.firstname,
                         jsuser.lastname,
                         "***",
@@ -299,14 +293,14 @@ class UserController @Inject()(config: Configuration,
                         Ok(Json.toJson(user.asProfileJs()))
                       }
                     } else {
-                      logger.error("Username Email mismatch, email already in use.")
-                      BadRequest(Json.obj("status" -> "ERR", "message" -> "Username Email mismatch, email already in use."))
+                      logger.error("User Email mismatch, email already in use.")
+                      BadRequest(Json.obj("status" -> "ERR", "message" -> "User Email mismatch, email already in use."))
                     }
                   }
 
                 } else {
-                  logger.error("Username Security Token mismatch.")
-                  Forbidden(Json.obj("status" -> "ERR", "message" -> "Username Security Token mismatch."))
+                  logger.error("User email Security Token mismatch.")
+                  Forbidden(Json.obj("status" -> "ERR", "message" -> "User email Security Token mismatch."))
                 }
               }
 
@@ -321,7 +315,7 @@ class UserController @Inject()(config: Configuration,
     */
   def updatePassword = HasToken(parse.json) {
     token =>
-      cachedSecUser =>
+      cachedSecUserEmail =>
         implicit request =>
 
           request.body.validate[LoginCredentials].fold(
@@ -331,13 +325,13 @@ class UserController @Inject()(config: Configuration,
             },
             valid = credentials => {
               // find user in db and compare password stuff
-              userDAO.findByUsername(credentials.username).fold {
+              userDAO.findUserByEmail(credentials.email).fold {
                 logger.error("User not found.")
                 BadRequest(Json.obj("status" -> "ERR", "message" -> "User not found."))
               } { dbuser =>
                 val cryptPass = passwordHashing.createHash(credentials.password)
                 val updateUser = User(dbuser.email,
-                  dbuser.username,
+                  dbuser.accountSubject,
                   dbuser.firstname,
                   dbuser.lastname,
                   cryptPass,
@@ -349,11 +343,11 @@ class UserController @Inject()(config: Configuration,
                   BadRequest(Json.obj("status" -> "ERR", "message" -> "Password update error."))
                 } { user =>
                   val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                  // logger.info(s"Logging in username from $uaIdentifier")
+                  // logger.info(s"Logging in email from $uaIdentifier")
                   cache.remove(token)
-                  val newtoken = passwordHashing.createSessionCookie(user.username, uaIdentifier)
-                  cache.set(newtoken, user.username)
-                  Ok(Json.obj("status" -> "OK", "token" -> newtoken, "username" -> user.username))
+                  val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+                  cache.set(newtoken, user.email)
+                  Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email))
                     .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
                 }
 
@@ -364,12 +358,12 @@ class UserController @Inject()(config: Configuration,
 
   /**
     * should be really used function only except user really wants to delete own account
-    * TODO should we remove username param or add additional check with HasToken?
+    * TODO should we remove email param or add additional check with HasToken?
     *
-    * @param username
+    * @param email
     * @return
     */
-  def deleteUser(username: String) = Action { request =>
+  def deleteUser(email: String) = Action { request =>
     val message = "some auth flow going on here"
     NotImplemented(Json.obj("status" -> "NA", "message" -> message))
   }
@@ -431,12 +425,15 @@ class UserController @Inject()(config: Configuration,
           val email = payload.getEmail()
           val emailVerified = payload.getEmailVerified()
 
+
           // get further payload things that is easy in java but needs to work in scala too
-          val name = payload.get("name").asInstanceOf[String]
-          val pictureUrl = payload.get("picture").asInstanceOf[String]
-          val locale = payload.get("locale").asInstanceOf[String]
-          val familyName = payload.get("family_name").asInstanceOf[String]
-          val givenName = payload.get("given_name").asInstanceOf[String]
+          val name = Option(payload.get("name").asInstanceOf[String])
+          val pictureUrl = Option(payload.get("picture").asInstanceOf[String])
+          val locale = Option(payload.get("locale").asInstanceOf[String])
+          val familyName = Option(payload.get("family_name").asInstanceOf[String])
+          val givenName = Option(payload.get("given_name").asInstanceOf[String])
+
+          logger.debug(s"payload.toPrettyString: ${payload.toPrettyString}")
 
           credentials.accesstype match {
             case "LOGIN" => {
@@ -445,47 +442,41 @@ class UserController @Inject()(config: Configuration,
                 Unauthorized(Json.obj("status" -> "ERR", "message" -> "User not known yet, please register first."))
               } { user =>
                 val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                // logger.debug(s"Logging in username from $uaIdentifier")
+                // logger.debug(s"Logging in email from $uaIdentifier")
                 val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
                 cache.set(token, user.email)
-                Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.email, "userprofile" -> user.asProfileJs()))
+                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
                   .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
               }
             }
             case "REGISTER" => {
-              userDAO.findByUsername(userId).fold {
-                // found none, good, but need to check for email address too
-                userDAO.findUserByEmail(email).fold {
-                  // found none, good, create user
-                  val regLinkId = java.util.UUID.randomUUID().toString()
-                  val cryptPass = passwordHashing.createHash(regLinkId)
+              // found none, good...
+              userDAO.findUserByEmail(email).fold {
+                // found none, good, create user
+                val regLinkId = java.util.UUID.randomUUID().toString()
+                val cryptPass = passwordHashing.createHash(regLinkId)
 
-                  val newUser = User(email,
-                    userId,
-                    givenName,
-                    familyName,
-                    cryptPass,
-                    s"REGISTERED:$regLinkId",
-                    ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+                val newUser = User(email,
+                  userId,
+                  givenName.getOrElse(name.getOrElse(email)),
+                  familyName.getOrElse(""),
+                  cryptPass,
+                  s"REGISTERED:$regLinkId",
+                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-                  userDAO.createWithNps(newUser).fold {
-                    logger.error("User create error.")
-                    BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
-                  } { user =>
-                    val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName, regLinkId)
-                    logger.info(s"New user registered. Email went out $emailWentOut")
-                    // creating default collection only after registration, account is only barely usable here
-                    Ok(Json.toJson(user.asProfileJs()))
-                  }
+                userDAO.createWithNps(newUser).fold {
+                  logger.error("User create error.")
+                  BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
                 } { user =>
-                  // found user with that email already
-                  logger.error("Email already in use.")
-                  BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
+                  val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName.getOrElse(name.getOrElse(email)), regLinkId)
+                  logger.info(s"New user registered. Email went out $emailWentOut")
+                  // creating default collection only after registration, account is only barely usable here
+                  Ok(Json.toJson(user.asProfileJs()))
                 }
               } { user =>
-                // found username already?! BAD
-                logger.error("User not found.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "Username already in use."))
+                // found user with that email already
+                logger.error("Email already in use.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
               }
             }
 
@@ -504,7 +495,7 @@ class UserController @Inject()(config: Configuration,
     */
   def gdisconnect = HasToken(parse.empty) {
     token =>
-      username =>
+      email =>
         implicit request =>
           cache.remove(token)
           // do some Google OAuth2 unregisteR

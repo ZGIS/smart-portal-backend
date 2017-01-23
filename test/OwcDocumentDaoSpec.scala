@@ -222,7 +222,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val userDao = new UserDAO(database, passwordHashing)
 
         val testUser1 = User("test@blubb.com",
-          "test",
+          "local:test@blubb.com",
           "Hans",
           "Wurst",
           passwordHashing.createHash("testpass123"),
@@ -236,12 +236,12 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcDocument1 = OwcDocument("http://portal.smart-project.info/context/smart-sac", Some(world), documentProps1, List(owcEntry1, owcEntry2))
 
-        owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.username, 2, "CUSTOM") mustEqual Some(owcDocument1)
+        owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM") mustEqual Some(owcDocument1)
 
         owcDocumentDAO.getAllOwcDocuments.size mustEqual 1
         owcDocumentDAO.getAllOwcEntries.size mustEqual 2
 
-        val thrown1 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.username, 2, "CUSTOM")
+        val thrown1 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM")
         thrown1.getErrorCode mustEqual 23505
 
         val thrown2 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcEntry(owcEntry2)
@@ -302,7 +302,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val cryptPass = passwordHashing.createHash("testpass123")
 
         val testUser1 = User("test@blubb.com",
-          "test",
+          "local:test@blubb.com",
           "Hans",
           "Wurst",
           cryptPass,
@@ -310,7 +310,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
           testTime)
 
         val testUser2 = User("test2@blubb.com",
-          "test2",
+          "local:test2@blubb.com",
           "Hans",
           "Wurst",
           cryptPass,
@@ -320,11 +320,11 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         userDao.create(testUser1) mustEqual Some(testUser1)
         userDao.create(testUser2) mustEqual Some(testUser2)
 
-        owcDocumentDAO.createUsersDefaultOwcDocument(owcDoc1, testUser1.username)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc2, testUser1.username)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc3, testUser1.username)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc4, testUser1.username)
-        owcDocumentDAO.createOwcDocument(owcDoc5, testUser2.username, 2, "CUSTOM")
+        owcDocumentDAO.createUsersDefaultOwcDocument(owcDoc1, testUser1.email)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc2, testUser1.email)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc3, testUser1.email)
+        owcDocumentDAO.createCustomOwcDocument(owcDoc4, testUser1.email)
+        owcDocumentDAO.createOwcDocument(owcDoc5, testUser2.email, 2, "CUSTOM")
 
         owcDocumentDAO.getAllOwcDocuments.size mustEqual 5
         owcDocumentDAO.getAllOwcEntries.size mustEqual 70

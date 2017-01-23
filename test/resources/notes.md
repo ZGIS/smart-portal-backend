@@ -1,7 +1,7 @@
 
-PROFILENOPASS='{"email":"alex@example.com","username":"alex","firstname":"Alex","lastname":"K"}'
-LOGIN='{"username":"alex","password":"testpass123"}'
-FULLPROFILE='{"email":"a.kmoch@gns.cri.nz","username":"akmoch","firstname":"Alex","lastname":"K","password":"testpass"}'
+PROFILENOPASS='{"email":"alex@example.com","email":"alex","firstname":"Alex","lastname":"K"}'
+LOGIN='{"email":"alex","password":"testpass123"}'
+FULLPROFILE='{"email":"a.kmoch@gns.cri.nz","email":"akmoch","firstname":"Alex","lastname":"K","password":"testpass"}'
 GOOGLEPAYLOAD="Google OAuth Payload"
 
 # --cookie "TOKEN=svdfbvd"

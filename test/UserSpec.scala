@@ -64,7 +64,7 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
         val cryptPassUpd = passwordHashing.createHash(testPassUpd)
 
         val testUser1 = User("test@blubb.com",
-          "test",
+          "local:test@blubb.com",
           "Hans",
           "Wurst",
           cryptPass,
@@ -72,7 +72,7 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
           testTime)
 
         val testUser2 = User("test2@blubb.com",
-          "test2",
+          "local:test2@blubb.com",
           "Hans",
           "Wurst",
           cryptPass,
@@ -87,11 +87,11 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
 
         userDao.findAll.size mustEqual 2
 
-        // findByUsername
-        userDao.findByUsername("test") mustEqual Some(testUser1)
+        // findByAccountSubject
+        userDao.findByAccountSubject("local:test@blubb.com") mustEqual Some(testUser1)
 
         // authenticate
-        userDao.authenticate(testUser2.username, testPass) mustEqual Some(testUser2)
+        userDao.authenticate(testUser2.email, testPass) mustEqual Some(testUser2)
 
         // findUserByEmail
         userDao.findUserByEmail("test2@blubb.com") mustEqual Some(testUser2)
@@ -104,17 +104,18 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
         // findRegisteredOnlyUsers
         val regUsers = userDao.findRegisteredOnlyUsers
         regUsers.size mustBe 1
-        regUsers.headOption.get.username mustEqual "test"
+        regUsers.headOption.get.accountSubject mustEqual "local:test@blubb.com"
 
 
         // findActiveUsers
         val activeUsers = userDao.findActiveUsers
         activeUsers.size mustBe 1
-        activeUsers.headOption.get.username mustEqual "test2"
+        activeUsers.headOption.get.accountSubject mustEqual "local:test2@blubb.com"
+        activeUsers.headOption.get.email mustEqual "test2@blubb.com"
 
         // updateNoPass
         val testUser2_1 = User("test2@blubb.com",
-          "test2",
+          "local:test2@blubb.com",
           "Hans",
           "Wurst-Ebermann",
           cryptPassUpd,
@@ -122,18 +123,18 @@ class UserSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with With
           testTime)
 
         userDao.updateNoPass(testUser2_1) mustEqual Some(testUser2_1)
-        userDao.findByUsername("test2").get.lastname mustEqual "Wurst-Ebermann"
-        userDao.authenticate("test2", testPass).get.lastname mustEqual "Wurst-Ebermann"
-        userDao.authenticate("test2", testPassUpd) mustEqual None
+        userDao.findByAccountSubject("local:test2@blubb.com").get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2@blubb.com", testPass).get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2@blubb.com", testPassUpd) mustEqual None
 
         // updatePassword
         userDao.updatePassword(testUser2_1) mustEqual Some(testUser2_1)
-        userDao.findByUsername("test2").get.lastname mustEqual "Wurst-Ebermann"
-        userDao.authenticate("test2", testPassUpd).get.lastname mustEqual "Wurst-Ebermann"
-        userDao.authenticate("test2", testPass) mustEqual None
+        userDao.findUserByEmail("test2@blubb.com").get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2@blubb.com", testPassUpd).get.lastname mustEqual "Wurst-Ebermann"
+        userDao.authenticate("test2@blubb.com", testPass) mustEqual None
 
         // deleteUser
-        userDao.deleteUser("test2") mustEqual true
+        userDao.deleteUser("test2@blubb.com") mustEqual true
         userDao.findAll.size mustBe 1
 
       }

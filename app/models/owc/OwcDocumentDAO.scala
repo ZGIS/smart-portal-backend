@@ -374,28 +374,28 @@ class OwcDocumentDAO @Inject()(db: Database,
   /**
     * find OwcDocumenst by user and type
     *
-    * @param username
+    * @param email
     * @param collectionType DEFAULT: user personal default, CUSTOM: general purpose
     * @return
     */
-  def findOwcDocumentsByUserAndType(username: String, collectionType: String): Seq[OwcDocument] = {
+  def findOwcDocumentsByUserAndType(email: String, collectionType: String): Seq[OwcDocument] = {
     db.withConnection { implicit connection =>
 
       SQL(
         s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
            | FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
            | where feature_type = {feature_type}
-           | AND u.users_username = {username}
+           | AND u.users_email = {email}
            | AND u.collection_type = {collection_type} """.stripMargin).on(
         'feature_type -> "OwcDocument",
-        'username -> username,
+        'email -> email,
         'collection_type -> collectionType
       ).as(owcDocumentParser *)
     }
   }
 
-  def findUserDefaultOwcDocument(username: String): Option[OwcDocument] = {
-    findOwcDocumentsByUserAndType(username, "DEFAULT").headOption
+  def findUserDefaultOwcDocument(email: String): Option[OwcDocument] = {
+    findOwcDocumentsByUserAndType(email, "DEFAULT").headOption
   }
 
   /**
@@ -438,19 +438,19 @@ class OwcDocumentDAO @Inject()(db: Database,
     * find an OwcDocument by its id and user
     *
     * @param id
-    * @param username
+    * @param email
     * @return
     */
-  def findOwcDocumentByIdAndUser(id: String, username: String): Option[OwcDocument] = {
+  def findOwcDocumentByIdAndUser(id: String, email: String): Option[OwcDocument] = {
     db.withConnection { implicit connection =>
 
       SQL(
         s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
            |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
-           |where ft = {id} AND feature_type = {feature_type} AND u.users_username = {username}""".stripMargin).on(
+           |where ft = {id} AND feature_type = {feature_type} AND u.users_email = {email}""".stripMargin).on(
         'id -> id,
         'feature_type -> "OwcDocument",
-        'username -> username
+        'email -> email
       ).as(owcDocumentParser.singleOpt)
     }
   }
@@ -458,18 +458,18 @@ class OwcDocumentDAO @Inject()(db: Database,
   /**
     * find an OwcDocument by user
     *
-    * @param username
+    * @param email
     * @return
     */
-  def findOwcDocumentByUser(username: String): Seq[OwcDocument] = {
+  def findOwcDocumentByUser(email: String): Seq[OwcDocument] = {
     db.withConnection { implicit connection =>
 
       SQL(
         s"""select ft.id as id, ft.feature_type as feature_type, ft.bbox as bbox
            |FROM $tableOwcFeatureTypes ft JOIN $tableUserHasOwcDocuments u ON ft.id=u.owc_feature_types_as_document_id
-           |where feature_type = {feature_type} AND u.users_username = {username}""".stripMargin).on(
+           |where feature_type = {feature_type} AND u.users_email = {email}""".stripMargin).on(
         'feature_type -> "OwcDocument",
-        'username -> username
+        'email -> email
       ).as(owcDocumentParser *)
     }
   }
@@ -481,8 +481,8 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param owcDocument
     * @return
     */
-  def createUsersDefaultOwcDocument(owcDocument: OwcDocument, username: String): Option[OwcDocument] = {
-    createOwcDocument(owcDocument, username, 0, "DEFAULT")
+  def createUsersDefaultOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
+    createOwcDocument(owcDocument, email, 0, "DEFAULT")
   }
 
   /**
@@ -492,8 +492,8 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param owcDocument
     * @return
     */
-  def createCustomOwcDocument(owcDocument: OwcDocument, username: String): Option[OwcDocument] = {
-    createOwcDocument(owcDocument, username, 0, "CUSTOM")
+  def createCustomOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
+    createOwcDocument(owcDocument, email, 0, "CUSTOM")
   }
 
   /**
@@ -502,7 +502,7 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param owcDocument
     * @return
     */
-  def createOwcDocument(owcDocument: OwcDocument, username: String, visibility: Int, collectionType: String): Option[OwcDocument] = {
+  def createOwcDocument(owcDocument: OwcDocument, email: String, visibility: Int, collectionType: String): Option[OwcDocument] = {
     db.withTransaction {
       implicit connection => {
 
@@ -550,9 +550,9 @@ class OwcDocumentDAO @Inject()(db: Database,
 
         SQL(
           s"""insert into $tableUserHasOwcDocuments values (
-             |{username}, {owcDocumentId}, {collection_type}, {visibility}
+             |{email}, {owcDocumentId}, {collection_type}, {visibility}
              |)""".stripMargin).on(
-          'username -> username,
+          'email -> email,
           'owcDocumentId -> owcDocument.id,
           'collection_type -> collectionType,
           'visibility -> visibility
@@ -573,7 +573,7 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @return
     */
   def updateOwcDocumentTypeAndVisibility(owcDocument: OwcDocument,
-                                         username: String,
+                                         email: String,
                                          visibility: Int,
                                          collectionType: String): Option[OwcDocument] = {
 
@@ -583,11 +583,11 @@ class OwcDocumentDAO @Inject()(db: Database,
           s"""UPDATE $tableUserHasOwcDocuments SET
              |collection_type = {collection_type},
              |visibility = {visibility}
-             |WHERE username = {username} AND owcDocumentId = {owcDocumentId}
+             |WHERE email = {email} AND owcDocumentId = {owcDocumentId}
              |""".stripMargin).on(
           'collection_type -> collectionType,
           'visibility -> visibility,
-          'username -> username,
+          'email -> email,
           'owcDocumentId -> owcDocument.id
         ).executeUpdate()
 
@@ -603,10 +603,10 @@ class OwcDocumentDAO @Inject()(db: Database,
   /**
     *
     * @param owcDocument
-    * @param username
+    * @param email
     * @return
     */
-  def updateOwcDocument(owcDocument: OwcDocument, username: String) : Option[OwcDocument] = {
+  def updateOwcDocument(owcDocument: OwcDocument, email: String) : Option[OwcDocument] = {
     None
   }
 

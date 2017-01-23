@@ -36,15 +36,15 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
 
   /**
     *
-    * @param username
+    * @param email
     * @return
     */
-  def getUserDefaultOwcDocument(username: String) : Option[OwcDocument] = {
-    owcDocumentDAO.findUserDefaultOwcDocument(username)
+  def getUserDefaultOwcDocument(email: String) : Option[OwcDocument] = {
+    owcDocumentDAO.findUserDefaultOwcDocument(email)
   }
 
   /**
-    * get Owc Documents For optional username And owc doc Id
+    * get Owc Documents For optional email And owc doc Id
     *
     * @param authUserOption
     * @param idOption
@@ -53,7 +53,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
   def getOwcDocumentsForUserAndId(authUserOption: Option[String], idOption: Option[String]): Seq[OwcDocument] = {
 
     authUserOption.fold {
-      // no username provided
+      // no email provided
       idOption.fold {
         // TODO docs for anonymous, no id provided => all public docs (implies docs must be public)
         owcDocumentDAO.getAllPublicOwcDocuments
@@ -65,7 +65,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
       }
     } { authUser => {
       // trying to find a user from provided authuser option
-      userDAO.findByUsername(authUser).fold {
+      userDAO.findUserByEmail(authUser).fold {
         logger.warn("Provided user not found.")
         idOption.fold {
           // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
@@ -82,13 +82,13 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           // docs for user, no id provided => all user visible docs
           // TODO technically would be more than "only" publicly visible at some point
           val publicDocs = owcDocumentDAO.getAllPublicOwcDocuments
-          val userDocs = owcDocumentDAO.findOwcDocumentByUser(user.username)
+          val userDocs = owcDocumentDAO.findOwcDocumentByUser(user.email)
 
           publicDocs ++ userDocs
         } {
           // TODO find doc by id for provided user if visible/available (later maybe check constraint)
           id => {
-            owcDocumentDAO.findOwcDocumentByIdAndUser(id, user.username).toSeq
+            owcDocumentDAO.findOwcDocumentByIdAndUser(id, user.email).toSeq
           }
         }
       }
@@ -127,7 +127,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     val defaultOwcDoc = OwcDocument(s"http://portal.smart-project.info/context/user/${propsUuid.toString}",
       None, defaultOwcProps, List())
 
-    val ok = owcDocumentDAO.createUsersDefaultOwcDocument(defaultOwcDoc, user.username)
+    val ok = owcDocumentDAO.createUsersDefaultOwcDocument(defaultOwcDoc, user.email)
     ok match {
       case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}" )
       case _ => logger.error("Something failed miserably")
@@ -137,10 +137,10 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
   /**
     *
     * @param mdMetadata
-    * @param username
+    * @param email
     * @return
     */
-  def addEntryToUserDefaultCollection(mdMetadata: MdMetadata, username: String) : Boolean = {
+  def addEntryToUserDefaultCollection(mdMetadata: MdMetadata, email: String) : Boolean = {
 
     val cswGetCapaOps = OwcOperation(UUID.randomUUID(),
       "GetCapabilities",
@@ -177,7 +177,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     )
 
     val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/${propsUuid.toString}", None)
-    val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(username)
+    val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(email)
 
     def upsertOk = defaultCollection.map{ owcDoc =>
       {
@@ -207,14 +207,14 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           None, entryProps, List(cswOffering))
         val entries = owcDoc.features ++ Seq(owcEntry)
         val newDoc = owcDoc.copy(features = entries)
-        owcDocumentDAO.updateOwcDocument(newDoc, username).isDefined
+        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
       }
     }
     upsertOk.getOrElse(false)
   }
 
-  def insertCollection(owcDocument: OwcDocument, username: String) = {
-    val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, username)
+  def insertCollection(owcDocument: OwcDocument, emailame: String) = {
+    val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, emailame)
     owcOk
   }
 

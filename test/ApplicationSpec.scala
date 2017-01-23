@@ -87,9 +87,9 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
     // EMPTY
   }
 
-  lazy val PROFILENOPASS = """{"email":"alex@example.com","username":"alex","firstname":"Alex","lastname":"K"}"""
-  lazy val LOGIN = """{"username":"alex","password":"testpass123"}"""
-  lazy val FULLPROFILE = """{"email":"alex@example.com","username":"akmoch","firstname":"Alex","lastname":"K","password":"testpass123"}"""
+  lazy val PROFILENOPASS = """{"email":"alex@example.com","accountSubject":"local:alex@example.com","firstname":"Alex","lastname":"K"}"""
+  lazy val LOGIN = """{"email":"alex@example.com","password":"testpass123"}"""
+  lazy val FULLPROFILE = """{"email":"alex@example.com","accountSubject":"local:alex@example.com","firstname":"Alex","lastname":"K","password":"testpass123"}"""
 
   "Routes" should {
     "send 404 on a bad request and GETs at POST endpoint" in {
@@ -114,7 +114,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       route(app, FakeRequest(POST, "/api/v1/login").withTextBody(LOGIN)).map(status(_)) mustBe Some(
         UNSUPPORTED_MEDIA_TYPE)
       route(app,
-        FakeRequest(POST, "/api/v1/login") withXmlBody (<username>alex</username> <password>testpass123</password>))
+        FakeRequest(POST, "/api/v1/login") withXmlBody (<email>alex@blub.de</email> <password>testpass123</password>))
         .map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
       route(app, FakeRequest(POST, "/api/v1/users/register")).map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
       route(app, FakeRequest(GET, "/api/v1/users/delete/testuser")).map(status(_)) mustBe Some(NOT_IMPLEMENTED)

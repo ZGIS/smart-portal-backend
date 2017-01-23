@@ -28,8 +28,8 @@ import play.api.libs.json._
 package object controllers {
 
   implicit val LoginCredentialsFromJson = (
-    (JsPath \ "username").read[String](minLength[String](3)) and
-      (JsPath \ "password").read[String](minLength[String](6)))((username, password) => LoginCredentials(username, password))
+    (JsPath \ "email").read[String](email) and
+      (JsPath \ "password").read[String](minLength[String](8)))((email, password) => LoginCredentials(email, password))
 
   implicit val GAuthCredentialsFromJson = (
     (JsPath \ "authcode").read[String] and
@@ -37,14 +37,14 @@ package object controllers {
 
   implicit val registerJsReads: Reads[RegisterJs] = (
     (JsPath \ "email").read[String](email) and
-      (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
       (JsPath \ "password").read[String](minLength[String](8)))(RegisterJs.apply _)
 
   implicit val userReads: Reads[User] = (
     (JsPath \ "email").read[String](email) and
-      (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
       (JsPath \ "password").read[String](minLength[String](8)) and
@@ -53,7 +53,7 @@ package object controllers {
 
   implicit val userWrites: Writes[User] = (
     (JsPath \ "email").write[String] and
-      (JsPath \ "username").write[String] and
+      (JsPath \ "accountSubject").write[String] and
       (JsPath \ "firstname").write[String] and
       (JsPath \ "lastname").write[String] and
       (JsPath \ "password").write[String] and
@@ -62,13 +62,13 @@ package object controllers {
 
   implicit val profileJsReads: Reads[ProfileJs] = (
     (JsPath \ "email").read[String](email) and
-      (JsPath \ "username").read[String](minLength[String](3)) and
+      (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String])(ProfileJs.apply _)
 
   implicit val profileJsWrites: Writes[ProfileJs] = (
     (JsPath \ "email").write[String] and
-      (JsPath \ "username").write[String] and
+      (JsPath \ "accountSubject").write[String] and
       (JsPath \ "firstname").write[String] and
       (JsPath \ "lastname").write[String])(unlift(ProfileJs.unapply))
 

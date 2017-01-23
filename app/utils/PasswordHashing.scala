@@ -65,12 +65,12 @@ class PasswordHashing @Inject()(configuration: Configuration) {
   def createSessionCookie(username: String, useragent: String): String = {
     val in = appSecret + username + useragent.toUpperCase
     val digest = MessageDigest.getInstance("SHA-512").digest(in.getBytes("UTF-8"))
-    // Logger.trace(s"createSessionCookie: ${toHex(digest)} app secret: $appSecret , username: $username, useragent: $useragent >>> $in")
+    // Logger.trace(s"createSessionCookie: ${toHex(digest)} app secret: $appSecret , email: $email, useragent: $useragent >>> $in")
     toHex(digest)
   }
 
   /**
-    * test Session Cookie with token, username, uaIdentifier, based on validatePassword
+    * test Session Cookie with token, email, uaIdentifier, based on validatePassword
     *
     * @param cookieHash
     * @param username
@@ -82,7 +82,7 @@ class PasswordHashing @Inject()(configuration: Configuration) {
     val digestHash = MessageDigest.getInstance("SHA-512").digest(in.getBytes("UTF-8"))
     val testHash = fromHex(cookieHash)
 //    Logger.trace(s"testSessionCookie: testhash ${toHex(testHash)} vs newdigest ${toHex(digestHash)}app secret: " +
-//      s"$appSecret cookieHash: $cookieHash, username: $username, $useragent: useragent  >>> $in")
+//      s"$appSecret cookieHash: $cookieHash, email: $email, $useragent: useragent  >>> $in")
     slowEquals(digestHash, testHash)
   }
 

@@ -42,26 +42,26 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     */
   val userParser = {
     get[String]("email") ~
-      get[String]("username") ~
+      get[String]("accountSubject") ~
       get[String]("firstname") ~
       get[String]("lastname") ~
       get[String]("password") ~
       get[String]("laststatustoken") ~
       get[ZonedDateTime]("laststatuschange") map {
-      case email~username~firstname~lastname~password~laststatustoken~laststatuschange =>
-        User(email, username, firstname, lastname, password, laststatustoken, laststatuschange)
+      case email~accountsubject~firstname~lastname~password~laststatustoken~laststatuschange =>
+        User(email, accountsubject, firstname, lastname, password, laststatustoken, laststatuschange)
     }
   }
 
   /**
-    * Retrieve a User from username.
+    * Retrieve a User from email.
     *
-    * @param username
+    * @param accountSubject
     */
-  def findByUsername(username: String): Option[User] = {
+  def findByAccountSubject(accountSubject: String): Option[User] = {
     db.withConnection { implicit connection =>
-      SQL("select * from users where username = {username}").on(
-        'username -> username
+      SQL("select * from users where accountsubject = {accountsubject}").on(
+        'accountsubject -> accountSubject
       ).as(userParser.singleOpt)
     }
   }
@@ -78,19 +78,19 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   /**
     * Authenticate a User.
     *
-    * @param username
+    * @param email
     * @param password
     */
-  def authenticate(username: String, password: String): Option[User] = {
+  def authenticate(email: String, password: String): Option[User] = {
 
     db.withConnection { implicit connection =>
       SQL(
         """
          select * from users where
-         username = {username}
+         email = {email}
         """
       ).on(
-        'username -> username
+        'email -> email
       ).as(userParser.singleOpt)
     }.filter { user =>
       passwordHashing.validatePassword(password, user.password)
@@ -110,7 +110,7 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     db.withConnection { implicit connection =>
       val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
         "email" -> user.email,
-        "username" -> user.username,
+        "accountsubject" -> user.accountSubject,
         "firstname" -> user.firstname,
         "lastname" -> user.lastname,
         "laststatustoken" -> user.laststatustoken,
@@ -120,7 +120,7 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
       val rowCount = SQL(
         """
           insert into users values (
-            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
+            {email}, {accountsubject}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
           )
         """).on(nps: _*).executeUpdate()
 
@@ -145,11 +145,11 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
       val rowCount = SQL(
         """
           insert into users values (
-            {email}, {username}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
+            {email}, {accountsubject}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
           )
         """).on(
         'email -> user.email,
-        'username -> user.username,
+        'accountsubject -> user.accountSubject,
         'firstname -> user.firstname,
         'lastname -> user.lastname,
         'password -> user.password,
@@ -176,18 +176,18 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
       val rowCount = SQL(
         """
           update users set
-            email = {email},
+            accountsubject = {accountsubject},
             firstname = {firstname},
             lastname = {lastname},
             laststatustoken = {laststatustoken},
-            laststatuschange = {laststatuschange} where username = {username}
+            laststatuschange = {laststatuschange} where email = {email}
         """).on(
-        'email -> user.email,
+        'accountsubject -> user.accountSubject,
         'firstname -> user.firstname,
         'lastname -> user.lastname,
         'laststatustoken -> user.laststatustoken,
         'laststatuschange -> user.laststatuschange,
-        'username -> user.username
+        'email -> user.email
       ).executeUpdate()
 
       rowCount match {
@@ -211,12 +211,12 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
           update users set
             password = {password},
             laststatustoken = {laststatustoken},
-            laststatuschange = {laststatuschange} where username = {username}
+            laststatuschange = {laststatuschange} where email = {email}
         """).on(
         'password -> user.password,
         'laststatustoken -> user.laststatustoken,
         'laststatuschange -> user.laststatuschange,
-        'username -> user.username
+        'email -> user.email
       ).executeUpdate()
 
       rowCount match {
@@ -246,13 +246,13 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   /**
     * delete a User
     *
-    * @param username
+    * @param email
     * @return
     */
-  def deleteUser(username: String) : Boolean = {
+  def deleteUser(email: String) : Boolean = {
     val rowCount = db.withConnection { implicit connection =>
-      SQL("delete from users where username = {username}").on(
-        'username -> username
+      SQL("delete from users where email = {email}").on(
+        'email -> email
       ).executeUpdate()
     }
 

@@ -30,7 +30,7 @@ import utils.ClassnameLogger
   * the companion object here
   *
   * @param email
-  * @param username
+  * @param accountSubject
   * @param firstname
   * @param lastname
   * @param password
@@ -38,7 +38,7 @@ import utils.ClassnameLogger
   * @param laststatuschange
   */
 case class User(email: String,
-                username: String,
+                accountSubject: String,
                 firstname: String,
                 lastname: String,
                 password: String,
@@ -53,7 +53,7 @@ case class User(email: String,
   override def toString: String = {
     f"""User(
         |$email,
-        |${username},
+        |${accountSubject},
         |${firstname},
         |${lastname},
         |***,
@@ -68,7 +68,7 @@ case class User(email: String,
     * @return
     */
   def asProfileJs(): ProfileJs = {
-    ProfileJs(email, username, firstname, lastname)
+    ProfileJs(email, accountSubject, firstname, lastname)
   }
 
 }
@@ -77,7 +77,7 @@ case class User(email: String,
   *  Used for obtaining the email and password from the HTTP login request
   *  from github.com/mariussoutier/play-angular-require-seed
   */
-case class LoginCredentials(username: String, password: String)
+case class LoginCredentials(email: String, password: String)
 
 /**
   *  Used for obtaining the gauth flow code and login/register action from the HTTP google login request

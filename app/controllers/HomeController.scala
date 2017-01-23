@@ -100,7 +100,7 @@ class HomeController @Inject()(config: Configuration,
 
   /**
     * login with JSON (from Angular / form)
-    * {"username":"akmoch","password":"testpass123"}
+    * {"email":"akmoch","password":"testpass123"}
     *
     * Create the authentication token and sets the cookie [[AuthTokenCookieKey]]
     * for AngularJS to use also in X-XSRF-TOKEN in HTTP header.
@@ -115,15 +115,15 @@ class HomeController @Inject()(config: Configuration,
       },
       valid = credentials => {
         // find user in db and compare password stuff
-        userDAO.authenticate(credentials.username, credentials.password).fold {
-          logger.error("User or password wrong.")
-          Unauthorized(Json.obj("status" -> "ERR", "message" -> "Username or password wrong."))
+        userDAO.authenticate(credentials.email, credentials.password).fold {
+          logger.error("User email or password wrong.")
+          Unauthorized(Json.obj("status" -> "ERR", "message" -> "User email or password wrong."))
         } { user =>
           val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-          // logger.debug(s"Logging in username from $uaIdentifier")
-          val token = passwordHashing.createSessionCookie(user.username, uaIdentifier)
-          cache.set(token, user.username)
-          Ok(Json.obj("status" -> "OK", "token" -> token, "username" -> user.username, "userprofile" -> user.asProfileJs()))
+          // logger.debug(s"Logging in email from $uaIdentifier")
+          val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+          cache.set(token, user.email)
+          Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
             .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
         }
       })
@@ -166,7 +166,7 @@ class HomeController @Inject()(config: Configuration,
     * X-XSRF-TOKEN in HTTP header.
     */
   def logout = HasToken(parse.empty) { token =>
-    username =>
+    email =>
       implicit request =>
         cache.remove(token)
         Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))

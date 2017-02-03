@@ -72,6 +72,9 @@ class CswController @Inject()(val configuration: Configuration,
   val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
   val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
 
+  //TODO SR maybe we should configure these URLs somewhere else? Or even better generate some access lib from the ingester?
+  val INGESTER_URL: String = configuration.getString("smart.csw-ingester.url").getOrElse("http://localhost:9001")
+  val INGESTER_UPDATE_INDEX_URL: String = s"$INGESTER_URL/cswi-api/buildIndex/smart"
 
   /**
     * returns valid values for different topics used in metadata editor of webgui
@@ -123,6 +126,9 @@ class CswController @Inject()(val configuration: Configuration,
         val finalXML = rule.transform(cswtInsertXml)
         logger.debug(s"finalXml: ${finalXML.toString()}")
         wsClient.url(CSW_URL).post(finalXML.toString())
+      }
+      updateIngesterIndexResponse <- {
+        wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
       }
     } yield insertResponse
 

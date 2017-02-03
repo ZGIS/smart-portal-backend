@@ -64,6 +64,8 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
         |Your GW HUB Team
       """.format(usernameTo, portalApiHost, linkId, emailFrom).stripMargin
 
+    logger.debug(emailText)
+
     val from = new Email(emailFrom)
     val to = new Email(emailTo)
     val content = new Content("text/plain", emailText)

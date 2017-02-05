@@ -98,6 +98,7 @@ trait JsonableCompanion[A] extends ClassnameLogger {
   * @param title
   * @param abstrakt
   * @param keywords
+  * @param smartCategory
   * @param topicCategoryCode
   * @param hierarchyLevelName
   * @param scale
@@ -107,6 +108,7 @@ case class MdMetadata(fileIdentifier: String,
                       title: String,
                       abstrakt: String,
                       keywords: List[String],
+                      smartCategory: List[String],
                       topicCategoryCode: String,
                       hierarchyLevelName: String,
                       scale: String,
@@ -166,7 +168,8 @@ case class MdMetadata(fileIdentifier: String,
             </gmd:descriptiveKeywords>
             <gmd:descriptiveKeywords>
               <gmd:MD_Keywords>
-                <gmd:keyword><gco:CharacterString>SMART CATEGORY</gco:CharacterString></gmd:keyword>
+                <!-- TODO FILL THIS WITH TRANSFORMATOR -->
+                {this.smartCategory.map(k=> <gmd:keyword><gco:CharacterString>{k}</gco:CharacterString></gmd:keyword>)}
                 <gmd:type>
                   <gmd:MD_KeywordTypeCode codeListValue="SMART"
                                           codeList="http://smart">
@@ -271,6 +274,7 @@ object MdMetadata extends ClassnameLogger with JsonableCompanion[MdMetadata] {
       (JsPath \ "title").read[String] and
       (JsPath \ "abstrakt").read[String] and
       (JsPath \ "keywords").read[List[String]] and
+      (JsPath \ "smartCategory").read[List[String]] and
       (JsPath \ "topicCategoryCode").read[String] and
       (JsPath \ "hierarchyLevelName").read[String] and
       (JsPath \ "scale").read[String] and
@@ -286,6 +290,7 @@ object MdMetadata extends ClassnameLogger with JsonableCompanion[MdMetadata] {
       (JsPath \ "title").write[String] and
       (JsPath \ "abstrakt").write[String] and
       (JsPath \ "keywords").write[List[String]] and
+      (JsPath \ "smartCategory").write[List[String]] and
       (JsPath \ "topicCategoryCode").write[String] and
       (JsPath \ "hierarchyLevelName").write[String] and
       (JsPath \ "scale").write[String] and

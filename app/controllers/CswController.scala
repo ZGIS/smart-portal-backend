@@ -97,63 +97,72 @@ class CswController @Inject()(val configuration: Configuration,
   /** calls CSW:Transaction -> Insert
     * FIXME should implement HasToken(parse.json) instead of Action.async, to only allow authenticated users
     */
-  def insert: Action[AnyContent] = Action.async { request =>
-    logger.debug(request.body.asJson.toString)
+  def insert: Action[JsValue] = HasTokenAsync(parse.json) {
+    token =>
+      authUser =>
+        implicit request => {
+          logger.debug(request.toString)
 
-    //TODO parse JSON to MDMetadataSet and convert that to XML
-    if (request.body.asJson.isEmpty) {
-      BadRequest("Posted data was no valid JSON document")
-    }
+          //TODO parse JSON to MDMetadataSet and convert that to XML
+          /*
+                    if (request.body) {
+                      BadRequest("Posted data was no valid JSON document")
+                    }
+          */
+          val mdMetadata = MdMetadata.fromJson(((request.body.as[JsObject]) \ "metadata").get)
 
-    val mdMetadata = MdMetadata.fromJson(((request.body.asJson.get) \ "metadata").get)
+          val futureResponse: Future[WSResponse] = for {
+            getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
+            insertResponse <- {
+              //check if getCapaResponse indicates, that the CSW can perform Transactions
+              val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
+                logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
+                node.attribute("name").get.text.equals("Transaction")
+              })
+              logger.debug(s"operation = ${operation.toString()}")
+              if (operation.isEmpty) {
+                throw new UnsupportedOperationException("CSW does not support Transaction.")
+              }
 
-    val futureResponse: Future[WSResponse] = for {
-      getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
-      insertResponse <- {
-        //check if getCapaResponse indicates, that the CSW can perform Transactions
-        val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
-          logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
-          node.attribute("name").get.text.equals("Transaction")
-        })
-        logger.debug(s"operation = ${operation.toString()}")
-        if (operation.isEmpty) {
-          throw new UnsupportedOperationException("CSW does not support Transaction.")
+              //insert MDMEtadata in insert template
+              logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
+              val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
+              val finalXML = rule.transform(cswtInsertXml)
+              logger.debug(s"finalXml: ${finalXML.toString()}")
+              wsClient.url(CSW_URL).post(finalXML.toString())
+            }
+            updateIngesterIndexResponse <- {
+              wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
+            }
+          } yield insertResponse
+
+          futureResponse.recover {
+            case e: Exception =>
+              logger.error("Insert CSW threw exception", e)
+              InternalServerError(e.getMessage)
+          }
+
+          futureResponse.map(response => {
+            logger.debug(response.xml.toString())
+            response.xml match {
+              case e: Elem if e.label == "TransactionResponse" => {
+                val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
+                logger.debug(s"Adding ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
+                val added = collectionsService.addEntryToUserDefaultCollection(mdMetadata.get, authUser)
+                if (!added) {
+                  logger.warn(s"Could not add ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
+                }
+                Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
+                  "message" -> s"Inserted as ${fileIdentifier}."))
+              }
+              case e: Elem if e.label == "ExceptionReport" => {
+                val message = (e \\ "Exception" \\ "ExceptionText").text
+                //TODO SR make this InternalServerError
+                Ok(Json.obj("type" -> "danger", "message" -> message))
+              }
+              case _ => InternalServerError(s"Unexpected Response: ${response}")
+            }
+          })
         }
-
-        //insert MDMEtadata in insert template
-        logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
-        val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
-        val finalXML = rule.transform(cswtInsertXml)
-        logger.debug(s"finalXml: ${finalXML.toString()}")
-        wsClient.url(CSW_URL).post(finalXML.toString())
-      }
-      updateIngesterIndexResponse <- {
-        wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
-      }
-    } yield insertResponse
-
-    futureResponse.recover {
-      case e: Exception =>
-        logger.error("Insert CSW threw exception", e)
-        InternalServerError(e.getMessage)
-    }
-
-    futureResponse.map(response => {
-      logger.debug(response.xml.toString())
-      response.xml match {
-        case e: Elem if e.label == "TransactionResponse" => {
-          val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
-          //TODO collectionsService.addEntryToUserDefaultCollection(mdMetadata, cachedSecUser)
-          Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
-            "message" -> s"Inserted as ${fileIdentifier}."))
-        }
-        case e: Elem if e.label == "ExceptionReport" => {
-          val message = (e \\ "Exception" \\ "ExceptionText").text
-          //TODO SR make this InternalServerError
-          Ok(Json.obj("type" -> "danger", "message" -> message))
-        }
-        case _ => InternalServerError(s"Unexpected Response: ${response}")
-      }
-    })
   }
 }

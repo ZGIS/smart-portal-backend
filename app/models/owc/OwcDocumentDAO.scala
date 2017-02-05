@@ -607,6 +607,7 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @return
     */
   def updateOwcDocument(owcDocument: OwcDocument, email: String) : Option[OwcDocument] = {
+    logger.warn("updateOwcDocument IS NOT IMPLEMENTED YET!")
     None
   }
 

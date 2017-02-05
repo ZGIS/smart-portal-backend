@@ -179,8 +179,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/${propsUuid.toString}", None)
     val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(email)
 
-    def upsertOk = defaultCollection.map{ owcDoc =>
-      {
+    val upsertOk = defaultCollection.map{ owcDoc => {
         val author1 = owcDoc.properties.authors.head
         val contributor = OwcAuthor(UUID.randomUUID(),
           mdMetadata.responsibleParty.individualName,
@@ -207,7 +206,8 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           None, entryProps, List(cswOffering))
         val entries = owcDoc.features ++ Seq(owcEntry)
         val newDoc = owcDoc.copy(features = entries)
-        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
+        val result = owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
+        result
       }
     }
     upsertOk.getOrElse(false)

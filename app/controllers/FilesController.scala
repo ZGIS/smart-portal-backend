@@ -130,7 +130,7 @@ class FilesController @Inject()(val configuration: Configuration,
               logger.debug(s"file upload $filename")
               Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "entry" -> owcEntry.toJson))
             } else {
-              logger.error(s"file metadata insert failed.")
+              logger.error("file metadata insert failed.")
               BadRequest(Json.obj("status" -> "ERR", "message" -> "file metadata insert failed."))
             }
           }.getOrElse {

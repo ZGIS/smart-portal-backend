@@ -207,7 +207,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
         val entries = owcDoc.features ++ Seq(owcEntry)
         val newDoc = owcDoc.copy(features = entries)
 
-        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
+        owcDocumentDAO.addOwcEntryToOwcDocument(newDoc, owcEntry, email).isDefined
       }
     }
     upsertOk.getOrElse(false)
@@ -230,7 +230,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
         val entries = owcDoc.features ++ Seq(newEntry)
         val newDoc = owcDoc.copy(features = entries)
 
-        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
+        owcDocumentDAO.addOwcEntryToOwcDocument(newDoc, newEntry, email).isDefined
       }
     }
     upsertOk.getOrElse(false)

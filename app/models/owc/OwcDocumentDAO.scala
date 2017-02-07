@@ -611,9 +611,74 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param email
     * @return
     */
-  def updateOwcDocument(owcDocument: OwcDocument, email: String) : Option[OwcDocument] = {
-    logger.warn("updateOwcDocument IS NOT IMPLEMENTED YET!")
-    None
+  def addOwcEntryToOwcDocument(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+
+    val rowCount = db.withTransaction {
+      implicit connection => {
+
+        // update the features/entries list of the OwcDoc collection
+
+            // if uuid of provided entry is not found in DB create new entry
+            if (findOwcEntriesById(owcEntry.id).isEmpty) {
+              createOwcEntry(owcEntry)
+
+              // and add relation to owc doc
+              SQL(
+                s"""insert into $tableOwcDocumentsHasOwcEntries  values (
+                   |{owc_feature_types_as_document_id}, {owc_feature_types_as_entry_id}
+                   |)
+               """.stripMargin).on(
+                'owc_feature_types_as_document_id -> owcDocument.id,
+                'owc_feature_types_as_entry_id -> owcEntry.id
+              ).executeUpdate()
+            } else {
+              // if uuid for provided entry exists in DB delegate entry update
+              if (deleteOwcEntry(owcEntry)) {
+                createOwcEntry(owcEntry)
+              }
+            }
+          }
+      }
+
+    rowCount match {
+      case 1 => Some(owcDocument)
+      case _ => None
+    }
+  }
+
+  /**
+    *
+    * @param owcDocument
+    * @param email
+    * @return
+    */
+  def deleteOwcEntryFromOwcDocument(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+
+    val rowCount = db.withTransaction {
+      implicit connection => {
+
+        // update the features/entries list of the OwcDoc collection
+
+        // if uuid of provided entry is not found in DB create new entry
+        if (findOwcEntriesById(owcEntry.id).isDefined) {
+          deleteOwcEntry(owcEntry)
+
+          // and add relation to owc doc
+          SQL(
+            s"""delete from $tableOwcDocumentsHasOwcEntries where owc_feature_types_as_document_id = {doc_id}
+               |AND owc_feature_types_as_entry_id = {entry_id}
+             """.stripMargin).on(
+            'doc_id -> owcDocument.id,
+            'entry_id -> owcEntry.id
+          ).executeUpdate()
+        }
+      }
+    }
+
+    rowCount match {
+      case 1 => Some(owcDocument)
+      case _ => None
+    }
   }
 
   /**

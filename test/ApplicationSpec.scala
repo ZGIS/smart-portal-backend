@@ -170,7 +170,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       status(topicCategories.get) mustBe 200
       val jsonTopicCategories = contentAsJson(topicCategories.get)
       (jsonTopicCategories \ "standardValue").toOption mustBe defined
-      (jsonTopicCategories \ "standardValue").as[Int] mustBe 0
+      (jsonTopicCategories \ "standardValue").as[Int] mustBe 2
       (jsonTopicCategories \ "descriptions").asOpt[List[String]] mustBe None
     }
 

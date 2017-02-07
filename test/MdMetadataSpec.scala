@@ -75,7 +75,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite wit
       mdMetadataExtent.get.description mustEqual "World"
 
       And("referenceSystem must be filled correctly")
-      mdMetadataExtent.get.referenceSystem mustEqual "urn:ogc:def:crs:EPSG::4328"
+      mdMetadataExtent.get.referenceSystem mustEqual "urn:ogc:def:crs:EPSG::4326"
 
       And("mapExtentCoordinates must be filled correctly")
       mdMetadataExtent.get.mapExtentCoordinates mustEqual

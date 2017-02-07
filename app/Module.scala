@@ -21,7 +21,7 @@ import com.google.inject.AbstractModule
 import models.gmd._
 import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
-import services.{EmailService, MetadataService, OwcCollectionsService}
+import services.{EmailService, GoogleServicesDAO, MetadataService, OwcCollectionsService}
 import utils.PasswordHashing
 
 /**
@@ -42,6 +42,7 @@ class Module extends AbstractModule {
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[MetadataService]).asEagerSingleton()
     bind(classOf[OwcCollectionsService]).asEagerSingleton()
+    bind(classOf[GoogleServicesDAO]).asEagerSingleton()
 
     // DAOs
     bind(classOf[UserDAO]).asEagerSingleton()

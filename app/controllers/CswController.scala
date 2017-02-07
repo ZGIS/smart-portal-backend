@@ -148,7 +148,7 @@ class CswController @Inject()(val configuration: Configuration,
               case e: Elem if e.label == "TransactionResponse" => {
                 val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
                 logger.debug(s"Adding ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
-                val added = collectionsService.addEntryToUserDefaultCollection(mdMetadata.get, authUser)
+                val added = collectionsService.addMdEntryToUserDefaultCollection(mdMetadata.get, authUser)
                 if (!added) {
                   logger.warn(s"Could not add ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
                 }

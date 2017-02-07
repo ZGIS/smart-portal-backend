@@ -140,7 +140,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     * @param email
     * @return
     */
-  def addEntryToUserDefaultCollection(mdMetadata: MdMetadata, email: String) : Boolean = {
+  def addMdEntryToUserDefaultCollection(mdMetadata: MdMetadata, email: String) : Boolean = {
 
     val cswGetCapaOps = OwcOperation(UUID.randomUUID(),
       "GetCapabilities",
@@ -206,13 +206,42 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           None, entryProps, List(cswOffering))
         val entries = owcDoc.features ++ Seq(owcEntry)
         val newDoc = owcDoc.copy(features = entries)
-        val result = owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
-        result
+
+        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
       }
     }
     upsertOk.getOrElse(false)
   }
 
+  /**
+    *
+    * @param owcEntry
+    * @param email
+    * @return
+    */
+  def addPlainFileEntryToUserDefaultCollection(owcEntry: OwcEntry, email: String) : Boolean = {
+    val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(email)
+    val upsertOk = defaultCollection.map {
+      owcDoc => {
+        val author1 = owcDoc.properties.authors.head
+
+        val newProps = owcEntry.properties.copy(authors = owcEntry.properties.authors ++ Seq(author1))
+        val newEntry = owcEntry.copy(properties = newProps)
+        val entries = owcDoc.features ++ Seq(newEntry)
+        val newDoc = owcDoc.copy(features = entries)
+
+        owcDocumentDAO.updateOwcDocument(newDoc, email).isDefined
+      }
+    }
+    upsertOk.getOrElse(false)
+  }
+
+  /**
+    *
+    * @param owcDocument
+    * @param emailame
+    * @return
+    */
   def insertCollection(owcDocument: OwcDocument, emailame: String) = {
     val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, emailame)
     owcOk

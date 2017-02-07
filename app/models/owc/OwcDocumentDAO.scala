@@ -479,6 +479,7 @@ class OwcDocumentDAO @Inject()(db: Database,
     * collectionType "DEFAULT"
     *
     * @param owcDocument
+    * @param email
     * @return
     */
   def createUsersDefaultOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
@@ -490,6 +491,7 @@ class OwcDocumentDAO @Inject()(db: Database,
     * collectionType "CUSTOM"
     *
     * @param owcDocument
+    * @param email
     * @return
     */
   def createCustomOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
@@ -500,6 +502,9 @@ class OwcDocumentDAO @Inject()(db: Database,
     * create/insert into db Owc Document
     *
     * @param owcDocument
+    * @param email
+    * @param visibility
+    * @param collectionType
     * @return
     */
   def createOwcDocument(owcDocument: OwcDocument, email: String, visibility: Int, collectionType: String): Option[OwcDocument] = {

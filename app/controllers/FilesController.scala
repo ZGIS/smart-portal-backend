@@ -19,8 +19,16 @@
 
 package controllers
 
+import java.io.FileInputStream
+import java.time.{ZoneId, ZonedDateTime}
+import java.util.UUID
 import javax.inject.Inject
 
+import com.google.auth.oauth2.ServiceAccountCredentials
+import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
+import com.google.common.io.Files
+
+import models.owc.{HttpLinkOffering, OwcEntry, OwcLink, OwcOperation, OwcProperties}
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.Json
@@ -28,20 +36,8 @@ import play.api.libs.ws.WSClient
 import play.api.mvc._
 import services.{GoogleServicesDAO, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
-import java.io.File
-import java.time.{ZoneId, ZonedDateTime}
-import java.util.UUID
-
-import models.owc.{HttpLinkOffering, OwcAuthor, OwcEntry, OwcLink, OwcOperation, OwcProperties}
 
 import scala.concurrent.ExecutionContext
-import com.google.cloud.storage.Acl
-import com.google.cloud.storage.Blob
-import com.google.cloud.storage.BlobInfo
-import com.google.cloud.storage.Storage
-import com.google.cloud.storage.StorageOptions
-
-import com.google.common.io.Files
 
 /**
   *
@@ -66,8 +62,10 @@ class FilesController @Inject()(config: Configuration,
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   lazy private val googleClientSecret: String = configuration.getString("google.client.secret")
     .getOrElse("client_secret.json")
-  lazy private val BUCKET_NAME: String = configuration.getString("google.storage.bucket")
+  lazy private val googleStorageBucket: String = configuration.getString("google.storage.bucket")
     .getOrElse("smart-backup")
+  lazy private val googleProjectId: String = configuration.getString("google.project.id")
+    .getOrElse("dynamic-cove-129211")
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
 
@@ -139,27 +137,23 @@ class FilesController @Inject()(config: Configuration,
             val tmpFile = new File(s"/tmp/$filename")
             theFile.ref.moveTo(tmpFile)
 
-
+            // Google Java upload stuff
             import scala.collection.JavaConverters._
 
-            // Google upload stuff
-            val storage: Storage = StorageOptions.getDefaultInstance().getService()
+            val serviceAccountCredentials = ServiceAccountCredentials.fromStream(new FileInputStream(googleClientSecret))
+            val authenticatedStorageOptions = StorageOptions.newBuilder().setProjectId(googleProjectId)
+              .setCredentials(serviceAccountCredentials).build()
 
-            /* maybe auth?
-
-             DatastoreOptions options = DatastoreOptions.newBuilder()
-  .setProjectId(PROJECT_ID)
-  .setAuthCredentials(AuthCredentials.createForJson(
-    new FileInputStream(PATH_TO_JSON_KEY))).build();
-
-              */
+            val storage: Storage = authenticatedStorageOptions.getService()
+            // val storage: Storage = StorageOptions.getDefaultInstance().getService()
+            // val noCredentials = NoCredentials.getInstance()
 
             // Modify access list to allow all users with link to read file
             val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)
             val acls: java.util.List[Acl] = List(roAcl).asJava
 
             // the inputstream is closed by default, so we don't need to close it here
-            val blob: Blob = storage.create(BlobInfo.newBuilder(BUCKET_NAME, filename).setAcl(acls).build(),
+            val blob: Blob = storage.create(BlobInfo.newBuilder(googleStorageBucket, filename).setAcl(acls).build(),
               Files.asByteSource(tmpFile).openStream())
 
             // return the public download link

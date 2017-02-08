@@ -66,6 +66,8 @@ class FilesController @Inject()(config: Configuration,
     .getOrElse("smart-backup")
   lazy private val googleProjectId: String = configuration.getString("google.project.id")
     .getOrElse("dynamic-cove-129211")
+  lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
+    .getOrElse("/tmp")
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
 
@@ -134,18 +136,18 @@ class FilesController @Inject()(config: Configuration,
             import java.io.File
             val filename = theFile.filename
             val contentType = theFile.contentType
-            val tmpFile = new File(s"/tmp/$filename")
+            val tmpFile = new File(s"$uploadDataPath/$filename")
             theFile.ref.moveTo(tmpFile)
 
             // Google Java upload stuff
             import scala.collection.JavaConverters._
 
-            val serviceAccountCredentials = ServiceAccountCredentials.fromStream(new FileInputStream(googleClientSecret))
-            val authenticatedStorageOptions = StorageOptions.newBuilder().setProjectId(googleProjectId)
-              .setCredentials(serviceAccountCredentials).build()
+//            val serviceAccountCredentials = ServiceAccountCredentials.fromStream(new FileInputStream(googleClientSecret))
+//            val authenticatedStorageOptions = StorageOptions.newBuilder().setProjectId(googleProjectId)
+//              .setCredentials(serviceAccountCredentials).build()
 
-            val storage: Storage = authenticatedStorageOptions.getService()
-            // val storage: Storage = StorageOptions.getDefaultInstance().getService()
+            // val storage: Storage = authenticatedStorageOptions.getService()
+            val storage: Storage = StorageOptions.getDefaultInstance().getService()
             // val noCredentials = NoCredentials.getInstance()
 
             // Modify access list to allow all users with link to read file

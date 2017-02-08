@@ -35,19 +35,29 @@ import java.util.UUID
 import models.owc.{HttpLinkOffering, OwcAuthor, OwcEntry, OwcLink, OwcOperation, OwcProperties}
 
 import scala.concurrent.ExecutionContext
+import com.google.cloud.storage.Acl
+import com.google.cloud.storage.Blob
+import com.google.cloud.storage.BlobInfo
+import com.google.cloud.storage.Storage
+import com.google.cloud.storage.StorageOptions
+import java.io.IOException
+import java.util.ArrayList
+import java.util.List
+
+import com.google.common.io.Files
 
 /**
   *
-  * @param configuration
-  * @param cache
+  * @param config
+  * @param cacheApi
   * @param passwordHashing
   * @param wsClient
   * @param context
   * @param googleService
   * @param collectionsService
   */
-class FilesController @Inject()(val configuration: Configuration,
-                                val cache: CacheApi,
+class FilesController @Inject()(config: Configuration,
+                                cacheApi: CacheApi,
                                 val passwordHashing: PasswordHashing,
                                 wsClient: WSClient,
                                 implicit val context: ExecutionContext,
@@ -55,6 +65,14 @@ class FilesController @Inject()(val configuration: Configuration,
                                 collectionsService: OwcCollectionsService
                                )
   extends Controller with ClassnameLogger with Security {
+
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val googleClientSecret: String = configuration.getString("google.client.secret")
+    .getOrElse("client_secret.json")
+  lazy private val BUCKET_NAME: String = configuration.getString("google.storage.bucket")
+    .getOrElse("smart-backup")
+  val cache: play.api.cache.CacheApi = cacheApi
+  val configuration: play.api.Configuration = config
 
   /**
     *
@@ -121,14 +139,30 @@ class FilesController @Inject()(val configuration: Configuration,
             import java.io.File
             val filename = theFile.filename
             val contentType = theFile.contentType
-            theFile.ref.moveTo(new File(s"/tmp/$filename"))
+            val tmpFile = new File(s"/tmp/$filename")
+            theFile.ref.moveTo(tmpFile)
 
-            val owcEntry = fileMetadata(filename, contentType, authUser)
+
+            import scala.collection.JavaConverters._
+
+            // Google upload stuff
+            val storage: Storage = StorageOptions.getDefaultInstance().getService()
+
+            // Modify access list to allow all users with link to read file
+            val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)
+            val acls: java.util.List[Acl] = List(roAcl).asJava
+
+            // the inputstream is closed by default, so we don't need to close it here
+            val blob: Blob = storage.create(BlobInfo.newBuilder(BUCKET_NAME, filename).setAcl(acls).build(),
+              Files.asByteSource(tmpFile).openStream())
+
+            // return the public download link
+            val owcEntry = fileMetadata(blob.getMediaLink(), contentType, authUser)
             val insertOk = collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser)
 
             if (insertOk) {
-              logger.debug(s"file upload $filename")
-              Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "entry" -> owcEntry.toJson))
+              logger.debug(s"file upload $filename to ${blob.getMediaLink}")
+              Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> blob.getMediaLink(), "entry" -> owcEntry.toJson))
             } else {
               logger.error("file metadata insert failed.")
               BadRequest(Json.obj("status" -> "ERR", "message" -> "file metadata insert failed."))

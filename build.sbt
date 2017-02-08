@@ -38,6 +38,8 @@ val googleCloudVersion = "0.8.0"
 val postgresDriver = "9.4.1211.jre7"
 val akkaVersion = "2.4.11"
 
+// google-cloud versions 0.8.0 ... 0.8.3-beta
+
 libraryDependencies ++= Seq(
   jdbc,
   evolutions,

@@ -40,9 +40,6 @@ import com.google.cloud.storage.Blob
 import com.google.cloud.storage.BlobInfo
 import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageOptions
-import java.io.IOException
-import java.util.ArrayList
-import java.util.List
 
 import com.google.common.io.Files
 
@@ -147,6 +144,15 @@ class FilesController @Inject()(config: Configuration,
 
             // Google upload stuff
             val storage: Storage = StorageOptions.getDefaultInstance().getService()
+
+            /* maybe auth?
+
+             DatastoreOptions options = DatastoreOptions.newBuilder()
+  .setProjectId(PROJECT_ID)
+  .setAuthCredentials(AuthCredentials.createForJson(
+    new FileInputStream(PATH_TO_JSON_KEY))).build();
+
+              */
 
             // Modify access list to allow all users with link to read file
             val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)

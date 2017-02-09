@@ -96,85 +96,100 @@
 </span>72 <span style=''>  val CSW_URL: String = </span><span style='background: #AEF1AE'>configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")</span><span style=''>
 </span>73 <span style=''>  val CSW_OPERATIONS_METADATA_URL: String = </span><span style='background: #AEF1AE'>s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"</span><span style=''>
 </span>74 <span style=''>
-</span>75 <span style=''>
-</span>76 <span style=''>  /**
-</span>77 <span style=''>    * returns valid values for different topics used in metadata editor of webgui
-</span>78 <span style=''>    *
-</span>79 <span style=''>    * @param topic
-</span>80 <span style=''>    * @return
-</span>81 <span style=''>    */
-</span>82 <span style=''>  def getValidValuesFor(topic: String): Action[AnyContent] = </span><span style='background: #AEF1AE'>Action { request =>
-</span>83 <span style=''></span><span style='background: #AEF1AE'>    logger.debug(</span><span style='background: #F0ADAD'>s"returning valid values for '${topic}'"</span><span style='background: #AEF1AE'>)
-</span>84 <span style=''></span><span style='background: #AEF1AE'>    val validValuesOption = metadataService.getValidValuesFor(topic)
-</span>85 <span style=''></span><span style='background: #AEF1AE'>    if (validValuesOption.isEmpty) {
-</span>86 <span style=''></span><span style='background: #AEF1AE'>      //TODO SR should we have a generic error return object that we return as JSON?
-</span>87 <span style=''></span><span style='background: #AEF1AE'>      BadRequest(s"There are not valid values for '${topic}'")
-</span>88 <span style=''></span><span style='background: #AEF1AE'>    }
-</span>89 <span style=''></span><span style='background: #AEF1AE'>    else {
-</span>90 <span style=''></span><span style='background: #AEF1AE'>      Ok(Json.toJson(validValuesOption.get))
+</span>75 <span style=''>  //TODO SR maybe we should configure these URLs somewhere else? Or even better generate some access lib from the ingester?
+</span>76 <span style=''>  val INGESTER_URL: String = </span><span style='background: #AEF1AE'>configuration.getString("smart.csw-ingester.url").getOrElse("http://localhost:9001")</span><span style=''>
+</span>77 <span style=''>  val INGESTER_UPDATE_INDEX_URL: String = </span><span style='background: #AEF1AE'>s"$INGESTER_URL/cswi-api/buildIndex/smart"</span><span style=''>
+</span>78 <span style=''>
+</span>79 <span style=''>  /**
+</span>80 <span style=''>    * returns valid values for different topics used in metadata editor of webgui
+</span>81 <span style=''>    *
+</span>82 <span style=''>    * @param topic
+</span>83 <span style=''>    * @return
+</span>84 <span style=''>    */
+</span>85 <span style=''>  def getValidValuesFor(topic: String): Action[AnyContent] = </span><span style='background: #AEF1AE'>Action { request =>
+</span>86 <span style=''></span><span style='background: #AEF1AE'>    logger.debug(</span><span style='background: #F0ADAD'>s"returning valid values for '${topic}'"</span><span style='background: #AEF1AE'>)
+</span>87 <span style=''></span><span style='background: #AEF1AE'>    val validValuesOption = metadataService.getValidValuesFor(topic)
+</span>88 <span style=''></span><span style='background: #AEF1AE'>    if (validValuesOption.isEmpty) {
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      //TODO SR should we have a generic error return object that we return as JSON?
+</span>90 <span style=''></span><span style='background: #AEF1AE'>      BadRequest(s"There are not valid values for '${topic}'")
 </span>91 <span style=''></span><span style='background: #AEF1AE'>    }
-</span>92 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>93 <span style=''>
-</span>94 <span style=''>  /** calls CSW:Transaction -> Insert
-</span>95 <span style=''>    * FIXME should implement HasToken(parse.json) instead of Action.async, to only allow authenticated users
-</span>96 <span style=''>    */
-</span>97 <span style=''>  def insert: Action[AnyContent] = </span><span style='background: #F0ADAD'>Action.async { request =>
-</span>98 <span style=''></span><span style='background: #F0ADAD'>    logger.debug(request.body.asJson.toString)
-</span>99 <span style=''></span><span style='background: #F0ADAD'>
-</span>100 <span style=''></span><span style='background: #F0ADAD'>    //TODO parse JSON to MDMetadataSet and convert that to XML
-</span>101 <span style=''></span><span style='background: #F0ADAD'>    if (request.body.asJson.isEmpty) {
-</span>102 <span style=''></span><span style='background: #F0ADAD'>      BadRequest("Posted data was no valid JSON document")
-</span>103 <span style=''></span><span style='background: #F0ADAD'>    }
-</span>104 <span style=''></span><span style='background: #F0ADAD'>
-</span>105 <span style=''></span><span style='background: #F0ADAD'>    val mdMetadata = MdMetadata.fromJson(((request.body.asJson.get) \ "metadata").get)
-</span>106 <span style=''></span><span style='background: #F0ADAD'>
-</span>107 <span style=''></span><span style='background: #F0ADAD'>    val futureResponse: Future[WSResponse] = for {
-</span>108 <span style=''></span><span style='background: #F0ADAD'>      getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
-</span>109 <span style=''></span><span style='background: #F0ADAD'>      insertResponse <- {
-</span>110 <span style=''></span><span style='background: #F0ADAD'>        //check if getCapaResponse indicates, that the CSW can perform Transactions
-</span>111 <span style=''></span><span style='background: #F0ADAD'>        val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
-</span>112 <span style=''></span><span style='background: #F0ADAD'>          logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
-</span>113 <span style=''></span><span style='background: #F0ADAD'>          node.attribute("name").get.text.equals("Transaction")
-</span>114 <span style=''></span><span style='background: #F0ADAD'>        })
-</span>115 <span style=''></span><span style='background: #F0ADAD'>        logger.debug(s"operation = ${operation.toString()}")
-</span>116 <span style=''></span><span style='background: #F0ADAD'>        if (operation.isEmpty) {
-</span>117 <span style=''></span><span style='background: #F0ADAD'>          throw new UnsupportedOperationException("CSW does not support Transaction.")
-</span>118 <span style=''></span><span style='background: #F0ADAD'>        }
-</span>119 <span style=''></span><span style='background: #F0ADAD'>
-</span>120 <span style=''></span><span style='background: #F0ADAD'>        //insert MDMEtadata in insert template
-</span>121 <span style=''></span><span style='background: #F0ADAD'>        logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
-</span>122 <span style=''></span><span style='background: #F0ADAD'>        val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
-</span>123 <span style=''></span><span style='background: #F0ADAD'>        val finalXML = rule.transform(cswtInsertXml)
-</span>124 <span style=''></span><span style='background: #F0ADAD'>        logger.debug(s"finalXml: ${finalXML.toString()}")
-</span>125 <span style=''></span><span style='background: #F0ADAD'>        wsClient.url(CSW_URL).post(finalXML.toString())
-</span>126 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>127 <span style=''></span><span style='background: #F0ADAD'>    } yield insertResponse
-</span>128 <span style=''></span><span style='background: #F0ADAD'>
-</span>129 <span style=''></span><span style='background: #F0ADAD'>    futureResponse.recover {
-</span>130 <span style=''></span><span style='background: #F0ADAD'>      case e: Exception =>
-</span>131 <span style=''></span><span style='background: #F0ADAD'>        logger.error("Insert CSW threw exception", e)
-</span>132 <span style=''></span><span style='background: #F0ADAD'>        InternalServerError(e.getMessage)
-</span>133 <span style=''></span><span style='background: #F0ADAD'>    }
-</span>134 <span style=''></span><span style='background: #F0ADAD'>
-</span>135 <span style=''></span><span style='background: #F0ADAD'>    futureResponse.map(response => {
-</span>136 <span style=''></span><span style='background: #F0ADAD'>      logger.debug(response.xml.toString())
-</span>137 <span style=''></span><span style='background: #F0ADAD'>      response.xml match {
-</span>138 <span style=''></span><span style='background: #F0ADAD'>        case e: Elem if e.label == "TransactionResponse" => {
-</span>139 <span style=''></span><span style='background: #F0ADAD'>          val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
-</span>140 <span style=''></span><span style='background: #F0ADAD'>          //TODO collectionsService.addEntryToUserDefaultCollection(mdMetadata, cachedSecUser)
-</span>141 <span style=''></span><span style='background: #F0ADAD'>          Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
-</span>142 <span style=''></span><span style='background: #F0ADAD'>            "message" -> s"Inserted as ${fileIdentifier}."))
-</span>143 <span style=''></span><span style='background: #F0ADAD'>        }
-</span>144 <span style=''></span><span style='background: #F0ADAD'>        case e: Elem if e.label == "ExceptionReport" => {
-</span>145 <span style=''></span><span style='background: #F0ADAD'>          val message = (e \\ "Exception" \\ "ExceptionText").text
-</span>146 <span style=''></span><span style='background: #F0ADAD'>          //TODO SR make this InternalServerError
-</span>147 <span style=''></span><span style='background: #F0ADAD'>          Ok(Json.obj("type" -> "danger", "message" -> message))
-</span>148 <span style=''></span><span style='background: #F0ADAD'>        }
-</span>149 <span style=''></span><span style='background: #F0ADAD'>        case _ => InternalServerError(s"Unexpected Response: ${response}")
-</span>150 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>151 <span style=''></span><span style='background: #F0ADAD'>    })
-</span>152 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>153 <span style=''>}
+</span>92 <span style=''></span><span style='background: #AEF1AE'>    else {
+</span>93 <span style=''></span><span style='background: #AEF1AE'>      Ok(Json.toJson(validValuesOption.get))
+</span>94 <span style=''></span><span style='background: #AEF1AE'>    }
+</span>95 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>96 <span style=''>
+</span>97 <span style=''>  /** calls CSW:Transaction -> Insert
+</span>98 <span style=''>    * FIXME should implement HasToken(parse.json) instead of Action.async, to only allow authenticated users
+</span>99 <span style=''>    */
+</span>100 <span style=''>  def insert: Action[JsValue] = </span><span style='background: #F0ADAD'>HasTokenAsync(parse.json) {
+</span>101 <span style=''></span><span style='background: #F0ADAD'>    token =>
+</span>102 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
+</span>103 <span style=''></span><span style='background: #F0ADAD'>        implicit request => {
+</span>104 <span style=''></span><span style='background: #F0ADAD'>          logger.debug(request.toString)
+</span>105 <span style=''></span><span style='background: #F0ADAD'>
+</span>106 <span style=''></span><span style='background: #F0ADAD'>          //TODO parse JSON to MDMetadataSet and convert that to XML
+</span>107 <span style=''></span><span style='background: #F0ADAD'>          /*
+</span>108 <span style=''></span><span style='background: #F0ADAD'>                    if (request.body) {
+</span>109 <span style=''></span><span style='background: #F0ADAD'>                      BadRequest("Posted data was no valid JSON document")
+</span>110 <span style=''></span><span style='background: #F0ADAD'>                    }
+</span>111 <span style=''></span><span style='background: #F0ADAD'>          */
+</span>112 <span style=''></span><span style='background: #F0ADAD'>          val mdMetadata = MdMetadata.fromJson(((request.body.as[JsObject]) \ "metadata").get)
+</span>113 <span style=''></span><span style='background: #F0ADAD'>
+</span>114 <span style=''></span><span style='background: #F0ADAD'>          val futureResponse: Future[WSResponse] = for {
+</span>115 <span style=''></span><span style='background: #F0ADAD'>            getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
+</span>116 <span style=''></span><span style='background: #F0ADAD'>            insertResponse <- {
+</span>117 <span style=''></span><span style='background: #F0ADAD'>              //check if getCapaResponse indicates, that the CSW can perform Transactions
+</span>118 <span style=''></span><span style='background: #F0ADAD'>              val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
+</span>119 <span style=''></span><span style='background: #F0ADAD'>                logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
+</span>120 <span style=''></span><span style='background: #F0ADAD'>                node.attribute("name").get.text.equals("Transaction")
+</span>121 <span style=''></span><span style='background: #F0ADAD'>              })
+</span>122 <span style=''></span><span style='background: #F0ADAD'>              logger.debug(s"operation = ${operation.toString()}")
+</span>123 <span style=''></span><span style='background: #F0ADAD'>              if (operation.isEmpty) {
+</span>124 <span style=''></span><span style='background: #F0ADAD'>                throw new UnsupportedOperationException("CSW does not support Transaction.")
+</span>125 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>126 <span style=''></span><span style='background: #F0ADAD'>
+</span>127 <span style=''></span><span style='background: #F0ADAD'>              //insert MDMEtadata in insert template
+</span>128 <span style=''></span><span style='background: #F0ADAD'>              logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
+</span>129 <span style=''></span><span style='background: #F0ADAD'>              val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
+</span>130 <span style=''></span><span style='background: #F0ADAD'>              val finalXML = rule.transform(cswtInsertXml)
+</span>131 <span style=''></span><span style='background: #F0ADAD'>              logger.debug(s"finalXml: ${finalXML.toString()}")
+</span>132 <span style=''></span><span style='background: #F0ADAD'>              wsClient.url(CSW_URL).post(finalXML.toString())
+</span>133 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>134 <span style=''></span><span style='background: #F0ADAD'>            updateIngesterIndexResponse <- {
+</span>135 <span style=''></span><span style='background: #F0ADAD'>              wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
+</span>136 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>137 <span style=''></span><span style='background: #F0ADAD'>          } yield insertResponse
+</span>138 <span style=''></span><span style='background: #F0ADAD'>
+</span>139 <span style=''></span><span style='background: #F0ADAD'>          futureResponse.recover {
+</span>140 <span style=''></span><span style='background: #F0ADAD'>            case e: Exception =>
+</span>141 <span style=''></span><span style='background: #F0ADAD'>              logger.error("Insert CSW threw exception", e)
+</span>142 <span style=''></span><span style='background: #F0ADAD'>              InternalServerError(e.getMessage)
+</span>143 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>144 <span style=''></span><span style='background: #F0ADAD'>
+</span>145 <span style=''></span><span style='background: #F0ADAD'>          futureResponse.map(response => {
+</span>146 <span style=''></span><span style='background: #F0ADAD'>            logger.debug(response.xml.toString())
+</span>147 <span style=''></span><span style='background: #F0ADAD'>            response.xml match {
+</span>148 <span style=''></span><span style='background: #F0ADAD'>              case e: Elem if e.label == "TransactionResponse" => {
+</span>149 <span style=''></span><span style='background: #F0ADAD'>                val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
+</span>150 <span style=''></span><span style='background: #F0ADAD'>                logger.debug(s"Adding ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
+</span>151 <span style=''></span><span style='background: #F0ADAD'>                val added = collectionsService.addMdEntryToUserDefaultCollection(mdMetadata.get, authUser)
+</span>152 <span style=''></span><span style='background: #F0ADAD'>                if (!added) {
+</span>153 <span style=''></span><span style='background: #F0ADAD'>                  logger.warn(s"Could not add ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
+</span>154 <span style=''></span><span style='background: #F0ADAD'>                }
+</span>155 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
+</span>156 <span style=''></span><span style='background: #F0ADAD'>                  "message" -> s"Inserted as ${fileIdentifier}."))
+</span>157 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>158 <span style=''></span><span style='background: #F0ADAD'>              case e: Elem if e.label == "ExceptionReport" => {
+</span>159 <span style=''></span><span style='background: #F0ADAD'>                val message = (e \\ "Exception" \\ "ExceptionText").text
+</span>160 <span style=''></span><span style='background: #F0ADAD'>                //TODO SR make this InternalServerError
+</span>161 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj("type" -> "danger", "message" -> message))
+</span>162 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>163 <span style=''></span><span style='background: #F0ADAD'>              case _ => InternalServerError(s"Unexpected Response: ${response}")
+</span>164 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>165 <span style=''></span><span style='background: #F0ADAD'>          })
+</span>166 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>167 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>168 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -191,7 +206,7 @@
           46
         </td>
         <td>
-          134
+          135
         </td>
         <td>
           1671
@@ -215,48 +230,6 @@
           137
         </td>
         <td>
-          1731
-          -
-          1743
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.xml.Elem.attributes
-        </td>
-        <td style="background: #F0ADAD">
-          e.attributes
-        </td>
-      </tr><tr>
-        <td>
-          47
-        </td>
-        <td>
-          140
-        </td>
-        <td>
-          1772
-          -
-          1782
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.collection.immutable.Seq.toSeq
-        </td>
-        <td style="background: #F0ADAD">
-          AddMDMetadataToInsert.this.xml.toSeq
-        </td>
-      </tr><tr>
-        <td>
-          47
-        </td>
-        <td>
-          136
-        </td>
-        <td>
           1721
           -
           1729
@@ -275,7 +248,7 @@
           47
         </td>
         <td>
-          139
+          140
         </td>
         <td>
           1754
@@ -296,28 +269,7 @@
           47
         </td>
         <td>
-          138
-        </td>
-        <td>
-          1745
-          -
-          1752
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.xml.Elem.scope
-        </td>
-        <td style="background: #F0ADAD">
-          e.scope
-        </td>
-      </tr><tr>
-        <td>
-          47
-        </td>
-        <td>
-          141
+          142
         </td>
         <td>
           1702
@@ -338,7 +290,7 @@
           47
         </td>
         <td>
-          135
+          136
         </td>
         <td>
           1711
@@ -356,10 +308,73 @@
         </td>
       </tr><tr>
         <td>
+          47
+        </td>
+        <td>
+          139
+        </td>
+        <td>
+          1745
+          -
+          1752
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.Elem.scope
+        </td>
+        <td style="background: #F0ADAD">
+          e.scope
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          138
+        </td>
+        <td>
+          1731
+          -
+          1743
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.Elem.attributes
+        </td>
+        <td style="background: #F0ADAD">
+          e.attributes
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          141
+        </td>
+        <td>
+          1772
+          -
+          1782
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Seq.toSeq
+        </td>
+        <td style="background: #F0ADAD">
+          AddMDMetadataToInsert.this.xml.toSeq
+        </td>
+      </tr><tr>
+        <td>
           68
         </td>
         <td>
-          142
+          143
         </td>
         <td>
           2443
@@ -380,7 +395,7 @@
           69
         </td>
         <td>
-          144
+          145
         </td>
         <td>
           2493
@@ -401,7 +416,7 @@
           69
         </td>
         <td>
-          143
+          144
         </td>
         <td>
           2506
@@ -422,7 +437,7 @@
           70
         </td>
         <td>
-          145
+          146
         </td>
         <td>
           2567
@@ -443,7 +458,7 @@
           72
         </td>
         <td>
-          146
+          147
         </td>
         <td>
           2631
@@ -467,27 +482,6 @@
           149
         </td>
         <td>
-          2755
-          -
-          2762
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.CswController.CSW_URL
-        </td>
-        <td style="background: #AEF1AE">
-          CswController.this.CSW_URL
-        </td>
-      </tr><tr>
-        <td>
-          73
-        </td>
-        <td>
-          148
-        </td>
-        <td>
           2763
           -
           2843
@@ -506,7 +500,28 @@
           73
         </td>
         <td>
-          147
+          151
+        </td>
+        <td>
+          2751
+          -
+          2843
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;&quot;, &quot;/?service=CSW&amp;version=2.0.2&amp;request=GetCapabilities&amp;sections=OperationsMetadata&quot;).s(CswController.this.CSW_URL)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          148
         </td>
         <td>
           2753
@@ -530,9 +545,93 @@
           150
         </td>
         <td>
-          2751
+          2755
           -
-          2843
+          2762
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.CSW_URL
+        </td>
+        <td style="background: #AEF1AE">
+          CswController.this.CSW_URL
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          152
+        </td>
+        <td>
+          2998
+          -
+          3082
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          CswController.this.configuration.getString(&quot;smart.csw-ingester.url&quot;, CswController.this.configuration.getString$default$2).getOrElse[String](&quot;http://localhost:9001&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          155
+        </td>
+        <td>
+          3128
+          -
+          3140
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.INGESTER_URL
+        </td>
+        <td style="background: #AEF1AE">
+          CswController.this.INGESTER_URL
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          154
+        </td>
+        <td>
+          3140
+          -
+          3167
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;/cswi-api/buildIndex/smart&quot;
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          156
+        </td>
+        <td>
+          3125
+          -
+          3167
         </td>
         <td>
           Apply
@@ -541,19 +640,40 @@
           scala.StringContext.s
         </td>
         <td style="background: #AEF1AE">
-          scala.StringContext.apply(&quot;&quot;, &quot;/?service=CSW&amp;version=2.0.2&amp;request=GetCapabilities&amp;sections=OperationsMetadata&quot;).s(CswController.this.CSW_URL)
+          scala.StringContext.apply(&quot;&quot;, &quot;/cswi-api/buildIndex/smart&quot;).s(CswController.this.INGESTER_URL)
         </td>
       </tr><tr>
         <td>
-          82
+          77
         </td>
         <td>
-          167
+          153
         </td>
         <td>
-          3041
+          3127
           -
-          3445
+          3128
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          173
+        </td>
+        <td>
+          3364
+          -
+          3768
         </td>
         <td>
           Apply
@@ -573,36 +693,15 @@
         </td>
       </tr><tr>
         <td>
-          83
+          86
         </td>
         <td>
-          151
+          158
         </td>
         <td>
-          3078
+          3388
           -
-          3118
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;returning valid values for \'&quot;, &quot;\'&quot;).s(topic)
-        </td>
-      </tr><tr>
-        <td>
-          83
-        </td>
-        <td>
-          152
-        </td>
-        <td>
-          3065
-          -
-          3119
+          3442
         </td>
         <td>
           Apply
@@ -615,15 +714,36 @@
         </td>
       </tr><tr>
         <td>
-          84
+          86
         </td>
         <td>
-          153
+          157
         </td>
         <td>
-          3148
+          3401
           -
-          3188
+          3441
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;returning valid values for \'&quot;, &quot;\'&quot;).s(topic)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          159
+        </td>
+        <td>
+          3471
+          -
+          3511
         </td>
         <td>
           Apply
@@ -636,15 +756,15 @@
         </td>
       </tr><tr>
         <td>
-          85
+          88
         </td>
         <td>
-          154
+          160
         </td>
         <td>
-          3197
+          3520
           -
-          3222
+          3545
         </td>
         <td>
           Select
@@ -657,36 +777,15 @@
         </td>
       </tr><tr>
         <td>
-          87
+          90
         </td>
         <td>
-          155
+          164
         </td>
         <td>
-          3328
+          3640
           -
-          3372
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #AEF1AE">
-          scala.StringContext.apply(&quot;There are not valid values for \'&quot;, &quot;\'&quot;).s(topic)
-        </td>
-      </tr><tr>
-        <td>
-          87
-        </td>
-        <td>
-          158
-        </td>
-        <td>
-          3317
-          -
-          3373
+          3696
         </td>
         <td>
           ApplyToImplicitArgs
@@ -699,15 +798,15 @@
         </td>
       </tr><tr>
         <td>
-          87
+          90
         </td>
         <td>
-          157
+          163
         </td>
         <td>
-          3327
+          3650
           -
-          3327
+          3650
         </td>
         <td>
           ApplyToImplicitArgs
@@ -720,36 +819,15 @@
         </td>
       </tr><tr>
         <td>
-          87
+          90
         </td>
         <td>
-          156
+          165
         </td>
         <td>
-          3327
+          3640
           -
-          3327
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #AEF1AE">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          87
-        </td>
-        <td>
-          159
-        </td>
-        <td>
-          3317
-          -
-          3373
+          3696
         </td>
         <td>
           Block
@@ -765,75 +843,12 @@
           90
         </td>
         <td>
-          164
+          162
         </td>
         <td>
-          3399
+          3650
           -
-          3399
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #AEF1AE">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
-          166
-        </td>
-        <td>
-          3397
-          -
-          3435
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #AEF1AE">
-          CswController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
-          160
-        </td>
-        <td>
-          3412
-          -
-          3433
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.Option.get
-        </td>
-        <td style="background: #AEF1AE">
-          validValuesOption.get
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
-          163
-        </td>
-        <td>
-          3399
-          -
-          3399
+          3650
         </td>
         <td>
           Select
@@ -849,54 +864,33 @@
           90
         </td>
         <td>
-          165
-        </td>
-        <td>
-          3397
-          -
-          3435
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #AEF1AE">
-          CswController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
-          162
-        </td>
-        <td>
-          3400
-          -
-          3434
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #AEF1AE">
-          play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter)
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
           161
         </td>
         <td>
-          3411
+          3651
           -
-          3411
+          3695
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;There are not valid values for \'&quot;, &quot;\'&quot;).s(topic)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          167
+        </td>
+        <td>
+          3734
+          -
+          3734
         </td>
         <td>
           Select
@@ -909,30 +903,152 @@
         </td>
       </tr><tr>
         <td>
-          97
+          93
         </td>
         <td>
-          282
+          166
         </td>
         <td>
-          3636
+          3735
           -
-          6083
+          3756
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          validValuesOption.get
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          169
+        </td>
+        <td>
+          3722
+          -
+          3722
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          172
+        </td>
+        <td>
+          3720
+          -
+          3758
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          CswController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          168
+        </td>
+        <td>
+          3723
+          -
+          3757
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          171
+        </td>
+        <td>
+          3720
+          -
+          3758
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          CswController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.metadata.ValidValues](validValuesOption.get)(metadata.this.ValidValues.validValuesWriter))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          170
+        </td>
+        <td>
+          3722
+          -
+          3722
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          303
+        </td>
+        <td>
+          3956
+          -
+          7193
         </td>
         <td>
           Apply
         </td>
         <td>
-          play.api.mvc.ActionBuilder.async
+          controllers.Security.HasTokenAsync
         </td>
         <td style="background: #F0ADAD">
-          play.api.mvc.Action.async(((request: play.api.mvc.Request[play.api.mvc.AnyContent]) =&gt; {
-  CswController.this.logger.debug(request.body.asJson.toString());
-  if (request.body.asJson.isEmpty)
-    CswController.this.BadRequest.apply[String](&quot;Posted data was no valid JSON document&quot;)(http.this.Writeable.wString(mvc.this.Codec.utf_8))
-  else
-    ();
-  val mdMetadata: Option[models.gmd.MdMetadata] = models.gmd.MdMetadata.fromJson(json.this.JsValue.jsValueToJsLookup(request.body.asJson.get).\(&quot;metadata&quot;).get);
+          CswController.this.HasTokenAsync[play.api.libs.json.JsValue](CswController.this.parse.json)(((token: String) =&gt; ((authUser: String) =&gt; ((implicit request: play.api.mvc.Request[play.api.libs.json.JsValue]) =&gt; {
+  CswController.this.logger.debug(request.toString());
+  val mdMetadata: Option[models.gmd.MdMetadata] = models.gmd.MdMetadata.fromJson(json.this.JsValue.jsValueToJsLookup(request.body.as[play.api.libs.json.JsObject](json.this.Reads.JsObjectReads)).\(&quot;metadata&quot;).get);
   val futureResponse: scala.concurrent.Future[play.api.libs.ws.WSResponse] = CswController.this.wsClient.url(CswController.this.CSW_OPERATIONS_METADATA_URL).get().flatMap[play.api.libs.ws.WSResponse](((getCapaResponse: play.api.libs.ws.WSResponse) =&gt; {
   val operation: scala.xml.NodeSeq = getCapaResponse.xml.\\(&quot;OperationsMetadata&quot;).\\(&quot;Operation&quot;).filter(((node: scala.xml.Node) =&gt; {
     CswController.this.logger.debug(scala.StringContext.apply(&quot;Attribute \'name\'=&quot;, &quot;&quot;).s(xml.this.NodeSeq.seqToNodeSeq(node.attribute(&quot;name&quot;).get).text.toString()));
@@ -948,7 +1064,7 @@
   val finalXML: Seq[scala.xml.Node] = rule.transform(CswController.this.cswtInsertXml);
   CswController.this.logger.debug(scala.StringContext.apply(&quot;finalXml: &quot;, &quot;&quot;).s(finalXML.toString()));
   CswController.this.wsClient.url(CswController.this.CSW_URL).post[String](finalXML.toString())(http.this.Writeable.wString(mvc.this.Codec.utf_8))
-}.map[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)))(CswController.this.context);
+}.flatMap[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; CswController.this.wsClient.url(CswController.this.INGESTER_UPDATE_INDEX_URL).get().map[play.api.libs.ws.WSResponse](((updateIngesterIndexResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)))(CswController.this.context)))(CswController.this.context);
   futureResponse.recover[Object](({
     @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
       def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
@@ -974,6 +1090,12 @@
     response.xml match {
       case (e @ (_: scala.xml.Elem)) if e.label.==(&quot;TransactionResponse&quot;) =&gt; {
         val fileIdentifier: String = e.\\(&quot;InsertResult&quot;).\\(&quot;BriefRecord&quot;).\\(&quot;identifier&quot;).text;
+        CswController.this.logger.debug(scala.StringContext.apply(&quot;Adding &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser));
+        val added: Boolean = CswController.this.collectionsService.addMdEntryToUserDefaultCollection(mdMetadata.get, authUser);
+        if (added.unary_!)
+          CswController.this.logger.warn(scala.StringContext.apply(&quot;Could not add &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser))
+        else
+          ();
         CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
       }
       case (e @ (_: scala.xml.Elem)) if e.label.==(&quot;ExceptionReport&quot;) =&gt; {
@@ -983,19 +1105,40 @@
       case _ =&gt; CswController.this.InternalServerError.apply[String](scala.StringContext.apply(&quot;Unexpected Response: &quot;, &quot;&quot;).s(response))(http.this.Writeable.wString(mvc.this.Codec.utf_8))
     }
   }))(CswController.this.context)
-}))
+}))))
         </td>
       </tr><tr>
         <td>
-          98
+          100
         </td>
         <td>
-          169
+          174
         </td>
         <td>
-          3666
+          3970
           -
-          3708
+          3980
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          176
+        </td>
+        <td>
+          4055
+          -
+          4085
         </td>
         <td>
           Apply
@@ -1004,229 +1147,61 @@
           play.api.LoggerLike.debug
         </td>
         <td style="background: #F0ADAD">
-          CswController.this.logger.debug(request.body.asJson.toString())
+          CswController.this.logger.debug(request.toString())
         </td>
       </tr><tr>
         <td>
-          98
-        </td>
-        <td>
-          168
-        </td>
-        <td>
-          3679
-          -
-          3707
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.Object.toString
-        </td>
-        <td style="background: #F0ADAD">
-          request.body.asJson.toString()
-        </td>
-      </tr><tr>
-        <td>
-          101
-        </td>
-        <td>
-          176
-        </td>
-        <td>
-          3777
-          -
-          3777
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          101
-        </td>
-        <td>
-          177
-        </td>
-        <td>
-          3777
-          -
-          3777
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          ()
-        </td>
-      </tr><tr>
-        <td>
-          101
-        </td>
-        <td>
-          170
-        </td>
-        <td>
-          3781
-          -
-          3808
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.Option.isEmpty
-        </td>
-        <td style="background: #F0ADAD">
-          request.body.asJson.isEmpty
-        </td>
-      </tr><tr>
-        <td>
-          102
-        </td>
-        <td>
-          173
-        </td>
-        <td>
-          3828
-          -
-          3828
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.wString
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.wString(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          102
+          104
         </td>
         <td>
           175
         </td>
         <td>
-          3818
+          4068
           -
-          3870
+          4084
         </td>
         <td>
-          Block
+          Apply
         </td>
         <td>
-          play.api.mvc.Results.Status.apply
+          play.api.mvc.RequestHeader.toString
         </td>
         <td style="background: #F0ADAD">
-          CswController.this.BadRequest.apply[String](&quot;Posted data was no valid JSON document&quot;)(http.this.Writeable.wString(mvc.this.Codec.utf_8))
+          request.toString()
         </td>
       </tr><tr>
         <td>
-          102
-        </td>
-        <td>
-          172
-        </td>
-        <td>
-          3828
-          -
-          3828
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          102
-        </td>
-        <td>
-          174
-        </td>
-        <td>
-          3818
-          -
-          3870
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.BadRequest.apply[String](&quot;Posted data was no valid JSON document&quot;)(http.this.Writeable.wString(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          102
-        </td>
-        <td>
-          171
-        </td>
-        <td>
-          3829
-          -
-          3869
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;Posted data was no valid JSON document&quot;
-        </td>
-      </tr><tr>
-        <td>
-          105
+          112
         </td>
         <td>
           178
         </td>
         <td>
-          3921
+          4368
           -
-          3944
+          4393
         </td>
         <td>
-          Select
+          ApplyToImplicitArgs
         </td>
         <td>
-          scala.Option.get
+          play.api.libs.json.JsReadable.as
         </td>
         <td style="background: #F0ADAD">
-          request.body.asJson.get
+          request.body.as[play.api.libs.json.JsObject](json.this.Reads.JsObjectReads)
         </td>
       </tr><tr>
         <td>
-          105
+          112
         </td>
         <td>
           181
         </td>
         <td>
-          3899
+          4346
           -
-          3964
+          4413
         </td>
         <td>
           Apply
@@ -1235,19 +1210,19 @@
           models.gmd.MdMetadata.fromJson
         </td>
         <td style="background: #F0ADAD">
-          models.gmd.MdMetadata.fromJson(json.this.JsValue.jsValueToJsLookup(request.body.asJson.get).\(&quot;metadata&quot;).get)
+          models.gmd.MdMetadata.fromJson(json.this.JsValue.jsValueToJsLookup(request.body.as[play.api.libs.json.JsObject](json.this.Reads.JsObjectReads)).\(&quot;metadata&quot;).get)
         </td>
       </tr><tr>
         <td>
-          105
+          112
         </td>
         <td>
           180
         </td>
         <td>
-          3920
+          4367
           -
-          3963
+          4412
         </td>
         <td>
           Select
@@ -1256,19 +1231,40 @@
           play.api.libs.json.JsLookupResult.get
         </td>
         <td style="background: #F0ADAD">
-          json.this.JsValue.jsValueToJsLookup(request.body.asJson.get).\(&quot;metadata&quot;).get
+          json.this.JsValue.jsValueToJsLookup(request.body.as[play.api.libs.json.JsObject](json.this.Reads.JsObjectReads)).\(&quot;metadata&quot;).get
         </td>
       </tr><tr>
         <td>
-          105
+          112
+        </td>
+        <td>
+          177
+        </td>
+        <td>
+          4383
+          -
+          4383
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.JsObjectReads
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Reads.JsObjectReads
+        </td>
+      </tr><tr>
+        <td>
+          112
         </td>
         <td>
           179
         </td>
         <td>
-          3948
+          4397
           -
-          3958
+          4407
         </td>
         <td>
           Literal
@@ -1281,57 +1277,15 @@
         </td>
       </tr><tr>
         <td>
-          108
+          115
         </td>
         <td>
-          182
+          227
         </td>
         <td>
-          4055
+          4466
           -
-          4082
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.CswController.CSW_OPERATIONS_METADATA_URL
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.CSW_OPERATIONS_METADATA_URL
-        </td>
-      </tr><tr>
-        <td>
-          108
-        </td>
-        <td>
-          223
-        </td>
-        <td>
-          4039
-          -
-          4039
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.CswController.context
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.context
-        </td>
-      </tr><tr>
-        <td>
-          108
-        </td>
-        <td>
-          224
-        </td>
-        <td>
-          4011
-          -
-          5073
+          5761
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1355,25 +1309,67 @@
   val finalXML: Seq[scala.xml.Node] = rule.transform(CswController.this.cswtInsertXml);
   CswController.this.logger.debug(scala.StringContext.apply(&quot;finalXml: &quot;, &quot;&quot;).s(finalXML.toString()));
   CswController.this.wsClient.url(CswController.this.CSW_URL).post[String](finalXML.toString())(http.this.Writeable.wString(mvc.this.Codec.utf_8))
-}.map[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)))(CswController.this.context)
+}.flatMap[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; CswController.this.wsClient.url(CswController.this.INGESTER_UPDATE_INDEX_URL).get().map[play.api.libs.ws.WSResponse](((updateIngesterIndexResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)))(CswController.this.context)))(CswController.this.context)
         </td>
       </tr><tr>
         <td>
-          109
+          115
         </td>
         <td>
-          222
+          182
         </td>
         <td>
-          4096
+          4516
           -
-          5073
+          4543
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.CSW_OPERATIONS_METADATA_URL
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.CSW_OPERATIONS_METADATA_URL
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          226
+        </td>
+        <td>
+          4500
+          -
+          4500
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.context
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.context
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          225
+        </td>
+        <td>
+          4563
+          -
+          5761
         </td>
         <td>
           ApplyToImplicitArgs
         </td>
         <td>
-          scala.concurrent.Future.map
+          scala.concurrent.Future.flatMap
         </td>
         <td style="background: #F0ADAD">
           {
@@ -1391,19 +1387,19 @@
   val finalXML: Seq[scala.xml.Node] = rule.transform(CswController.this.cswtInsertXml);
   CswController.this.logger.debug(scala.StringContext.apply(&quot;finalXml: &quot;, &quot;&quot;).s(finalXML.toString()));
   CswController.this.wsClient.url(CswController.this.CSW_URL).post[String](finalXML.toString())(http.this.Writeable.wString(mvc.this.Codec.utf_8))
-}.map[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)
+}.flatMap[play.api.libs.ws.WSResponse](((insertResponse: play.api.libs.ws.WSResponse) =&gt; CswController.this.wsClient.url(CswController.this.INGESTER_UPDATE_INDEX_URL).get().map[play.api.libs.ws.WSResponse](((updateIngesterIndexResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)))(CswController.this.context)
         </td>
       </tr><tr>
         <td>
-          109
+          116
         </td>
         <td>
-          221
+          224
         </td>
         <td>
-          4111
+          4578
           -
-          4111
+          4578
         </td>
         <td>
           Select
@@ -1416,15 +1412,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          118
         </td>
         <td>
           191
         </td>
         <td>
-          4225
+          4704
           -
-          4464
+          4961
         </td>
         <td>
           Apply
@@ -1440,15 +1436,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          118
         </td>
         <td>
           184
         </td>
         <td>
-          4272
+          4751
           -
-          4283
+          4762
         </td>
         <td>
           Literal
@@ -1461,15 +1457,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          118
         </td>
         <td>
           183
         </td>
         <td>
-          4248
+          4727
           -
-          4268
+          4747
         </td>
         <td>
           Literal
@@ -1482,15 +1478,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          119
         </td>
         <td>
           185
         </td>
         <td>
-          4327
+          4812
           -
-          4345
+          4830
         </td>
         <td>
           Literal
@@ -1503,15 +1499,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          119
         </td>
         <td>
           187
         </td>
         <td>
-          4346
+          4831
           -
-          4386
+          4871
         </td>
         <td>
           Apply
@@ -1524,15 +1520,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          119
         </td>
         <td>
           189
         </td>
         <td>
-          4312
+          4797
           -
-          4389
+          4874
         </td>
         <td>
           Apply
@@ -1545,15 +1541,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          119
         </td>
         <td>
           186
         </td>
         <td>
-          4387
+          4872
           -
-          4388
+          4873
         </td>
         <td>
           Literal
@@ -1566,15 +1562,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          119
         </td>
         <td>
           188
         </td>
         <td>
-          4325
+          4810
           -
-          4388
+          4873
         </td>
         <td>
           Apply
@@ -1587,15 +1583,15 @@
         </td>
       </tr><tr>
         <td>
-          113
+          120
         </td>
         <td>
           190
         </td>
         <td>
-          4400
+          4891
           -
-          4453
+          4944
         </td>
         <td>
           Apply
@@ -1608,15 +1604,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          122
         </td>
         <td>
           194
         </td>
         <td>
-          4502
+          5005
           -
-          4522
+          5025
         </td>
         <td>
           Apply
@@ -1629,15 +1625,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          122
         </td>
         <td>
           193
         </td>
         <td>
-          4523
+          5026
           -
-          4524
+          5027
         </td>
         <td>
           Literal
@@ -1650,15 +1646,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          122
         </td>
         <td>
           196
         </td>
         <td>
-          4473
+          4976
           -
-          4525
+          5028
         </td>
         <td>
           Apply
@@ -1671,15 +1667,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          122
         </td>
         <td>
           192
         </td>
         <td>
-          4488
+          4991
           -
-          4501
+          5004
         </td>
         <td>
           Literal
@@ -1692,15 +1688,15 @@
         </td>
       </tr><tr>
         <td>
-          115
+          122
         </td>
         <td>
           195
         </td>
         <td>
-          4486
+          4989
           -
-          4524
+          5027
         </td>
         <td>
           Apply
@@ -1713,15 +1709,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          123
         </td>
         <td>
           200
         </td>
         <td>
-          4534
+          5043
           -
-          4534
+          5043
         </td>
         <td>
           Literal
@@ -1734,15 +1730,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          123
         </td>
         <td>
           201
         </td>
         <td>
-          4534
+          5043
           -
-          4534
+          5043
         </td>
         <td>
           Block
@@ -1755,15 +1751,15 @@
         </td>
       </tr><tr>
         <td>
-          116
+          123
         </td>
         <td>
           197
         </td>
         <td>
-          4538
+          5047
           -
-          4555
+          5064
         </td>
         <td>
           Select
@@ -1776,15 +1772,15 @@
         </td>
       </tr><tr>
         <td>
-          117
+          124
         </td>
         <td>
           199
         </td>
         <td>
-          4569
+          5084
           -
-          4645
+          5160
         </td>
         <td>
           Block
@@ -1797,15 +1793,15 @@
         </td>
       </tr><tr>
         <td>
-          117
+          124
         </td>
         <td>
           198
         </td>
         <td>
-          4569
+          5084
           -
-          4645
+          5160
         </td>
         <td>
           Throw
@@ -1818,15 +1814,15 @@
         </td>
       </tr><tr>
         <td>
-          121
+          128
         </td>
         <td>
           202
         </td>
         <td>
-          4727
+          5260
           -
-          4744
+          5277
         </td>
         <td>
           Literal
@@ -1839,15 +1835,15 @@
         </td>
       </tr><tr>
         <td>
-          121
+          128
         </td>
         <td>
           205
         </td>
         <td>
-          4725
+          5258
           -
-          4780
+          5313
         </td>
         <td>
           Apply
@@ -1860,15 +1856,15 @@
         </td>
       </tr><tr>
         <td>
-          121
+          128
         </td>
         <td>
           204
         </td>
         <td>
-          4745
+          5278
           -
-          4778
+          5311
         </td>
         <td>
           Apply
@@ -1881,15 +1877,15 @@
         </td>
       </tr><tr>
         <td>
-          121
+          128
         </td>
         <td>
           203
         </td>
         <td>
-          4779
+          5312
           -
-          4780
+          5313
         </td>
         <td>
           Literal
@@ -1902,15 +1898,15 @@
         </td>
       </tr><tr>
         <td>
-          121
+          128
         </td>
         <td>
           206
         </td>
         <td>
-          4712
+          5245
           -
-          4781
+          5314
         </td>
         <td>
           Apply
@@ -1923,15 +1919,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          129
         </td>
         <td>
           209
         </td>
         <td>
-          4801
+          5340
           -
-          4871
+          5410
         </td>
         <td>
           Apply
@@ -1944,15 +1940,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          129
         </td>
         <td>
           208
         </td>
         <td>
-          4821
+          5360
           -
-          4870
+          5409
         </td>
         <td>
           Apply
@@ -1965,15 +1961,15 @@
         </td>
       </tr><tr>
         <td>
-          122
+          129
         </td>
         <td>
           207
         </td>
         <td>
-          4847
+          5386
           -
-          4869
+          5408
         </td>
         <td>
           Apply
@@ -1986,15 +1982,15 @@
         </td>
       </tr><tr>
         <td>
-          123
+          130
         </td>
         <td>
           210
         </td>
         <td>
-          4895
+          5440
           -
-          4924
+          5469
         </td>
         <td>
           Apply
@@ -2007,15 +2003,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          131
         </td>
         <td>
           211
         </td>
         <td>
-          4948
+          5499
           -
-          4959
+          5510
         </td>
         <td>
           Literal
@@ -2028,15 +2024,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          131
         </td>
         <td>
           214
         </td>
         <td>
-          4946
+          5497
           -
-          4981
+          5532
         </td>
         <td>
           Apply
@@ -2049,15 +2045,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          131
         </td>
         <td>
           213
         </td>
         <td>
-          4960
+          5511
           -
-          4979
+          5530
         </td>
         <td>
           Apply
@@ -2070,15 +2066,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          131
         </td>
         <td>
           212
         </td>
         <td>
-          4980
+          5531
           -
-          4981
+          5532
         </td>
         <td>
           Literal
@@ -2091,15 +2087,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          131
         </td>
         <td>
           215
         </td>
         <td>
-          4933
+          5484
           -
-          4982
+          5533
         </td>
         <td>
           Apply
@@ -2112,15 +2108,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          132
         </td>
         <td>
           218
         </td>
         <td>
-          5017
+          5574
           -
-          5017
+          5574
         </td>
         <td>
           Select
@@ -2133,15 +2129,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          132
         </td>
         <td>
           220
         </td>
         <td>
-          4991
+          5548
           -
-          5038
+          5595
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2154,15 +2150,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          132
         </td>
         <td>
           217
         </td>
         <td>
-          5018
+          5575
           -
-          5037
+          5594
         </td>
         <td>
           Apply
@@ -2175,15 +2171,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          132
         </td>
         <td>
           216
         </td>
         <td>
-          5004
+          5561
           -
-          5011
+          5568
         </td>
         <td>
           Select
@@ -2196,15 +2192,15 @@
         </td>
       </tr><tr>
         <td>
-          125
+          132
         </td>
         <td>
           219
         </td>
         <td>
-          5017
+          5574
           -
-          5017
+          5574
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2217,15 +2213,78 @@
         </td>
       </tr><tr>
         <td>
-          129
+          134
         </td>
         <td>
-          232
+          223
         </td>
         <td>
-          5079
+          5622
           -
-          5232
+          5761
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.map
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.wsClient.url(CswController.this.INGESTER_UPDATE_INDEX_URL).get().map[play.api.libs.ws.WSResponse](((updateIngesterIndexResponse: play.api.libs.ws.WSResponse) =&gt; insertResponse))(CswController.this.context)
+        </td>
+      </tr><tr>
+        <td>
+          134
+        </td>
+        <td>
+          222
+        </td>
+        <td>
+          5650
+          -
+          5650
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.context
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.context
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          221
+        </td>
+        <td>
+          5682
+          -
+          5707
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.CswController.INGESTER_UPDATE_INDEX_URL
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.INGESTER_UPDATE_INDEX_URL
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          235
+        </td>
+        <td>
+          5773
+          -
+          5950
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2257,15 +2316,15 @@
         </td>
       </tr><tr>
         <td>
-          129
+          139
         </td>
         <td>
-          231
+          234
         </td>
         <td>
-          5102
+          5796
           -
-          5102
+          5796
         </td>
         <td>
           Select
@@ -2278,15 +2337,15 @@
         </td>
       </tr><tr>
         <td>
-          129
+          139
         </td>
         <td>
-          230
+          233
         </td>
         <td>
-          5102
+          5796
           -
-          5102
+          5796
         </td>
         <td>
           Apply
@@ -2299,15 +2358,15 @@
         </td>
       </tr><tr>
         <td>
-          131
+          141
         </td>
         <td>
-          225
+          228
         </td>
         <td>
-          5139
+          5845
           -
-          5184
+          5890
         </td>
         <td>
           Apply
@@ -2320,36 +2379,15 @@
         </td>
       </tr><tr>
         <td>
-          132
+          142
         </td>
         <td>
-          227
+          229
         </td>
         <td>
-          5212
+          5925
           -
-          5212
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          132
-        </td>
-        <td>
-          226
-        </td>
-        <td>
-          5213
-          -
-          5225
+          5937
         </td>
         <td>
           Apply
@@ -2362,15 +2400,15 @@
         </td>
       </tr><tr>
         <td>
-          132
+          142
         </td>
         <td>
-          229
+          232
         </td>
         <td>
-          5193
+          5905
           -
-          5226
+          5938
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2383,15 +2421,15 @@
         </td>
       </tr><tr>
         <td>
-          132
+          142
         </td>
         <td>
-          228
+          231
         </td>
         <td>
-          5212
+          5924
           -
-          5212
+          5924
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2404,15 +2442,36 @@
         </td>
       </tr><tr>
         <td>
-          135
+          142
         </td>
         <td>
-          280
+          230
         </td>
         <td>
-          5256
+          5924
           -
-          5256
+          5924
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          301
+        </td>
+        <td>
+          5980
+          -
+          5980
         </td>
         <td>
           Select
@@ -2425,15 +2484,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          145
         </td>
         <td>
-          281
+          302
         </td>
         <td>
-          5238
+          5962
           -
-          6079
+          7179
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2447,6 +2506,12 @@
   response.xml match {
     case (e @ (_: scala.xml.Elem)) if e.label.==(&quot;TransactionResponse&quot;) =&gt; {
       val fileIdentifier: String = e.\\(&quot;InsertResult&quot;).\\(&quot;BriefRecord&quot;).\\(&quot;identifier&quot;).text;
+      CswController.this.logger.debug(scala.StringContext.apply(&quot;Adding &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser));
+      val added: Boolean = CswController.this.collectionsService.addMdEntryToUserDefaultCollection(mdMetadata.get, authUser);
+      if (added.unary_!)
+        CswController.this.logger.warn(scala.StringContext.apply(&quot;Could not add &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser))
+      else
+        ();
       CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
     }
     case (e @ (_: scala.xml.Elem)) if e.label.==(&quot;ExceptionReport&quot;) =&gt; {
@@ -2459,36 +2524,15 @@
         </td>
       </tr><tr>
         <td>
-          136
+          146
         </td>
         <td>
-          234
+          236
         </td>
         <td>
-          5277
+          6020
           -
-          5314
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.debug
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.logger.debug(response.xml.toString())
-        </td>
-      </tr><tr>
-        <td>
-          136
-        </td>
-        <td>
-          233
-        </td>
-        <td>
-          5290
-          -
-          5313
+          6043
         </td>
         <td>
           Apply
@@ -2501,15 +2545,36 @@
         </td>
       </tr><tr>
         <td>
-          137
+          146
         </td>
         <td>
-          235
+          237
         </td>
         <td>
-          5321
+          6007
           -
-          5333
+          6044
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.logger.debug(response.xml.toString())
+        </td>
+      </tr><tr>
+        <td>
+          147
+        </td>
+        <td>
+          238
+        </td>
+        <td>
+          6057
+          -
+          6069
         </td>
         <td>
           Select
@@ -2522,15 +2587,15 @@
         </td>
       </tr><tr>
         <td>
-          138
+          148
         </td>
         <td>
-          236
+          239
         </td>
         <td>
-          5366
+          6108
           -
-          5398
+          6140
         </td>
         <td>
           Apply
@@ -2543,15 +2608,15 @@
         </td>
       </tr><tr>
         <td>
-          139
+          149
         </td>
         <td>
-          238
+          241
         </td>
         <td>
-          5459
+          6207
           -
-          5472
+          6220
         </td>
         <td>
           Literal
@@ -2564,36 +2629,15 @@
         </td>
       </tr><tr>
         <td>
-          139
+          149
         </td>
         <td>
           240
         </td>
         <td>
-          5436
+          6189
           -
-          5494
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.xml.NodeSeq.text
-        </td>
-        <td style="background: #F0ADAD">
-          e.\\(&quot;InsertResult&quot;).\\(&quot;BriefRecord&quot;).\\(&quot;identifier&quot;).text
-        </td>
-      </tr><tr>
-        <td>
-          139
-        </td>
-        <td>
-          237
-        </td>
-        <td>
-          5441
-          -
-          5455
+          6203
         </td>
         <td>
           Literal
@@ -2606,15 +2650,36 @@
         </td>
       </tr><tr>
         <td>
-          139
+          149
         </td>
         <td>
-          239
+          243
         </td>
         <td>
-          5476
+          6184
           -
-          5488
+          6242
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.NodeSeq.text
+        </td>
+        <td style="background: #F0ADAD">
+          e.\\(&quot;InsertResult&quot;).\\(&quot;BriefRecord&quot;).\\(&quot;identifier&quot;).text
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          242
+        </td>
+        <td>
+          6224
+          -
+          6236
         </td>
         <td>
           Literal
@@ -2627,36 +2692,414 @@
         </td>
       </tr><tr>
         <td>
-          141
+          150
         </td>
         <td>
           245
         </td>
         <td>
-          5612
+          6313
           -
-          5631
+          6340
         </td>
         <td>
-          Apply
+          Literal
         </td>
         <td>
-          scala.Predef.ArrowAssoc.-&gt;
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites))
+          &quot; to default collection of &quot;
         </td>
       </tr><tr>
         <td>
-          141
+          150
         </td>
         <td>
           244
         </td>
         <td>
-          5622
+          6274
           -
-          5631
+          6282
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Adding &quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          247
+        </td>
+        <td>
+          6283
+          -
+          6312
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.fileIdentifier
+        </td>
+        <td style="background: #F0ADAD">
+          mdMetadata.get.fileIdentifier
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          249
+        </td>
+        <td>
+          6259
+          -
+          6351
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.logger.debug(scala.StringContext.apply(&quot;Adding &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          246
+        </td>
+        <td>
+          6348
+          -
+          6350
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          248
+        </td>
+        <td>
+          6272
+          -
+          6350
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Adding &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser)
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          250
+        </td>
+        <td>
+          6433
+          -
+          6447
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          mdMetadata.get
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          251
+        </td>
+        <td>
+          6380
+          -
+          6458
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.OwcCollectionsService.addMdEntryToUserDefaultCollection
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.collectionsService.addMdEntryToUserDefaultCollection(mdMetadata.get, authUser)
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          252
+        </td>
+        <td>
+          6479
+          -
+          6485
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Boolean.unary_!
+        </td>
+        <td style="background: #F0ADAD">
+          added.unary_!
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          261
+        </td>
+        <td>
+          6475
+          -
+          6475
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          260
+        </td>
+        <td>
+          6475
+          -
+          6475
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          254
+        </td>
+        <td>
+          6567
+          -
+          6594
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; to default collection of &quot;
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          253
+        </td>
+        <td>
+          6521
+          -
+          6536
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Could not add &quot;
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          256
+        </td>
+        <td>
+          6537
+          -
+          6566
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.fileIdentifier
+        </td>
+        <td style="background: #F0ADAD">
+          mdMetadata.get.fileIdentifier
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          259
+        </td>
+        <td>
+          6507
+          -
+          6605
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.logger.warn(scala.StringContext.apply(&quot;Could not add &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser))
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          258
+        </td>
+        <td>
+          6507
+          -
+          6605
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.logger.warn(scala.StringContext.apply(&quot;Could not add &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser))
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          255
+        </td>
+        <td>
+          6602
+          -
+          6604
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          257
+        </td>
+        <td>
+          6519
+          -
+          6604
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Could not add &quot;, &quot; to default collection of &quot;, &quot;.&quot;).s(mdMetadata.get.fileIdentifier, authUser)
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          262
+        </td>
+        <td>
+          6652
+          -
+          6658
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          265
+        </td>
+        <td>
+          6662
+          -
+          6671
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2669,15 +3112,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          256
+          277
         </td>
         <td>
-          5602
+          6642
           -
-          5602
+          6642
         </td>
         <td>
           Select
@@ -2690,15 +3133,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          247
+          268
         </td>
         <td>
-          5653
+          6693
           -
-          5653
+          6693
         </td>
         <td>
           Select
@@ -2711,99 +3154,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          241
+          276
         </td>
         <td>
-          5612
+          6643
           -
-          5618
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;type&quot;
-        </td>
-      </tr><tr>
-        <td>
-          141
-        </td>
-        <td>
-          249
-        </td>
-        <td>
-          5633
-          -
-          5667
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          141
-        </td>
-        <td>
-          258
-        </td>
-        <td>
-          5600
-          -
-          5729
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          141
-        </td>
-        <td>
-          243
-        </td>
-        <td>
-          5622
-          -
-          5622
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          141
-        </td>
-        <td>
-          255
-        </td>
-        <td>
-          5603
-          -
-          5728
+          6774
         </td>
         <td>
           Apply
@@ -2816,15 +3175,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          246
+          267
         </td>
         <td>
-          5633
+          6673
           -
-          5649
+          6689
         </td>
         <td>
           Literal
@@ -2837,57 +3196,78 @@
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          257
+          270
         </td>
         <td>
-          5602
+          6673
           -
-          5602
+          6707
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          279
+        </td>
+        <td>
+          6640
+          -
+          6775
         </td>
         <td>
           ApplyToImplicitArgs
         </td>
         <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
+          play.api.mvc.Results.Status.apply
         </td>
         <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+          CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;fileIdentifier&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          248
+          264
         </td>
         <td>
-          5653
+          6662
           -
-          5667
+          6662
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
+          play.api.libs.json.DefaultWrites.StringWrites
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)
+          json.this.Writes.StringWrites
         </td>
       </tr><tr>
         <td>
-          141
+          155
         </td>
         <td>
-          242
+          263
         </td>
         <td>
-          5622
+          6662
           -
-          5631
+          6671
         </td>
         <td>
           Literal
@@ -2900,15 +3280,15 @@
         </td>
       </tr><tr>
         <td>
-          142
+          155
         </td>
         <td>
-          254
+          266
         </td>
         <td>
-          5681
+          6652
           -
-          5727
+          6671
         </td>
         <td>
           Apply
@@ -2917,19 +3297,19 @@
           scala.Predef.ArrowAssoc.-&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))
+          scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;success&quot;)(json.this.Writes.StringWrites))
         </td>
       </tr><tr>
         <td>
-          142
+          155
         </td>
         <td>
-          253
+          269
         </td>
         <td>
-          5694
+          6693
           -
-          5727
+          6707
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2938,208 +3318,19 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[String](fileIdentifier)(json.this.Writes.StringWrites)
         </td>
       </tr><tr>
         <td>
-          142
+          155
         </td>
         <td>
-          250
+          278
         </td>
         <td>
-          5681
+          6642
           -
-          5690
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          142
-        </td>
-        <td>
-          252
-        </td>
-        <td>
-          5694
-          -
-          5694
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          142
-        </td>
-        <td>
-          251
-        </td>
-        <td>
-          5694
-          -
-          5727
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier)
-        </td>
-      </tr><tr>
-        <td>
-          144
-        </td>
-        <td>
-          259
-        </td>
-        <td>
-          5764
-          -
-          5792
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.Object.==
-        </td>
-        <td style="background: #F0ADAD">
-          e.label.==(&quot;ExceptionReport&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          145
-        </td>
-        <td>
-          262
-        </td>
-        <td>
-          5823
-          -
-          5864
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.xml.NodeSeq.text
-        </td>
-        <td style="background: #F0ADAD">
-          e.\\(&quot;Exception&quot;).\\(&quot;ExceptionText&quot;).text
-        </td>
-      </tr><tr>
-        <td>
-          145
-        </td>
-        <td>
-          261
-        </td>
-        <td>
-          5843
-          -
-          5858
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;ExceptionText&quot;
-        </td>
-      </tr><tr>
-        <td>
-          145
-        </td>
-        <td>
-          260
-        </td>
-        <td>
-          5828
-          -
-          5839
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;Exception&quot;
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          271
-        </td>
-        <td>
-          5957
-          -
-          5977
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          265
-        </td>
-        <td>
-          5947
-          -
-          5947
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          274
-        </td>
-        <td>
-          5927
-          -
-          5927
+          6642
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3152,15 +3343,15 @@
         </td>
       </tr><tr>
         <td>
-          147
+          156
         </td>
         <td>
-          268
+          271
         </td>
         <td>
-          5957
+          6727
           -
-          5966
+          6736
         </td>
         <td>
           Literal
@@ -3173,36 +3364,15 @@
         </td>
       </tr><tr>
         <td>
-          147
+          156
         </td>
         <td>
-          267
+          274
         </td>
         <td>
-          5937
+          6740
           -
-          5955
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          270
-        </td>
-        <td>
-          5970
-          -
-          5977
+          6773
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3211,145 +3381,19 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites)
         </td>
       </tr><tr>
         <td>
-          147
-        </td>
-        <td>
-          264
-        </td>
-        <td>
-          5947
-          -
-          5955
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;danger&quot;
-        </td>
-      </tr><tr>
-        <td>
-          147
+          156
         </td>
         <td>
           273
         </td>
         <td>
-          5927
+          6740
           -
-          5927
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          263
-        </td>
-        <td>
-          5937
-          -
-          5943
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;type&quot;
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          272
-        </td>
-        <td>
-          5928
-          -
-          5978
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.Json.obj
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites)))
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          275
-        </td>
-        <td>
-          5925
-          -
-          5979
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          266
-        </td>
-        <td>
-          5947
-          -
-          5955
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          269
-        </td>
-        <td>
-          5970
-          -
-          5970
+          6740
         </td>
         <td>
           Select
@@ -3362,15 +3406,225 @@
         </td>
       </tr><tr>
         <td>
-          149
+          156
         </td>
         <td>
-          277
+          272
         </td>
         <td>
-          6027
+          6740
           -
-          6027
+          6773
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier)
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          275
+        </td>
+        <td>
+          6727
+          -
+          6773
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;Inserted as &quot;, &quot;.&quot;).s(fileIdentifier))(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          280
+        </td>
+        <td>
+          6822
+          -
+          6850
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #F0ADAD">
+          e.label.==(&quot;ExceptionReport&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          283
+        </td>
+        <td>
+          6887
+          -
+          6928
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.NodeSeq.text
+        </td>
+        <td style="background: #F0ADAD">
+          e.\\(&quot;Exception&quot;).\\(&quot;ExceptionText&quot;).text
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          282
+        </td>
+        <td>
+          6907
+          -
+          6922
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ExceptionText&quot;
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          281
+        </td>
+        <td>
+          6892
+          -
+          6903
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Exception&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          286
+        </td>
+        <td>
+          7023
+          -
+          7023
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          295
+        </td>
+        <td>
+          7003
+          -
+          7003
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          289
+        </td>
+        <td>
+          7033
+          -
+          7042
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          292
+        </td>
+        <td>
+          7033
+          -
+          7053
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          294
+        </td>
+        <td>
+          7003
+          -
+          7003
         </td>
         <td>
           Select
@@ -3383,36 +3637,204 @@
         </td>
       </tr><tr>
         <td>
-          149
+          161
         </td>
         <td>
-          276
+          285
         </td>
         <td>
-          6028
+          7023
           -
-          6063
+          7031
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;danger&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          288
+        </td>
+        <td>
+          7013
+          -
+          7031
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          scala.Predef.ArrowAssoc.-&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;Unexpected Response: &quot;, &quot;&quot;).s(response)
+          scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites))
         </td>
       </tr><tr>
         <td>
-          149
+          161
         </td>
         <td>
-          279
+          291
         </td>
         <td>
-          6008
+          7046
           -
-          6064
+          7053
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          290
+        </td>
+        <td>
+          7046
+          -
+          7046
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          284
+        </td>
+        <td>
+          7013
+          -
+          7019
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          293
+        </td>
+        <td>
+          7004
+          -
+          7054
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          287
+        </td>
+        <td>
+          7023
+          -
+          7031
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          296
+        </td>
+        <td>
+          7001
+          -
+          7055
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          CswController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;type&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;danger&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](message)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          298
+        </td>
+        <td>
+          7115
+          -
+          7115
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          300
+        </td>
+        <td>
+          7096
+          -
+          7152
         </td>
         <td>
           ApplyToImplicitArgs
@@ -3425,15 +3847,36 @@
         </td>
       </tr><tr>
         <td>
-          149
+          163
         </td>
         <td>
-          278
+          297
         </td>
         <td>
-          6027
+          7116
           -
-          6027
+          7151
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Unexpected Response: &quot;, &quot;&quot;).s(response)
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          299
+        </td>
+        <td>
+          7115
+          -
+          7115
         </td>
         <td>
           ApplyToImplicitArgs

@@ -36,6 +36,10 @@ EXPOSE 9000
 # ${?UPLOAD_DATA_DIR}
 # ${?SENDGRID_API_KEY}
 # ${?APP_TIMEZONE}
+# ${?GOOGLE_RECAPTCHA_SECRET}
+# ${?GOOGLE_CLIENT_SECRET}
+# ${?GOOGLE_BUCKET_NAME}
+# ${?GOOGLE_PROJECT_ID}
 
 CMD [ "/smart-portal-backend-1.0-SNAPSHOT/bin/smart-portal-backend", \
     "-Dconfig.resource=application.conf", \

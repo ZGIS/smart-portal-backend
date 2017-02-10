@@ -247,7 +247,10 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     owcOk
   }
 
-  def updateCollection = ???
+  def updateCollection(owcDocument: OwcDocument, emailame: String) = {
+    val owcOk = owcDocumentDAO.deleteOwcDocument(owcDocument, emailame)
+    owcOk
+  }
 
   def deleteCollection = ???
 

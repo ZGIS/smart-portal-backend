@@ -76,9 +76,10 @@ class FilesController @Inject()(config: Configuration,
     * @param filename
     * @param contentType
     * @param email
+    * @param filelink
     * @return
     */
-  def fileMetadata(filename: String, contentType: Option[String], email: String): OwcEntry = {
+  def fileMetadata(filename: String, contentType: Option[String], email: String, filelink: String): OwcEntry = {
 
     val propsUuid = UUID.randomUUID()
     val updatedTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
@@ -87,7 +88,7 @@ class FilesController @Inject()(config: Configuration,
       "GetFile",
       "GET",
       contentType.getOrElse("application/octet-stream"),
-      "http://portal.smart-project.info/fs/",
+      filelink,
       None, None)
 
     val httpLinkOffering = HttpLinkOffering(
@@ -98,7 +99,7 @@ class FilesController @Inject()(config: Configuration,
     )
 
     val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"),
-      s"http://portal.smart-project.info/context/${propsUuid.toString}", None)
+      s"http://portal.smart-project.info/context/entry/${propsUuid.toString}", None)
 
     val useLimitation = s"IP limitation: Please inquire with $email"
 
@@ -106,7 +107,7 @@ class FilesController @Inject()(config: Configuration,
       propsUuid,
       "en",
       filename,
-      Some(s"$filename uploaded via GW Hub by $email"),
+      Some(s"$filename uploaded to $filelink via GW Hub by $email"),
       Some(updatedTime),
       None,
       Some(useLimitation),
@@ -159,7 +160,7 @@ class FilesController @Inject()(config: Configuration,
               Files.asByteSource(tmpFile).openStream())
 
             // return the public download link
-            val owcEntry = fileMetadata(blob.getMediaLink(), contentType, authUser)
+            val owcEntry = fileMetadata(filename, contentType, authUser, blob.getMediaLink())
             val insertOk = collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser)
 
             if (insertOk) {

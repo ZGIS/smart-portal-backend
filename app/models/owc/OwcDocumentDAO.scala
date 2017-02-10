@@ -48,32 +48,30 @@ class OwcDocumentDAO @Inject()(db: Database,
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val wktReader = ctx.getFormats().getReader(ShapeIO.WKT)
-
   /**
-    * quick and dirty bbox from wkt stored in DB
-    *
-    * @param bboxAsWkt
-    * @return
+    * Parse an OwcEntry from a ResultSet
     */
-  def createOptionalBbox(bboxAsWkt: Option[String]): Option[Rectangle] = {
-    bboxAsWkt.map {
-      bboxString => {
-        wktReader.read(bboxAsWkt.getOrElse(ctx.getWorldBounds)).asInstanceOf[Rectangle]
+  val owcEntryParser: RowParser[OwcEntry] = {
+    str("id") ~
+      str("feature_type") ~
+      get[Option[String]]("bbox") map {
+      case id ~ featureType ~ bboxAsWkt => {
+        logger.debug(s"owcEntryParser $id, $featureType, $bboxAsWkt")
+        instantiateOwcFeatureType(id, featureType, bboxAsWkt).asInstanceOf[OwcEntry]
       }
     }
   }
-
   /**
-    * quick and dirty string from a bbox to store wkt in DB
-    *
-    * @param rect
-    * @return
+    * Parse an OwcDocument from a ResultSet
     */
-  def rectToWkt(rect: Rectangle): String = {
-    val shpWriter = ctx.getFormats().getWriter(ShapeIO.WKT)
-    shpWriter.toString(rect)
+  val owcDocumentParser: RowParser[OwcDocument] = {
+    str("id") ~
+      str("feature_type") ~
+      get[Option[String]]("bbox") map {
+      case id ~ featureType ~ bboxAsWkt =>
+        instantiateOwcFeatureType(id, featureType, bboxAsWkt).asInstanceOf[OwcDocument]
+    }
   }
-
 
   /**
     * instantiate an OwcFeatureType either OwcEntry, or OwcDocument
@@ -129,59 +127,16 @@ class OwcDocumentDAO @Inject()(db: Database,
     * **********/
 
   /**
-    * Parse an OwcEntry from a ResultSet
+    * quick and dirty bbox from wkt stored in DB
+    *
+    * @param bboxAsWkt
+    * @return
     */
-  val owcEntryParser: RowParser[OwcEntry] = {
-    str("id") ~
-      str("feature_type") ~
-      get[Option[String]]("bbox") map {
-      case id ~ featureType ~ bboxAsWkt => {
-        logger.debug(s"owcEntryParser $id, $featureType, $bboxAsWkt")
-        instantiateOwcFeatureType(id, featureType, bboxAsWkt).asInstanceOf[OwcEntry]
+  def createOptionalBbox(bboxAsWkt: Option[String]): Option[Rectangle] = {
+    bboxAsWkt.map {
+      bboxString => {
+        wktReader.read(bboxAsWkt.getOrElse(ctx.getWorldBounds)).asInstanceOf[Rectangle]
       }
-    }
-  }
-
-  /**
-    * Parse an OwcDocument from a ResultSet
-    */
-  val owcDocumentParser: RowParser[OwcDocument] = {
-    str("id") ~
-      str("feature_type") ~
-      get[Option[String]]("bbox") map {
-      case id ~ featureType ~ bboxAsWkt =>
-        instantiateOwcFeatureType(id, featureType, bboxAsWkt).asInstanceOf[OwcDocument]
-    }
-  }
-
-  /**
-    * get all OwcEntries
-    *
-    * @return
-    */
-  def getAllOwcEntries: Seq[OwcEntry] = {
-    db.withConnection { implicit connection =>
-      val sql = SQL(s"""select * from $tableOwcFeatureTypes where feature_type = {feature_type}""").on(
-        'feature_type -> "OwcEntry")
-      logger.debug(s"getAllOwcEntries ${sql.toString}")
-      sql.as(owcEntryParser *)
-    }
-  }
-
-  /**
-    * find an OwcEntry by its id
-    *
-    * @param id
-    * @return
-    */
-  def findOwcEntriesById(id: String): Option[OwcEntry] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""select * from $tableOwcFeatureTypes
-           |where id = {id} AND feature_type = {feature_type}""".stripMargin).on(
-        'id -> id,
-        'feature_type -> "OwcEntry"
-      ).as(owcEntryParser.singleOpt)
     }
   }
 
@@ -205,67 +160,16 @@ class OwcDocumentDAO @Inject()(db: Database,
   }
 
   /**
-    * create an owc entry with dependent offerings and properties
+    * get all OwcEntries
     *
-    * @param owcEntry
     * @return
     */
-  def createOwcEntry(owcEntry: OwcEntry): Option[OwcEntry] = {
-
-    db.withTransaction {
-      implicit connection => {
-
-        val sql = SQL(
-          s"""
-          insert into $tableOwcFeatureTypes values (
-            {id}, {feature_type}, {bbox}
-          )
-        """).on(
-          'id -> owcEntry.id,
-          'feature_type -> "OwcEntry",
-          'bbox -> owcEntry.bbox.map(rect => rectToWkt(rect))
-        )
-
-        val rowCount = sql.executeUpdate()
-
-        logger.debug(s"inserted ${owcEntry.getClass.getSimpleName} $rowCount ${sql.toString}")
-
-        owcEntry.offerings.foreach {
-          owcOffering => {
-            if (owcOfferingDAO.findOwcOfferingByUuid(owcOffering.uuid).isEmpty) {
-              owcOfferingDAO.createOwcOffering(owcOffering)
-            }
-
-            SQL(
-              s"""insert into $tableOwcEntriesHasOwcOfferings  values (
-                 |{owc_feature_types_as_entry_id}, {owc_offerings_uuid}
-                 |)
-               """.stripMargin).on(
-              'owc_feature_types_as_entry_id -> owcEntry.id,
-              'owc_offerings_uuid -> owcOffering.uuid.toString
-            ).executeUpdate()
-          }
-        }
-
-        // the single dependent owc properties object
-        if (owcPropertiesDAO.findOwcPropertiesByUuid(owcEntry.properties.uuid).isEmpty) {
-          owcPropertiesDAO.createOwcProperties(owcEntry.properties)
-        }
-
-        SQL(
-          s"""insert into $tableOwcFeatureTypesHasOwcProperties  values (
-             |{owc_feature_types_id}, {owc_properties_uuid}
-             |)
-               """.stripMargin).on(
-          'owc_feature_types_id -> owcEntry.id,
-          'owc_properties_uuid -> owcEntry.properties.uuid.toString
-        ).executeUpdate()
-
-        rowCount match {
-          case 1 => Some(owcEntry)
-          case _ => None
-        }
-      }
+  def getAllOwcEntries: Seq[OwcEntry] = {
+    db.withConnection { implicit connection =>
+      val sql = SQL(s"""select * from $tableOwcFeatureTypes where feature_type = {feature_type}""").on(
+        'feature_type -> "OwcEntry")
+      logger.debug(s"getAllOwcEntries ${sql.toString}")
+      sql.as(owcEntryParser *)
     }
   }
 
@@ -276,59 +180,6 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @return
     */
   def updateOwcEntry(owcEntry: OwcEntry): Option[OwcEntry] = ???
-
-  /**
-    * delete an owc featuretype (OwcEntry) with dependnt properties and offerings
-    *
-    * @param owcEntry
-    * @return
-    */
-  def deleteOwcEntry(owcEntry: OwcEntry): Boolean = {
-
-    val rowCount = db.withTransaction {
-      implicit connection => {
-        SQL(s"""delete from $tableOwcEntriesHasOwcOfferings where owc_feature_types_as_entry_id = {id}""").on(
-          'id -> owcEntry.id
-        ).executeUpdate()
-
-        SQL(s"""delete from $tableOwcFeatureTypesHasOwcProperties where owc_feature_types_id = {id}""").on(
-          'id -> owcEntry.id
-        ).executeUpdate()
-
-        SQL(s"delete from $tableOwcFeatureTypes where id = {id}").on(
-          'id -> owcEntry.id
-        ).executeUpdate()
-      }
-    }
-
-    db.withConnection(
-      implicit connection => {
-
-        owcEntry.offerings.filter {
-          offering => {
-            SQL(s"""select owc_offerings_uuid from $tableOwcEntriesHasOwcOfferings where owc_offerings_uuid = {uuid}""").on(
-              'uuid -> offering.uuid.toString
-            ).as(SqlParser.str("owc_offerings_uuid") *).isEmpty
-          }
-        }.foreach(owcOfferingDAO.deleteOwcOffering(_))
-
-        if (SQL(s"""select owc_properties_uuid from $tableOwcFeatureTypesHasOwcProperties where owc_properties_uuid = {uuid}""").on(
-          'uuid -> owcEntry.properties.uuid.toString
-        ).as(SqlParser.str("owc_properties_uuid") *).isEmpty) {
-          owcPropertiesDAO.deleteOwcProperties(owcEntry.properties)
-        }
-      }
-    )
-
-    rowCount match {
-      case 1 => true
-      case _ => false
-    }
-  }
-
-  /** *********
-    * OwcDocument
-    * **********/
 
   /**
     * get all OwcDocuments
@@ -371,6 +222,14 @@ class OwcDocumentDAO @Inject()(db: Database,
     }
   }
 
+  def findUserDefaultOwcDocument(email: String): Option[OwcDocument] = {
+    findOwcDocumentsByUserAndType(email, "DEFAULT").headOption
+  }
+
+  /** *********
+    * OwcDocument
+    * **********/
+
   /**
     * find OwcDocumenst by user and type
     *
@@ -392,10 +251,6 @@ class OwcDocumentDAO @Inject()(db: Database,
         'collection_type -> collectionType
       ).as(owcDocumentParser *)
     }
-  }
-
-  def findUserDefaultOwcDocument(email: String): Option[OwcDocument] = {
-    findOwcDocumentsByUserAndType(email, "DEFAULT").headOption
   }
 
   /**
@@ -487,18 +342,6 @@ class OwcDocumentDAO @Inject()(db: Database,
   }
 
   /**
-    * create Users Default collection aka Owc Document, visibility 0 > private,
-    * collectionType "CUSTOM"
-    *
-    * @param owcDocument
-    * @param email
-    * @return
-    */
-  def createCustomOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
-    createOwcDocument(owcDocument, email, 0, "CUSTOM")
-  }
-
-  /**
     * create/insert into db Owc Document
     *
     * @param owcDocument
@@ -572,6 +415,111 @@ class OwcDocumentDAO @Inject()(db: Database,
   }
 
   /**
+    * find an OwcEntry by its id
+    *
+    * @param id
+    * @return
+    */
+  def findOwcEntriesById(id: String): Option[OwcEntry] = {
+    db.withConnection { implicit connection =>
+      SQL(
+        s"""select * from $tableOwcFeatureTypes
+           |where id = {id} AND feature_type = {feature_type}""".stripMargin).on(
+        'id -> id,
+        'feature_type -> "OwcEntry"
+      ).as(owcEntryParser.singleOpt)
+    }
+  }
+
+  /**
+    * create an owc entry with dependent offerings and properties
+    *
+    * @param owcEntry
+    * @return
+    */
+  def createOwcEntry(owcEntry: OwcEntry): Option[OwcEntry] = {
+
+    db.withTransaction {
+      implicit connection => {
+
+        val sql = SQL(
+          s"""
+          insert into $tableOwcFeatureTypes values (
+            {id}, {feature_type}, {bbox}
+          )
+        """).on(
+          'id -> owcEntry.id,
+          'feature_type -> "OwcEntry",
+          'bbox -> owcEntry.bbox.map(rect => rectToWkt(rect))
+        )
+
+        val rowCount = sql.executeUpdate()
+
+        logger.debug(s"inserted ${owcEntry.getClass.getSimpleName} $rowCount ${sql.toString}")
+
+        owcEntry.offerings.foreach {
+          owcOffering => {
+            if (owcOfferingDAO.findOwcOfferingByUuid(owcOffering.uuid).isEmpty) {
+              owcOfferingDAO.createOwcOffering(owcOffering)
+            }
+
+            SQL(
+              s"""insert into $tableOwcEntriesHasOwcOfferings  values (
+                 |{owc_feature_types_as_entry_id}, {owc_offerings_uuid}
+                 |)
+               """.stripMargin).on(
+              'owc_feature_types_as_entry_id -> owcEntry.id,
+              'owc_offerings_uuid -> owcOffering.uuid.toString
+            ).executeUpdate()
+          }
+        }
+
+        // the single dependent owc properties object
+        if (owcPropertiesDAO.findOwcPropertiesByUuid(owcEntry.properties.uuid).isEmpty) {
+          owcPropertiesDAO.createOwcProperties(owcEntry.properties)
+        }
+
+        SQL(
+          s"""insert into $tableOwcFeatureTypesHasOwcProperties  values (
+             |{owc_feature_types_id}, {owc_properties_uuid}
+             |)
+               """.stripMargin).on(
+          'owc_feature_types_id -> owcEntry.id,
+          'owc_properties_uuid -> owcEntry.properties.uuid.toString
+        ).executeUpdate()
+
+        rowCount match {
+          case 1 => Some(owcEntry)
+          case _ => None
+        }
+      }
+    }
+  }
+
+  /**
+    * quick and dirty string from a bbox to store wkt in DB
+    *
+    * @param rect
+    * @return
+    */
+  def rectToWkt(rect: Rectangle): String = {
+    val shpWriter = ctx.getFormats().getWriter(ShapeIO.WKT)
+    shpWriter.toString(rect)
+  }
+
+  /**
+    * create Users Default collection aka Owc Document, visibility 0 > private,
+    * collectionType "CUSTOM"
+    *
+    * @param owcDocument
+    * @param email
+    * @return
+    */
+  def createCustomOwcDocument(owcDocument: OwcDocument, email: String): Option[OwcDocument] = {
+    createOwcDocument(owcDocument, email, 0, "CUSTOM")
+  }
+
+  /**
     * Not yet implemented, update OwcDocument and hierarchical dependents
     *
     * @param owcDocument
@@ -611,34 +559,31 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param email
     * @return
     */
-  def addOwcEntryToOwcDocument(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+  def addOwcEntryToOwcDocument(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String): Option[OwcDocument] = {
 
     val rowCount = db.withTransaction {
       implicit connection => {
 
+        // if uuid of provided entry is not found in DB create new entry (should be most likely usually?)
+        if (findOwcEntriesById(owcEntry.id).isEmpty) {
+          createOwcEntry(owcEntry)
+
+        } else {
+          logger.warn(s"owcentry scheduled for addition to owcdoc ${owcDocument.id} with entry id ${owcEntry.id} already exists")
+          None
+        }
+
         // update the features/entries list of the OwcDoc collection
-
-            // if uuid of provided entry is not found in DB create new entry
-            if (findOwcEntriesById(owcEntry.id).isEmpty) {
-              createOwcEntry(owcEntry)
-
-              // and add relation to owc doc
-              SQL(
-                s"""insert into $tableOwcDocumentsHasOwcEntries  values (
-                   |{owc_feature_types_as_document_id}, {owc_feature_types_as_entry_id}
-                   |)
+        SQL(
+          s"""insert into $tableOwcDocumentsHasOwcEntries  values (
+             |{owc_feature_types_as_document_id}, {owc_feature_types_as_entry_id}
+             |)
                """.stripMargin).on(
-                'owc_feature_types_as_document_id -> owcDocument.id,
-                'owc_feature_types_as_entry_id -> owcEntry.id
-              ).executeUpdate()
-            } else {
-              // if uuid for provided entry exists in DB delegate entry update
-              if (deleteOwcEntry(owcEntry)) {
-                createOwcEntry(owcEntry)
-              }
-            }
-          }
+          'owc_feature_types_as_document_id -> owcDocument.id,
+          'owc_feature_types_as_entry_id -> owcEntry.id
+        ).executeUpdate()
       }
+    }
 
     rowCount match {
       case 1 => Some(owcDocument)
@@ -652,18 +597,18 @@ class OwcDocumentDAO @Inject()(db: Database,
     * @param email
     * @return
     */
-  def deleteOwcEntryFromOwcDocument(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+  def replaceEntryInCollection(owcDocument: OwcDocument, owcEntry: OwcEntry, email: String): Option[OwcDocument] = {
 
-    val rowCount = db.withTransaction {
+    val updateCount = db.withTransaction {
       implicit connection => {
 
-        // update the features/entries list of the OwcDoc collection
+        // update / replace the entry, due to SQL foreign key reference, we can only update if noone else has a ref on it
+        val entryToReplace = findOwcEntriesById(owcEntry.id)
 
-        // if uuid of provided entry is not found in DB create new entry
-        if (findOwcEntriesById(owcEntry.id).isDefined) {
-          deleteOwcEntry(owcEntry)
+        // if uuid of provided entry is not found in DB create new entry (upsert)
+        if (entryToReplace.isDefined) {
 
-          // and add relation to owc doc
+          // and now delete our own ref from specified relation to owc doc
           SQL(
             s"""delete from $tableOwcDocumentsHasOwcEntries where owc_feature_types_as_document_id = {doc_id}
                |AND owc_feature_types_as_entry_id = {entry_id}
@@ -671,6 +616,91 @@ class OwcDocumentDAO @Inject()(db: Database,
             'doc_id -> owcDocument.id,
             'entry_id -> owcEntry.id
           ).executeUpdate()
+
+        }
+
+        val isItOrphan = SQL(
+          s"""select owc_feature_types_as_entry_id from
+             |$tableOwcDocumentsHasOwcEntries where owc_feature_types_as_entry_id = {id}""".stripMargin).on(
+          'id -> owcEntry.id
+        ).as(SqlParser.str("owc_feature_types_as_entry_id") *).isEmpty
+
+        val replacementStep: Int = if (isItOrphan) {
+          if (entryToReplace.isDefined) {
+            if (deleteOwcEntry(owcEntry)) {
+              createOwcEntry(owcEntry).size
+            } else {
+              logger.error(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
+                s"could not be deleted/replaced properly")
+              0
+            }
+          } else {
+            logger.warn(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
+              s"did not exist before (doing upsert")
+            createOwcEntry(owcEntry).size
+          }
+        } else {
+          logger.error(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
+            s"is referenced in other collections and cannot be touched.")
+          0
+        }
+
+        // add relation to owc doc
+        val reAddRelations = SQL(
+          s"""insert into $tableOwcDocumentsHasOwcEntries  values (
+             |{owc_feature_types_as_document_id}, {owc_feature_types_as_entry_id}
+             |)
+               """.stripMargin).on(
+          'owc_feature_types_as_document_id -> owcDocument.id,
+          'owc_feature_types_as_entry_id -> owcEntry.id
+        ).executeUpdate()
+
+        reAddRelations + replacementStep
+      }
+    }
+
+    updateCount match {
+      case 2 => Some(owcDocument) // the chained new document
+      case 1 => findOwcDocumentByIdAndUser(owcDocument.id, email) // the old document
+      case _ => None
+    }
+  }
+
+  /**
+    *
+    * @param owcDocument
+    * @param email
+    * @return
+    */
+  def deleteOwcEntryFromOwcDocument(owcDocument: OwcDocument, owcEntryId: String, email: String): Option[OwcDocument] = {
+
+    val rowCount = db.withTransaction {
+      implicit connection => {
+
+        val entryToRemove = findOwcEntriesById(owcEntryId)
+        // if uuid of provided entry is not found in DB can't delete then
+        if (entryToRemove.isDefined) {
+
+          // and delete relation to owc doc
+          val deleteEntryRelationForDoc = SQL(
+            s"""delete from $tableOwcDocumentsHasOwcEntries where owc_feature_types_as_document_id = {doc_id}
+               |AND owc_feature_types_as_entry_id = {entry_id}
+             """.stripMargin).on(
+            'doc_id -> owcDocument.id,
+            'entry_id -> owcEntryId
+          ).executeUpdate()
+
+          val shouldRemoveOrphan = SQL(
+            s"""select owc_feature_types_as_entry_id from
+               |$tableOwcDocumentsHasOwcEntries where owc_feature_types_as_entry_id = {id}""".stripMargin).on(
+            'id -> owcEntryId
+          ).as(SqlParser.str("owc_feature_types_as_entry_id") *).isEmpty
+
+          if (shouldRemoveOrphan) {
+            deleteOwcEntry(entryToRemove.get)
+          }
+
+          deleteEntryRelationForDoc
         }
       }
     }
@@ -724,6 +754,55 @@ class OwcDocumentDAO @Inject()(db: Database,
           'uuid -> owcDocument.properties.uuid.toString
         ).as(SqlParser.str("owc_properties_uuid") *).isEmpty) {
           owcPropertiesDAO.deleteOwcProperties(owcDocument.properties)
+        }
+      }
+    )
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
+  /**
+    * delete an owc featuretype (OwcEntry) with dependnt properties and offerings
+    *
+    * @param owcEntry
+    * @return
+    */
+  def deleteOwcEntry(owcEntry: OwcEntry): Boolean = {
+
+    val rowCount = db.withTransaction {
+      implicit connection => {
+        SQL(s"""delete from $tableOwcEntriesHasOwcOfferings where owc_feature_types_as_entry_id = {id}""").on(
+          'id -> owcEntry.id
+        ).executeUpdate()
+
+        SQL(s"""delete from $tableOwcFeatureTypesHasOwcProperties where owc_feature_types_id = {id}""").on(
+          'id -> owcEntry.id
+        ).executeUpdate()
+
+        SQL(s"delete from $tableOwcFeatureTypes where id = {id}").on(
+          'id -> owcEntry.id
+        ).executeUpdate()
+      }
+    }
+
+    db.withConnection(
+      implicit connection => {
+
+        owcEntry.offerings.filter {
+          offering => {
+            SQL(s"""select owc_offerings_uuid from $tableOwcEntriesHasOwcOfferings where owc_offerings_uuid = {uuid}""").on(
+              'uuid -> offering.uuid.toString
+            ).as(SqlParser.str("owc_offerings_uuid") *).isEmpty
+          }
+        }.foreach(owcOfferingDAO.deleteOwcOffering(_))
+
+        if (SQL(s"""select owc_properties_uuid from $tableOwcFeatureTypesHasOwcProperties where owc_properties_uuid = {uuid}""").on(
+          'uuid -> owcEntry.properties.uuid.toString
+        ).as(SqlParser.str("owc_properties_uuid") *).isEmpty) {
+          owcPropertiesDAO.deleteOwcProperties(owcEntry.properties)
         }
       }
     )

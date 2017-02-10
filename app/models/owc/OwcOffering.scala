@@ -596,4 +596,26 @@ case class HttpLinkOffering(
   def toJson: JsValue = Json.toJson(this)
 }
 
+/**
+  * not in the spec, but we need them so I made up an extension
+  *
+  * @param uuid
+  * @param code
+  * @param operations
+  * @param content
+  */
+case class X3dOffering(
+                             uuid: UUID,
+                             code: String = "http://www.opengis.net/spec/owc-geojson/1.0/req/x3d",
+                             operations: List[OwcOperation],
+                             content: List[String]
+                           ) extends OwcOffering with ClassnameLogger {
+
+  /**
+    *
+    * @return
+    */
+  def toJson: JsValue = Json.toJson(this)
+}
+
 

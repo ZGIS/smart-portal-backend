@@ -279,6 +279,7 @@ class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
       case "SosOffering" => SosOffering(uuidObj, code, ops, contentList)
       case "NetCdfOffering" => NetCdfOffering(uuidObj, code, ops, contentList)
       case "HttpLinkOffering" => HttpLinkOffering(uuidObj, code, ops, contentList)
+      case "X3dOffering" => X3dOffering(uuidObj, code, ops, contentList)
       case _ => throw new InvalidClassException(offeringType, s"Unknown Offering type $offeringType")
     }
   }

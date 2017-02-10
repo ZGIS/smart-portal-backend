@@ -221,6 +221,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     */
   def addPlainFileEntryToUserDefaultCollection(owcEntry: OwcEntry, email: String) : Boolean = {
     val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(email)
+
     val upsertOk = defaultCollection.map {
       owcDoc => {
         val author1 = owcDoc.properties.authors.head
@@ -238,20 +239,101 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
 
   /**
     *
-    * @param owcDocument
-    * @param emailame
+    * @param owcEntry
+    * @param email
     * @return
     */
-  def insertCollection(owcDocument: OwcDocument, emailame: String) = {
-    val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, emailame)
+  def addEntryToCollection(owcDocumentId: String, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+    val collection = owcDocumentDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
+
+    collection.fold {
+      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
+      val empty: Option[OwcDocument] = None
+      empty
+    }{
+      owcDoc => {
+        val entries = owcDoc.features ++ Seq(owcEntry)
+        val newDoc = owcDoc.copy(features = entries)
+        owcDocumentDAO.addOwcEntryToOwcDocument(newDoc, owcEntry, email)
+      }
+    }
+  }
+
+  /**
+    *
+    * @param owcEntry
+    * @param email
+    * @return
+    */
+  def replaceEntryInCollection(owcDocumentId: String, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
+    val collection = owcDocumentDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
+
+    collection.fold {
+      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
+      val empty: Option[OwcDocument] = None
+      empty
+    }{
+      owcDoc => {
+        // at first filter the entry out of the current collection and then add the updated entry back in
+        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(owcEntry.id)) ++ Seq(owcEntry)
+        val newDoc = owcDoc.copy(features = entries)
+        owcDocumentDAO.replaceEntryInCollection(newDoc, owcEntry, email)
+      }
+    }
+  }
+
+  def deleteEntryFromCollection(owcDocumentId: String, entryid: String, email: String) : Option[OwcDocument] = {
+    val collection = owcDocumentDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
+    collection.fold {
+      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
+      val empty: Option[OwcDocument] = None
+      empty
+    } {
+      owcDoc => {
+        // filter the entry out of the current collection
+        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(entryid))
+        val newDoc = owcDoc.copy(features = entries)
+        owcDocumentDAO.deleteOwcEntryFromOwcDocument(newDoc, entryid, email)
+      }
+    }
+  }
+
+  /**
+    *
+    * @param owcDocument
+    * @param email
+    * @return
+    */
+  def insertCollection(owcDocument: OwcDocument, email: String) = {
+    val owcOk = owcDocumentDAO.createCustomOwcDocument(owcDocument, email)
     owcOk
   }
 
-  def updateCollection(owcDocument: OwcDocument, emailame: String) = {
-    val owcOk = owcDocumentDAO.deleteOwcDocument(owcDocument, emailame)
-    owcOk
+  /**
+    *
+    * @param owcDocument
+    * @param email
+    * @return
+    */
+  def updateCollectionMetadata(owcDocument: OwcDocument, email: String) : Option[OwcDocument] = {
+    logger.error(s"${owcDocument.id} should be updated, but is currently not implemented")
+    owcDocumentDAO.findOwcDocumentByIdAndUser(owcDocument.id, email)
   }
-
-  def deleteCollection = ???
+  /**
+    *
+    * @param owcDocumentId
+    * @param email
+    * @return
+    */
+  def deleteCollection(owcDocumentId: String, email: String) : Boolean ={
+    val hasOwcDoc = owcDocumentDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
+    hasOwcDoc.fold{
+      false
+    } {
+      theDoc => {
+        owcDocumentDAO.deleteOwcDocument(theDoc)
+      }
+    }
+  }
 
 }

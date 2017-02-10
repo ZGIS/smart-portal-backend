@@ -625,24 +625,24 @@ class OwcDocumentDAO @Inject()(db: Database,
           'id -> owcEntry.id
         ).as(SqlParser.str("owc_feature_types_as_entry_id") *).isEmpty
 
-        val replacementStep: Int = if (isItOrphan) {
+        val replacementStep = if (isItOrphan) {
           if (entryToReplace.isDefined) {
             if (deleteOwcEntry(owcEntry)) {
-              createOwcEntry(owcEntry).size
+              createOwcEntry(owcEntry).isDefined
             } else {
               logger.error(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
-                s"could not be deleted/replaced properly")
-              0
+                "could not be deleted/replaced properly")
+              false
             }
           } else {
             logger.warn(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
-              s"did not exist before (doing upsert")
-            createOwcEntry(owcEntry).size
+              "did not exist before (doing upsert")
+            createOwcEntry(owcEntry).isDefined
           }
         } else {
           logger.error(s"owcentry with entry id ${owcEntry.id} scheduled for replacement in owcdoc ${owcDocument.id} " +
-            s"is referenced in other collections and cannot be touched.")
-          0
+            "is referenced in other collections and cannot be touched.")
+          false
         }
 
         // add relation to owc doc
@@ -655,7 +655,8 @@ class OwcDocumentDAO @Inject()(db: Database,
           'owc_feature_types_as_entry_id -> owcEntry.id
         ).executeUpdate()
 
-        reAddRelations + replacementStep
+        val yesOrNo = if (replacementStep) 1 else 0
+        reAddRelations + yesOrNo
       }
     }
 

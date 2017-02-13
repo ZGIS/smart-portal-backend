@@ -1,6 +1,4 @@
-# SMART Portal Backend Play [![OpenHUB](https://www.openhub.net/p/smart-portal-backend/widgets/project_thin_badge.gif)](https://www.openhub.net/p/smart-portal-backend)
-
-
+# SMART Portal Backend Play
 
 - app to manage OWC collections of CSW metadata records
 - up - and download of datasets, models and reports and add them to case studies (maintained as OWC collections)
@@ -10,14 +8,22 @@
 
 ## Build
 
+[![Build Status][build-status-badge]][build-status-url]
+[![Issues][issues-badge]][issues-url]
+
+[![License][license-badge]][license-url]
+[![OpenHUB](https://www.openhub.net/p/smart-portal-backend/widgets/project_thin_badge.gif)](https://www.openhub.net/p/smart-portal-backend)
+ 
+[build-status-badge]: https://img.shields.io/travis/ZGIS/smart-portal-backend.svg?style=flat-square
+[build-status-url]: https://travis-ci.org/ZGIS/smart-portal-backend
+[issues-badge]: https://img.shields.io/github/issues/ZGIS/smart-portal-backend.svg?style=flat-square
+[issues-url]: https://github.com/ZGIS/smart-portal-backend/issues
+[license-badge]: https://img.shields.io/badge/License-Apache%202-blue.svg?style=flat-square
+[license-url]: LICENSE
+
 <p><a href="https://api.travis-ci.org/repos/ZGIS/smart-portal-backend/builds.atom"><img src="https://upload.wikimedia.org/wikipedia/en/4/43/Feed-icon.svg" align="left" height="32" width="32" alt="Builds Feed"></a></p>
 
-[Travis CI Build](https://travis-ci.org/ZGIS/smart-portal-backend) [![Build Status](https://travis-ci.org/ZGIS/smart-portal-backend.svg)](https://travis-ci.org/ZGIS/smart-portal-backend)
-
 [Site Docs](https://zgis.github.io/smart-portal-backend/)
-
-[Issue Tracker](https://github.com/ZGIS/smart-portal-backend/issues)
-
 
 ## Licenses
 

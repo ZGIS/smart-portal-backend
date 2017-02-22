@@ -74,7 +74,7 @@ class CswController @Inject()(val configuration: Configuration,
 
   //TODO SR maybe we should configure these URLs somewhere else? Or even better generate some access lib from the ingester?
   val INGESTER_URL: String = configuration.getString("smart.csw-ingester.url").getOrElse("http://localhost:9001")
-  val INGESTER_UPDATE_INDEX_URL: String = s"$INGESTER_URL/cswi-api/buildIndex/smart"
+  val INGESTER_UPDATE_INDEX_URL: String = s"$INGESTER_URL/cswi-api/v1/buildIndex/smart"
 
   /**
     * returns valid values for different topics used in metadata editor of webgui

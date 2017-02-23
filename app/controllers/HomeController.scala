@@ -47,8 +47,8 @@ class HomeController @Inject()(config: Configuration,
                                userDAO: UserDAO,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {
 
-  lazy private val reCaptchaSecret: String = configuration.getString("google.recaptcha.secret")
-    .getOrElse("secret api key")
+  lazy private val reCaptchaSecret: String =
+    configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
 
   val cache: play.api.cache.CacheApi = cacheApi
   val configuration: play.api.Configuration = config
@@ -60,7 +60,7 @@ class HomeController @Inject()(config: Configuration,
     * @param all
     * @return
     */
-  def preflight(all: String) = Action { request =>
+  def preflight(all: String): Action[AnyContent] = Action { request =>
     NoContent.withHeaders(headers: _*)
   }
 
@@ -69,7 +69,7 @@ class HomeController @Inject()(config: Configuration,
     *
     * @return
     */
-  def headers = List(
+  def headers: List[(String, String)] = List(
     "Access-Control-Allow-Origin" -> "*",
     "Allow" -> "*",
     "Access-Control-Allow-Methods" -> "GET, POST, OPTIONS",
@@ -84,7 +84,7 @@ class HomeController @Inject()(config: Configuration,
     * @param fields
     * @return
     */
-  def discovery(fields: Option[String]) = Action { request =>
+  def discovery(fields: Option[String]): Action[AnyContent] = Action { request =>
     Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
   }
 
@@ -94,7 +94,7 @@ class HomeController @Inject()(config: Configuration,
     * will be called when the application receives a `GET` request with
     * a path of `/`.
     */
-  def index = Action {
+  def index: Action[AnyContent] = Action {
     Ok(views.html.index("Your new application is ready."))
   }
 
@@ -107,7 +107,7 @@ class HomeController @Inject()(config: Configuration,
     *
     * @return
     */
-  def login = Action(parse.json) { implicit request =>
+  def login: Action[JsValue] = Action(parse.json) { implicit request =>
     request.body.validate[LoginCredentials].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
@@ -135,8 +135,7 @@ class HomeController @Inject()(config: Configuration,
     * @param recaptcaChallenge
     * @return
     */
-  def recaptchaValidate(recaptcaChallenge: String) = Action.async { implicit request =>
-
+  def recaptchaValidate(recaptcaChallenge: String): Action[AnyContent] = Action.async { implicit request =>
     // TODO check from where URL referer comes from
     ws.url(recaptcaVerifyUrl)
       .withHeaders("Accept" -> "application/json")
@@ -147,7 +146,8 @@ class HomeController @Inject()(config: Configuration,
         val success = (response.json \ "success").as[Boolean]
         if (success) {
           Ok(Json.obj("status" -> "OK", "message" -> "granted", "success" -> JsBoolean(true)))
-        } else {
+        }
+        else {
           val errors = (response.json \ "error-codes")
           val jsErrors = errors.getOrElse(JsString("No further errors"))
           BadRequest(Json.obj("status" -> "OK", "message" -> jsErrors, "success" -> JsBoolean(false)))
@@ -165,7 +165,7 @@ class HomeController @Inject()(config: Configuration,
     * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
     * X-XSRF-TOKEN in HTTP header.
     */
-  def logout = HasToken(parse.empty) { token =>
+  def logout: Action[Unit] = HasToken(parse.empty) { token =>
     email =>
       implicit request =>
         cache.remove(token)

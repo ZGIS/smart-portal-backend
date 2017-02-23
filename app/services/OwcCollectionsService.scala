@@ -35,12 +35,21 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
                                       owcDocumentDAO: OwcDocumentDAO) extends ClassnameLogger {
 
   /**
-    *
+    * get user's default collection
     * @param email
     * @return
     */
   def getUserDefaultOwcDocument(email: String) : Option[OwcDocument] = {
     owcDocumentDAO.findUserDefaultOwcDocument(email)
+  }
+
+  /**
+    * get user's own files
+    * @param email
+    * @return
+    */
+  def getOwcPropertiesForOwcAuthorOwnFiles(email: String): Seq[UploadedFileProperties] = {
+    owcDocumentDAO.findOwcPropertiesForOwcAuthorOwnFiles(email)
   }
 
   /**

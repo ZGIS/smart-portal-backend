@@ -202,5 +202,9 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         owcPropsDao.getAllOwcLinks.size mustBe 2
       }
     }
+
+    "get OwcProperties with own files" in {
+      pending("Implement me!")
+    }
   }
 }

@@ -439,3 +439,38 @@ object OwcPropertiesJs extends ClassnameLogger {
   }
 }
 
+/**
+  * Represents an uploaded file in OwnCollection
+  * @param owcProperties this contains the file name
+  * @param owcOperation  this contains the URL where it was uploaded to
+  */
+case class UploadedFileProperties(owcProperties: OwcProperties,
+                                  owcOperation: OwcOperation) {
+  implicit val reads: Reads[UploadedFileProperties] = (
+    (JsPath \ "properties").read[OwcProperties] and
+      (JsPath \ "operation").read[OwcOperation]
+    ) (UploadedFilePropertiesJs.apply _)
+
+  implicit val writes: Writes[UploadedFileProperties] = (
+    (JsPath \ "properties").write[OwcProperties] and
+      (JsPath \ "operation").write[OwcOperation]
+    ) (unlift(UploadedFilePropertiesJs.unapply))
+
+  def toJson: JsValue = Json.toJson(this);
+}
+
+/**
+  * UploadedFileProperties Json stuff
+  */
+object UploadedFilePropertiesJs extends ClassnameLogger {
+
+  def apply(owcProperties: OwcProperties,
+            owcOperation: OwcOperation): UploadedFileProperties = {
+    UploadedFileProperties(owcProperties, owcOperation)
+  }
+
+  def unapply(arg: UploadedFileProperties): Option[(OwcProperties, OwcOperation)] = {
+    Some(arg.owcProperties, arg.owcOperation)
+  }
+}
+

@@ -53,7 +53,8 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         val author2 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
         val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
 
-        val owcPropsDao = new OwcPropertiesDAO(database)
+        // TODO SR these DAO objects are created by DepInj framework normally and we should think about using it in tests also
+        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
 
         owcPropsDao.getAllOwcAuthors.size mustEqual 0
         owcPropsDao.createOwcAuthor(author1) mustEqual Some(author1)
@@ -79,7 +80,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
     "handle OwcCategory with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
 
         val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
         val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
@@ -109,7 +110,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
     "handle OwcLink with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
 
         val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
         val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
@@ -137,7 +138,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
     "handle OwcProperties with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database)
+        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
 
         val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
         val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
@@ -204,7 +205,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
     }
 
     "get OwcProperties with own files" in {
-      pending("Implement me!")
+      pending
     }
   }
 }

@@ -23,7 +23,7 @@ import java.util.UUID
 
 import anorm.{SQL, SqlParser}
 import com.typesafe.config.ConfigFactory
-import models.owc._
+import models.owc.{OwcOfferingDAO, _}
 import models.users.{User, UserDAO}
 import org.locationtech.spatial4j.context.SpatialContext
 import org.scalatest.{BeforeAndAfter, TestData}
@@ -179,7 +179,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
     "handle OwcEntries with DB" in {
       withTestDatabase { database =>
 
-        val owcPropertiesDAO = new OwcPropertiesDAO(database)
+        val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
         val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
@@ -214,7 +214,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
     "handle OwcDocuments with DB" in {
       withTestDatabase { database =>
 
-        val owcPropertiesDAO = new OwcPropertiesDAO(database)
+        val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
         val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
@@ -291,7 +291,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val owcDoc4 = OwcDocument.parseJson(jsonTestCollection4).get
         val owcDoc5 = OwcDocument.parseJson(jsonTestCollection5).get
 
-        val owcPropertiesDAO = new OwcPropertiesDAO(database)
+        val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
         val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
 

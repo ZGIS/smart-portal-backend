@@ -136,7 +136,9 @@ class CswController @Inject()(val configuration: Configuration,
               wsClient.url(CSW_URL).post(finalXML.toString())
             }
             updateIngesterIndexResponse <- {
-              wsClient.url(INGESTER_UPDATE_INDEX_URL).get().onSuccess {
+              wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
+              /*
+              .onSuccess {
                 case response if response.status == 200 => {
                   logger.info(
                     s"Successfully called $INGESTER_UPDATE_INDEX_URL (${response.status} - ${response.statusText})");
@@ -148,6 +150,7 @@ class CswController @Inject()(val configuration: Configuration,
                   logger.warn(s"response: ${response.body}");
                 }
               }
+              */
             }
           } yield insertResponse
 

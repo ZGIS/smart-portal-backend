@@ -51,7 +51,15 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
 }
 
 /**
-  *
+  * Controllers
+  * @param configuration
+  * @param cache
+  * @param passwordHashing
+  * @param wsClient
+  * @param context
+  * @param appProvider
+  * @param metadataService
+  * @param collectionsService
   */
 class CswController @Inject()(val configuration: Configuration,
                               val cache: CacheApi,
@@ -95,7 +103,6 @@ class CswController @Inject()(val configuration: Configuration,
   }
 
   /** calls CSW:Transaction -> Insert
-    * FIXME should implement HasToken(parse.json) instead of Action.async, to only allow authenticated users
     */
   def insert: Action[JsValue] = HasTokenAsync(parse.json) {
     token =>
@@ -104,13 +111,10 @@ class CswController @Inject()(val configuration: Configuration,
           logger.debug(request.toString)
 
           //TODO parse JSON to MDMetadataSet and convert that to XML
-          /*
-                    if (request.body) {
-                      BadRequest("Posted data was no valid JSON document")
-                    }
-          */
           val mdMetadata = MdMetadata.fromJson(((request.body.as[JsObject]) \ "metadata").get)
 
+          //FIXME SR I find that pretty hard to read. Is there a better way of chaining WS calls?
+          // see https://www.playframework.com/documentation/2.5.x/ScalaWS#chaining-ws-calls
           val futureResponse: Future[WSResponse] = for {
             getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
             insertResponse <- {
@@ -132,7 +136,18 @@ class CswController @Inject()(val configuration: Configuration,
               wsClient.url(CSW_URL).post(finalXML.toString())
             }
             updateIngesterIndexResponse <- {
-              wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
+              wsClient.url(INGESTER_UPDATE_INDEX_URL).get().onSuccess {
+                case response if response.status == 200 => {
+                  logger.info(
+                    s"Successfully called $INGESTER_UPDATE_INDEX_URL (${response.status} - ${response.statusText})");
+                  logger.info(s"response: ${response.body}");
+                }
+                case response => {
+                  logger.warn(
+                    s"Call to '$INGESTER_UPDATE_INDEX_URL' returned error: ${response.status} - ${response.statusText}");
+                  logger.warn(s"response: ${response.body}");
+                }
+              }
             }
           } yield insertResponse
 

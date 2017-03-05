@@ -179,33 +179,26 @@ class OwcDocumentDAO @Inject()(db: Database,
              |  prop.*,
              |  oper.*
              |FROM $tableOwcFeatureTypes AS ftyp
-             |  /*get all OwcEntries under default collection*/
              |  INNER JOIN $tableOwcFeatureTypesAsDocumentHasOwcEntries AS ftyp2entr
              |    ON "ftyp"."id" = "ftyp2entr"."owc_feature_types_as_entry_id"
-             |  /*get all Properties for that OwcEntry*/
              |  INNER JOIN $tableOwcFeatureTypesHasOwcProperties AS ftyp2prop
              |    ON "ftyp"."id" = "ftyp2prop"."owc_feature_types_id"
              |  INNER JOIN $tableOwcProperties AS prop
              |    ON "ftyp2prop"."owc_properties_uuid" = "prop"."uuid"
-             |  /*get all offerings in that Entry*/
              |  INNER JOIN $tableOwcFeatureTypesAsEntryHasOwcOfferings AS ftyp2offe
              |    ON "ftyp"."id" = "ftyp2offe"."owc_feature_types_as_entry_id"
              |  INNER JOIN $tableOwcOfferings AS offe
              |    ON "ftyp2offe"."owc_offerings_uuid" = "offe"."uuid"
-             |  // find all operations to that offering
              |  INNER JOIN $tableOwcOfferingsHasOwcOperations AS offe2oper
              |    ON "offe"."uuid" = "offe2oper"."owc_offerings_uuid"
              |  INNER JOIN $tableOwcOperations AS oper
              |    ON "offe2oper"."owc_operations_uuid" = "oper"."uuid"
              |WHERE 1 = 1
-             |      // default collection ID
              |      AND ftyp2entr."owc_feature_types_as_document_id" = {defaultCollectionId}
              |      AND offe."offering_type" = 'HttpLinkOffering'
              |      AND oper."code" = 'GetFile';""".stripMargin)
           .on('defaultCollectionId -> defaultDocument.get.id)
           .as(owcPropertiesDAO.uploadedFilePropertiesParser *)
-        // TODO SR is there a possibility to easily parse a TUPLE out of that? At that point I have the file +
-        //   the GetFile offering at hand! Now I need to select twice :-(
       }
     }
   }

@@ -544,7 +544,7 @@ class UserController @Inject()(config: Configuration,
                 givenName.getOrElse(name.getOrElse(email)),
                 familyName.getOrElse(""),
                 cryptPass,
-                s"ACTIVE:REGCONFIRMED",
+                "ACTIVE:REGCONFIRMED",
                 ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
               userDAO.createWithNps(newUser).fold {

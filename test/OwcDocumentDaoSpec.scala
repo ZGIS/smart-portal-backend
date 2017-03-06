@@ -50,11 +50,12 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
   }
 
   private lazy val ctx = SpatialContext.GEO
-  private lazy val owcResource1 = this.getClass().getResource("owc/smart-nz.owc.json")
-  private lazy val owcResource2 = this.getClass().getResource("owc/smart-sac.owc.json")
-  private lazy val owcResource3 = this.getClass().getResource("owc/smart-mond.owc.json")
-  private lazy val owcResource4 = this.getClass().getResource("owc/csw_10entries.owc.json")
-  private lazy val owcResource5 = this.getClass().getResource("owc/wps_52north.owc.json")
+  private lazy val owcResourceSmartNz = this.getClass().getResource("owc/smart-nz.owc.json")
+  private lazy val owcResourceSmartSac = this.getClass().getResource("owc/smart-sac.owc.json")
+  private lazy val owcResourceSmartMondsee = this.getClass().getResource("owc/smart-mond.owc.json")
+  private lazy val owcResourceCsw10Entries = this.getClass().getResource("owc/csw_10entries.owc.json")
+  private lazy val owcResourceWps52North = this.getClass().getResource("owc/wps_52north.owc.json")
+  private lazy val owcResourceDefaultCollectionWithFiles = this.getClass().getResource("owc/DefaultCollectionWithFiles.json")
 
   "OwcDocument " can {
 
@@ -279,11 +280,11 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
     "handle Users having OwcDocuments with DB" in {
       withTestDatabase { database =>
 
-        val jsonTestCollection1 = scala.io.Source.fromURL(owcResource1).getLines.mkString
-        val jsonTestCollection2 = scala.io.Source.fromURL(owcResource2).getLines.mkString
-        val jsonTestCollection3 = scala.io.Source.fromURL(owcResource3).getLines.mkString
-        val jsonTestCollection4 = scala.io.Source.fromURL(owcResource4).getLines.mkString
-        val jsonTestCollection5 = scala.io.Source.fromURL(owcResource5).getLines.mkString
+        val jsonTestCollection1 = scala.io.Source.fromURL(owcResourceSmartNz).getLines.mkString
+        val jsonTestCollection2 = scala.io.Source.fromURL(owcResourceSmartSac).getLines.mkString
+        val jsonTestCollection3 = scala.io.Source.fromURL(owcResourceSmartMondsee).getLines.mkString
+        val jsonTestCollection4 = scala.io.Source.fromURL(owcResourceCsw10Entries).getLines.mkString
+        val jsonTestCollection5 = scala.io.Source.fromURL(owcResourceWps52North).getLines.mkString
 
         val owcDoc1 = OwcDocument.parseJson(jsonTestCollection1).get
         val owcDoc2 = OwcDocument.parseJson(jsonTestCollection2).get
@@ -341,5 +342,39 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
       }
     }
 
+    "find users own uploaded files" in {
+      withTestDatabase { database =>
+        val defaultCollectionRaw = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
+        val defaultCollection = OwcDocument.parseJson(defaultCollectionRaw).get
+
+        // TODO SR this should be injected probably
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val userDao = new UserDAO(database, passwordHashing)
+        val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+        val owcOfferingDAO = new OwcOfferingDAO(database)
+        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+
+
+        val testUser = User("testuser@test.com",
+          "local:testuser@test.com",
+          "Test",
+          "User",
+          passwordHashing.createHash("testpass123"),
+          "ACTIVE:REGCONFIRMED",
+          ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault()))
+
+        userDao.create(testUser) mustEqual Some(testUser)
+        owcDocumentDAO.createUsersDefaultOwcDocument(defaultCollection, testUser.email)
+
+        val ownFiles = owcDocumentDAO.findOwcPropertiesForOwcAuthorOwnFiles(testUser.email)
+        ownFiles.length mustEqual 3
+
+        ownFiles.map(ufp => ufp.owcProperties.title).sorted mustEqual
+          ("gksee-2016-09-01_09_30_01.989.jpg"::
+          "gksee-2016-08-31_15_00_05.615.jpg"::
+          "gksee-2016-08-30_11_55_02.411.jpg"::
+          Nil).sorted
+      }
+    }
   }
 }

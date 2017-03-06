@@ -105,6 +105,7 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     *
     * @param user
     */
+  // FIXME SR which one should be used? WithNps, or without?
   def createWithNps(user: User): Option[User] = {
 
     db.withConnection { implicit connection =>

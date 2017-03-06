@@ -46,7 +46,7 @@ case class User(email: String,
                 laststatuschange: ZonedDateTime) extends ClassnameLogger {
 
   /**
-    * toString, should be more explicit with date handling
+    * toString, should be more explicit with datetime handling
     *
     * @return
     */

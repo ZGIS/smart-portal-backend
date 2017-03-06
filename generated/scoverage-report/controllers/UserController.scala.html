@@ -556,81 +556,129 @@
 </span>532 <span style=''></span><span style='background: #F0ADAD'>
 </span>533 <span style=''></span><span style='background: #F0ADAD'>          logger.debug(s"payload.toPrettyString: ${payload.toPrettyString}")
 </span>534 <span style=''></span><span style='background: #F0ADAD'>
-</span>535 <span style=''></span><span style='background: #F0ADAD'>          credentials.accesstype match {
-</span>536 <span style=''></span><span style='background: #F0ADAD'>            case "LOGIN" => {
-</span>537 <span style=''></span><span style='background: #F0ADAD'>              userDAO.findUserByEmail(email).fold {
-</span>538 <span style=''></span><span style='background: #F0ADAD'>                logger.error("User not known.")
-</span>539 <span style=''></span><span style='background: #F0ADAD'>                Unauthorized(Json.obj("status" -> "ERR", "message" -> "User not known yet, please register first."))
-</span>540 <span style=''></span><span style='background: #F0ADAD'>              } { user =>
-</span>541 <span style=''></span><span style='background: #F0ADAD'>                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-</span>542 <span style=''></span><span style='background: #F0ADAD'>                // logger.debug(s"Logging in email from $uaIdentifier")
-</span>543 <span style=''></span><span style='background: #F0ADAD'>                val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-</span>544 <span style=''></span><span style='background: #F0ADAD'>                cache.set(token, user.email)
-</span>545 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
-</span>546 <span style=''></span><span style='background: #F0ADAD'>                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
-</span>547 <span style=''></span><span style='background: #F0ADAD'>              }
-</span>548 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>549 <span style=''></span><span style='background: #F0ADAD'>            case "REGISTER" => {
-</span>550 <span style=''></span><span style='background: #F0ADAD'>              // found none, good...
-</span>551 <span style=''></span><span style='background: #F0ADAD'>              userDAO.findUserByEmail(email).fold {
-</span>552 <span style=''></span><span style='background: #F0ADAD'>                // found none, good, create user
-</span>553 <span style=''></span><span style='background: #F0ADAD'>                val regLinkId = java.util.UUID.randomUUID().toString()
-</span>554 <span style=''></span><span style='background: #F0ADAD'>                val cryptPass = passwordHashing.createHash(regLinkId)
-</span>555 <span style=''></span><span style='background: #F0ADAD'>
-</span>556 <span style=''></span><span style='background: #F0ADAD'>                val newUser = User(email,
-</span>557 <span style=''></span><span style='background: #F0ADAD'>                  s"google:${userId}",
-</span>558 <span style=''></span><span style='background: #F0ADAD'>                  givenName.getOrElse(name.getOrElse(email)),
-</span>559 <span style=''></span><span style='background: #F0ADAD'>                  familyName.getOrElse(""),
-</span>560 <span style=''></span><span style='background: #F0ADAD'>                  cryptPass,
-</span>561 <span style=''></span><span style='background: #F0ADAD'>                  s"REGISTERED:$regLinkId",
-</span>562 <span style=''></span><span style='background: #F0ADAD'>                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-</span>563 <span style=''></span><span style='background: #F0ADAD'>
-</span>564 <span style=''></span><span style='background: #F0ADAD'>                userDAO.createWithNps(newUser).fold {
-</span>565 <span style=''></span><span style='background: #F0ADAD'>                  logger.error("User create error.")
-</span>566 <span style=''></span><span style='background: #F0ADAD'>                  BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
-</span>567 <span style=''></span><span style='background: #F0ADAD'>                } { user =>
-</span>568 <span style=''></span><span style='background: #F0ADAD'>                  val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName.getOrElse(name.getOrElse(email)), regLinkId)
-</span>569 <span style=''></span><span style='background: #F0ADAD'>                  logger.info(s"New user registered. Email went out $emailWentOut")
-</span>570 <span style=''></span><span style='background: #F0ADAD'>                  // creating default collection only after registration, account is only barely usable here
-</span>571 <span style=''></span><span style='background: #F0ADAD'>                  Ok(Json.toJson(user.asProfileJs()))
-</span>572 <span style=''></span><span style='background: #F0ADAD'>                }
-</span>573 <span style=''></span><span style='background: #F0ADAD'>              } { user =>
-</span>574 <span style=''></span><span style='background: #F0ADAD'>                // found user with that email already
-</span>575 <span style=''></span><span style='background: #F0ADAD'>                logger.error("Email already in use.")
-</span>576 <span style=''></span><span style='background: #F0ADAD'>                BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
-</span>577 <span style=''></span><span style='background: #F0ADAD'>              }
-</span>578 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>579 <span style=''></span><span style='background: #F0ADAD'>
-</span>580 <span style=''></span><span style='background: #F0ADAD'>            case _ => BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
-</span>581 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>582 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style='background: #AEF1AE'>
-</span>583 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>584 <span style=''></span><span style='background: #AEF1AE'>    )
-</span>585 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>586 <span style=''>
-</span>587 <span style=''>
-</span>588 <span style=''>  /**
-</span>589 <span style=''>    * Disconnect the Google login
-</span>590 <span style=''>    *
-</span>591 <span style=''>    * @return
-</span>592 <span style=''>    */
-</span>593 <span style=''>  def gdisconnect = </span><span style='background: #AEF1AE'>HasToken(parse.empty) {
-</span>594 <span style=''></span><span style='background: #AEF1AE'>    token =>
-</span>595 <span style=''></span><span style='background: #AEF1AE'>      email =>
-</span>596 <span style=''></span><span style='background: #AEF1AE'>        implicit request =>
-</span>597 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
-</span>598 <span style=''></span><span style='background: #AEF1AE'>          // do some Google OAuth2 unregisteR
-</span>599 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
-</span>600 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
-</span>601 <span style=''>
-</span>602 <span style=''>  /**
-</span>603 <span style=''>    *
-</span>604 <span style=''>    * @return
-</span>605 <span style=''>    */
-</span>606 <span style=''>  def oauth2callback = </span><span style='background: #F0ADAD'>Action {
-</span>607 <span style=''></span><span style='background: #F0ADAD'>    Redirect("/#/account")
-</span>608 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>609 <span style=''>}
+</span>535 <span style=''></span><span style='background: #F0ADAD'>          if (credentials.accesstype.equalsIgnoreCase("LOGIN") || credentials.accesstype.equalsIgnoreCase("REGISTER")) {
+</span>536 <span style=''></span><span style='background: #F0ADAD'>
+</span>537 <span style=''></span><span style='background: #F0ADAD'>            userDAO.findUserByEmail(email).fold {
+</span>538 <span style=''></span><span style='background: #F0ADAD'>              // well, must be a new user coming through from Google
+</span>539 <span style=''></span><span style='background: #F0ADAD'>              val regLinkId = java.util.UUID.randomUUID().toString()
+</span>540 <span style=''></span><span style='background: #F0ADAD'>              val cryptPass = passwordHashing.createHash(regLinkId)
+</span>541 <span style=''></span><span style='background: #F0ADAD'>
+</span>542 <span style=''></span><span style='background: #F0ADAD'>              val newUser = User(email,
+</span>543 <span style=''></span><span style='background: #F0ADAD'>                s"google:${userId}",
+</span>544 <span style=''></span><span style='background: #F0ADAD'>                givenName.getOrElse(name.getOrElse(email)),
+</span>545 <span style=''></span><span style='background: #F0ADAD'>                familyName.getOrElse(""),
+</span>546 <span style=''></span><span style='background: #F0ADAD'>                cryptPass,
+</span>547 <span style=''></span><span style='background: #F0ADAD'>                "ACTIVE:REGCONFIRMED",
+</span>548 <span style=''></span><span style='background: #F0ADAD'>                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>549 <span style=''></span><span style='background: #F0ADAD'>
+</span>550 <span style=''></span><span style='background: #F0ADAD'>              userDAO.createWithNps(newUser).fold {
+</span>551 <span style=''></span><span style='background: #F0ADAD'>                logger.error("User create error.")
+</span>552 <span style=''></span><span style='background: #F0ADAD'>                BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+</span>553 <span style=''></span><span style='background: #F0ADAD'>              } { user =>
+</span>554 <span style=''></span><span style='background: #F0ADAD'>                val emailWentOut = emailService.sendConfirmationEmail(newUser.email, "Your GW HUB account is now active", newUser.firstname)
+</span>555 <span style=''></span><span style='background: #F0ADAD'>                // all good here, creating default collection (Unit)
+</span>556 <span style=''></span><span style='background: #F0ADAD'>                collectionsService.createUserDefaultCollection(newUser)
+</span>557 <span style=''></span><span style='background: #F0ADAD'>
+</span>558 <span style=''></span><span style='background: #F0ADAD'>                logger.info(s"New user registered. Email went out $emailWentOut")
+</span>559 <span style=''></span><span style='background: #F0ADAD'>                // creating default collection only after registration, account is only barely usable here
+</span>560 <span style=''></span><span style='background: #F0ADAD'>
+</span>561 <span style=''></span><span style='background: #F0ADAD'>                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+</span>562 <span style=''></span><span style='background: #F0ADAD'>                // logger.debug(s"Logging in email from $uaIdentifier")
+</span>563 <span style=''></span><span style='background: #F0ADAD'>                val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+</span>564 <span style=''></span><span style='background: #F0ADAD'>                cache.set(token, user.email)
+</span>565 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
+</span>566 <span style=''></span><span style='background: #F0ADAD'>                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+</span>567 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>568 <span style=''></span><span style='background: #F0ADAD'>
+</span>569 <span style=''></span><span style='background: #F0ADAD'>            } { user =>
+</span>570 <span style=''></span><span style='background: #F0ADAD'>
+</span>571 <span style=''></span><span style='background: #F0ADAD'>              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+</span>572 <span style=''></span><span style='background: #F0ADAD'>              // logger.debug(s"Logging in email from $uaIdentifier")
+</span>573 <span style=''></span><span style='background: #F0ADAD'>              val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+</span>574 <span style=''></span><span style='background: #F0ADAD'>              cache.set(token, user.email)
+</span>575 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
+</span>576 <span style=''></span><span style='background: #F0ADAD'>                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+</span>577 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>578 <span style=''></span><span style='background: #F0ADAD'>          } else {
+</span>579 <span style=''></span><span style='background: #F0ADAD'>            BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
+</span>580 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>581 <span style=''></span><span style='background: #F0ADAD'>
+</span>582 <span style=''></span><span style='background: #F0ADAD'>          // Google Sign up always logs in, might create user AND collection on the fly
+</span>583 <span style=''></span><span style='background: #F0ADAD'>/*          credentials.accesstype match {
+</span>584 <span style=''></span><span style='background: #F0ADAD'>            case "LOGIN" => {
+</span>585 <span style=''></span><span style='background: #F0ADAD'>              userDAO.findUserByEmail(email).fold {
+</span>586 <span style=''></span><span style='background: #F0ADAD'>                logger.error("User not known.")
+</span>587 <span style=''></span><span style='background: #F0ADAD'>                Unauthorized(Json.obj("status" -> "ERR", "message" -> "User not known yet, please register first."))
+</span>588 <span style=''></span><span style='background: #F0ADAD'>              } { user =>
+</span>589 <span style=''></span><span style='background: #F0ADAD'>                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+</span>590 <span style=''></span><span style='background: #F0ADAD'>                // logger.debug(s"Logging in email from $uaIdentifier")
+</span>591 <span style=''></span><span style='background: #F0ADAD'>                val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+</span>592 <span style=''></span><span style='background: #F0ADAD'>                cache.set(token, user.email)
+</span>593 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
+</span>594 <span style=''></span><span style='background: #F0ADAD'>                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+</span>595 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>596 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>597 <span style=''></span><span style='background: #F0ADAD'>            case "REGISTER" => {
+</span>598 <span style=''></span><span style='background: #F0ADAD'>              // found none, good...
+</span>599 <span style=''></span><span style='background: #F0ADAD'>              userDAO.findUserByEmail(email).fold {
+</span>600 <span style=''></span><span style='background: #F0ADAD'>                // found none, good, create user
+</span>601 <span style=''></span><span style='background: #F0ADAD'>                val regLinkId = java.util.UUID.randomUUID().toString()
+</span>602 <span style=''></span><span style='background: #F0ADAD'>                val cryptPass = passwordHashing.createHash(regLinkId)
+</span>603 <span style=''></span><span style='background: #F0ADAD'>
+</span>604 <span style=''></span><span style='background: #F0ADAD'>                val newUser = User(email,
+</span>605 <span style=''></span><span style='background: #F0ADAD'>                  s"google:${userId}",
+</span>606 <span style=''></span><span style='background: #F0ADAD'>                  givenName.getOrElse(name.getOrElse(email)),
+</span>607 <span style=''></span><span style='background: #F0ADAD'>                  familyName.getOrElse(""),
+</span>608 <span style=''></span><span style='background: #F0ADAD'>                  cryptPass,
+</span>609 <span style=''></span><span style='background: #F0ADAD'>                  s"REGISTERED:$regLinkId",
+</span>610 <span style=''></span><span style='background: #F0ADAD'>                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>611 <span style=''></span><span style='background: #F0ADAD'>
+</span>612 <span style=''></span><span style='background: #F0ADAD'>                userDAO.createWithNps(newUser).fold {
+</span>613 <span style=''></span><span style='background: #F0ADAD'>                  logger.error("User create error.")
+</span>614 <span style=''></span><span style='background: #F0ADAD'>                  BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+</span>615 <span style=''></span><span style='background: #F0ADAD'>                } { user =>
+</span>616 <span style=''></span><span style='background: #F0ADAD'>                  val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName.getOrElse(name.getOrElse(email)), regLinkId)
+</span>617 <span style=''></span><span style='background: #F0ADAD'>                  logger.info(s"New user registered. Email went out $emailWentOut")
+</span>618 <span style=''></span><span style='background: #F0ADAD'>                  // creating default collection only after registration, account is only barely usable here
+</span>619 <span style=''></span><span style='background: #F0ADAD'>                  Ok(Json.toJson(user.asProfileJs()))
+</span>620 <span style=''></span><span style='background: #F0ADAD'>                }
+</span>621 <span style=''></span><span style='background: #F0ADAD'>              } { user =>
+</span>622 <span style=''></span><span style='background: #F0ADAD'>                // found user with that email already
+</span>623 <span style=''></span><span style='background: #F0ADAD'>                logger.error("Email already in use.")
+</span>624 <span style=''></span><span style='background: #F0ADAD'>                BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
+</span>625 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>626 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>627 <span style=''></span><span style='background: #F0ADAD'>
+</span>628 <span style=''></span><span style='background: #F0ADAD'>            case _ => BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
+</span>629 <span style=''></span><span style='background: #F0ADAD'>          }*/
+</span>630 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style='background: #AEF1AE'>
+</span>631 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>632 <span style=''></span><span style='background: #AEF1AE'>    )
+</span>633 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>634 <span style=''>
+</span>635 <span style=''>
+</span>636 <span style=''>  /**
+</span>637 <span style=''>    * Disconnect the Google login
+</span>638 <span style=''>    *
+</span>639 <span style=''>    * @return
+</span>640 <span style=''>    */
+</span>641 <span style=''>  def gdisconnect = </span><span style='background: #AEF1AE'>HasToken(parse.empty) {
+</span>642 <span style=''></span><span style='background: #AEF1AE'>    token =>
+</span>643 <span style=''></span><span style='background: #AEF1AE'>      email =>
+</span>644 <span style=''></span><span style='background: #AEF1AE'>        implicit request =>
+</span>645 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>cache.remove(token)</span><span style='background: #AEF1AE'>
+</span>646 <span style=''></span><span style='background: #AEF1AE'>          // do some Google OAuth2 unregisteR
+</span>647 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
+</span>648 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>649 <span style=''>
+</span>650 <span style=''>  /**
+</span>651 <span style=''>    *
+</span>652 <span style=''>    * @return
+</span>653 <span style=''>    */
+</span>654 <span style=''>  def oauth2callback = </span><span style='background: #F0ADAD'>Action {
+</span>655 <span style=''></span><span style='background: #F0ADAD'>    Redirect("/#/account")
+</span>656 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>657 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -13934,12 +13982,12 @@ else
           473
         </td>
         <td>
-          1946
+          1952
         </td>
         <td>
           18458
           -
-          24118
+          26852
         </td>
         <td>
           Apply
@@ -13975,43 +14023,49 @@ else
       val familyName: Option[String] = scala.Option.apply[String](payload.get(&quot;family_name&quot;).asInstanceOf[String]);
       val givenName: Option[String] = scala.Option.apply[String](payload.get(&quot;given_name&quot;).asInstanceOf[String]);
       UserController.this.logger.debug(scala.StringContext.apply(&quot;payload.toPrettyString: &quot;, &quot;&quot;).s(payload.toPrettyString()));
-      credentials.accesstype match {
-        case &quot;LOGIN&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-          UserController.this.logger.error(&quot;User not known.&quot;);
-          UserController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+      if (credentials.accesstype.equalsIgnoreCase(&quot;LOGIN&quot;).||(credentials.accesstype.equalsIgnoreCase(&quot;REGISTER&quot;)))
+        UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
+          val regLinkId: String = java.util.UUID.randomUUID().toString();
+          val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
+          val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
+          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+            UserController.this.logger.error(&quot;User create error.&quot;);
+            UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+          })(((user: models.users.User) =&gt; {
+            val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+            UserController.this.collectionsService.createUserDefaultCollection(newUser);
+            UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
+            val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+            val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+            UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+            UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+              &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
+              &lt;artifact&gt; val x$9: String = token;
+              &lt;artifact&gt; val x$10: None.type = scala.None;
+              &lt;artifact&gt; val x$11: Boolean = false;
+              &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
+              &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+              &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
+              play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+            })
+          }))
         })(((user: models.users.User) =&gt; {
           val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
           val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
           UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
           UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
-            &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
-            &lt;artifact&gt; val x$9: String = token;
-            &lt;artifact&gt; val x$10: None.type = scala.None;
-            &lt;artifact&gt; val x$11: Boolean = false;
-            &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
-            &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
-            &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
-            play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+            &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+            &lt;artifact&gt; val x$16: String = token;
+            &lt;artifact&gt; val x$17: None.type = scala.None;
+            &lt;artifact&gt; val x$18: Boolean = false;
+            &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+            &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+            &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+            play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
           })
         }))
-        case &quot;REGISTER&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-          val regLinkId: String = java.util.UUID.randomUUID().toString();
-          val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
-          val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
-          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
-            UserController.this.logger.error(&quot;User create error.&quot;);
-            UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-          })(((user: models.users.User) =&gt; {
-            val emailWentOut: Boolean = UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId);
-            UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
-            UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-          }))
-        })(((user: models.users.User) =&gt; {
-          UserController.this.logger.error(&quot;Email already in use.&quot;);
-          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        }))
-        case _ =&gt; UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-      }
+      else
+        UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
     }
 }))))
         </td>
@@ -14041,12 +14095,12 @@ else
           474
         </td>
         <td>
-          1945
+          1951
         </td>
         <td>
           18503
           -
-          24114
+          26848
         </td>
         <td>
           Apply
@@ -14082,43 +14136,49 @@ else
       val familyName: Option[String] = scala.Option.apply[String](payload.get(&quot;family_name&quot;).asInstanceOf[String]);
       val givenName: Option[String] = scala.Option.apply[String](payload.get(&quot;given_name&quot;).asInstanceOf[String]);
       UserController.this.logger.debug(scala.StringContext.apply(&quot;payload.toPrettyString: &quot;, &quot;&quot;).s(payload.toPrettyString()));
-      credentials.accesstype match {
-        case &quot;LOGIN&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-          UserController.this.logger.error(&quot;User not known.&quot;);
-          UserController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+      if (credentials.accesstype.equalsIgnoreCase(&quot;LOGIN&quot;).||(credentials.accesstype.equalsIgnoreCase(&quot;REGISTER&quot;)))
+        UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
+          val regLinkId: String = java.util.UUID.randomUUID().toString();
+          val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
+          val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
+          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+            UserController.this.logger.error(&quot;User create error.&quot;);
+            UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+          })(((user: models.users.User) =&gt; {
+            val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+            UserController.this.collectionsService.createUserDefaultCollection(newUser);
+            UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
+            val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+            val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+            UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+            UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+              &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
+              &lt;artifact&gt; val x$9: String = token;
+              &lt;artifact&gt; val x$10: None.type = scala.None;
+              &lt;artifact&gt; val x$11: Boolean = false;
+              &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
+              &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+              &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
+              play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+            })
+          }))
         })(((user: models.users.User) =&gt; {
           val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
           val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
           UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
           UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
-            &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
-            &lt;artifact&gt; val x$9: String = token;
-            &lt;artifact&gt; val x$10: None.type = scala.None;
-            &lt;artifact&gt; val x$11: Boolean = false;
-            &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
-            &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
-            &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
-            play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+            &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+            &lt;artifact&gt; val x$16: String = token;
+            &lt;artifact&gt; val x$17: None.type = scala.None;
+            &lt;artifact&gt; val x$18: Boolean = false;
+            &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+            &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+            &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+            play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
           })
         }))
-        case &quot;REGISTER&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-          val regLinkId: String = java.util.UUID.randomUUID().toString();
-          val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
-          val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
-          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
-            UserController.this.logger.error(&quot;User create error.&quot;);
-            UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-          })(((user: models.users.User) =&gt; {
-            val emailWentOut: Boolean = UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId);
-            UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
-            UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-          }))
-        })(((user: models.users.User) =&gt; {
-          UserController.this.logger.error(&quot;Email already in use.&quot;);
-          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        }))
-        case _ =&gt; UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-      }
+      else
+        UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
     }
 }))
         </td>
@@ -14862,12 +14922,12 @@ else
           491
         </td>
         <td>
-          1944
+          1950
         </td>
         <td>
           19408
           -
-          24100
+          26834
         </td>
         <td>
           Block
@@ -14895,43 +14955,49 @@ else
   val familyName: Option[String] = scala.Option.apply[String](payload.get(&quot;family_name&quot;).asInstanceOf[String]);
   val givenName: Option[String] = scala.Option.apply[String](payload.get(&quot;given_name&quot;).asInstanceOf[String]);
   UserController.this.logger.debug(scala.StringContext.apply(&quot;payload.toPrettyString: &quot;, &quot;&quot;).s(payload.toPrettyString()));
-  credentials.accesstype match {
-    case &quot;LOGIN&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-      UserController.this.logger.error(&quot;User not known.&quot;);
-      UserController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  if (credentials.accesstype.equalsIgnoreCase(&quot;LOGIN&quot;).||(credentials.accesstype.equalsIgnoreCase(&quot;REGISTER&quot;)))
+    UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
+      val regLinkId: String = java.util.UUID.randomUUID().toString();
+      val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
+      val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
+      UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+        UserController.this.logger.error(&quot;User create error.&quot;);
+        UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+      })(((user: models.users.User) =&gt; {
+        val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+        UserController.this.collectionsService.createUserDefaultCollection(newUser);
+        UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
+        val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+        val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+        UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+        UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+          &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
+          &lt;artifact&gt; val x$9: String = token;
+          &lt;artifact&gt; val x$10: None.type = scala.None;
+          &lt;artifact&gt; val x$11: Boolean = false;
+          &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
+          &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+          &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
+          play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+        })
+      }))
     })(((user: models.users.User) =&gt; {
       val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
       val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
       UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
       UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
-        &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
-        &lt;artifact&gt; val x$9: String = token;
-        &lt;artifact&gt; val x$10: None.type = scala.None;
-        &lt;artifact&gt; val x$11: Boolean = false;
-        &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
-        &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
-        &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
-        play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+        &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+        &lt;artifact&gt; val x$16: String = token;
+        &lt;artifact&gt; val x$17: None.type = scala.None;
+        &lt;artifact&gt; val x$18: Boolean = false;
+        &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+        &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+        &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+        play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
       })
     }))
-    case &quot;REGISTER&quot; =&gt; UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-      val regLinkId: String = java.util.UUID.randomUUID().toString();
-      val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
-      val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
-      UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
-        UserController.this.logger.error(&quot;User create error.&quot;);
-        UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-      })(((user: models.users.User) =&gt; {
-        val emailWentOut: Boolean = UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId);
-        UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
-        UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-      }))
-    })(((user: models.users.User) =&gt; {
-      UserController.this.logger.error(&quot;Email already in use.&quot;);
-      UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-    }))
-    case _ =&gt; UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-  }
+  else
+    UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
 }
         </td>
       </tr><tr>
@@ -15695,63 +15761,63 @@ else
           535
         </td>
         <td>
-          1821
+          1823
         </td>
         <td>
-          21523
+          21527
           -
-          21545
+          21630
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          models.users.GAuthCredentials.accesstype
+          scala.Boolean.||
         </td>
         <td style="background: #F0ADAD">
-          credentials.accesstype
+          credentials.accesstype.equalsIgnoreCase(&quot;LOGIN&quot;).||(credentials.accesstype.equalsIgnoreCase(&quot;REGISTER&quot;))
         </td>
       </tr><tr>
         <td>
-          538
+          535
         </td>
         <td>
           1822
         </td>
         <td>
-          21652
+          21579
           -
-          21683
+          21630
         </td>
         <td>
           Apply
         </td>
         <td>
-          play.api.LoggerLike.error
+          java.lang.String.equalsIgnoreCase
         </td>
         <td style="background: #F0ADAD">
-          UserController.this.logger.error(&quot;User not known.&quot;)
+          credentials.accesstype.equalsIgnoreCase(&quot;REGISTER&quot;)
         </td>
       </tr><tr>
         <td>
-          539
+          535
         </td>
         <td>
-          1833
+          1821
         </td>
         <td>
-          21713
+          21567
           -
-          21799
+          21574
         </td>
         <td>
-          Apply
+          Literal
         </td>
         <td>
-          play.api.libs.json.Json.obj
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites)))
+          &quot;LOGIN&quot;
         </td>
       </tr><tr>
         <td>
@@ -15761,9 +15827,156 @@ else
           1824
         </td>
         <td>
-          21734
+          21784
           -
-          21739
+          21822
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #F0ADAD">
+          java.util.UUID.randomUUID().toString()
+        </td>
+      </tr><tr>
+        <td>
+          540
+        </td>
+        <td>
+          1825
+        </td>
+        <td>
+          21853
+          -
+          21890
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.PasswordHashing.createHash
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.passwordHashing.createHash(regLinkId)
+        </td>
+      </tr><tr>
+        <td>
+          542
+        </td>
+        <td>
+          1833
+        </td>
+        <td>
+          21920
+          -
+          22215
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.User.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)))
+        </td>
+      </tr><tr>
+        <td>
+          543
+        </td>
+        <td>
+          1826
+        </td>
+        <td>
+          21948
+          -
+          21967
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId)
+        </td>
+      </tr><tr>
+        <td>
+          544
+        </td>
+        <td>
+          1828
+        </td>
+        <td>
+          21985
+          -
+          22027
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          givenName.getOrElse[String](name.getOrElse[String](email))
+        </td>
+      </tr><tr>
+        <td>
+          544
+        </td>
+        <td>
+          1827
+        </td>
+        <td>
+          22005
+          -
+          22026
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          name.getOrElse[String](email)
+        </td>
+      </tr><tr>
+        <td>
+          545
+        </td>
+        <td>
+          1829
+        </td>
+        <td>
+          22045
+          -
+          22069
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          familyName.getOrElse[String](&quot;&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          547
+        </td>
+        <td>
+          1830
+        </td>
+        <td>
+          22114
+          -
+          22135
         </td>
         <td>
           Literal
@@ -15772,19 +15985,145 @@ else
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;ERR&quot;
+          &quot;ACTIVE:REGCONFIRMED&quot;
         </td>
       </tr><tr>
         <td>
-          539
+          548
         </td>
         <td>
-          1823
+          1832
         </td>
         <td>
-          21722
+          22153
           -
-          21730
+          22214
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZonedDateTime.withZoneSameInstant
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone))
+        </td>
+      </tr><tr>
+        <td>
+          548
+        </td>
+        <td>
+          1831
+        </td>
+        <td>
+          22191
+          -
+          22213
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZoneId.of(UserController.this.appTimeZone)
+        </td>
+      </tr><tr>
+        <td>
+          551
+        </td>
+        <td>
+          1834
+        </td>
+        <td>
+          22285
+          -
+          22319
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.logger.error(&quot;User create error.&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1842
+        </td>
+        <td>
+          22388
+          -
+          22388
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1841
+        </td>
+        <td>
+          22388
+          -
+          22408
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;User create error.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1844
+        </td>
+        <td>
+          22375
+          -
+          22408
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1835
+        </td>
+        <td>
+          22356
+          -
+          22364
         </td>
         <td>
           Literal
@@ -15797,36 +16136,15 @@ else
         </td>
       </tr><tr>
         <td>
-          539
+          552
         </td>
         <td>
-          1832
+          1838
         </td>
         <td>
-          21741
+          22368
           -
-          21798
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1826
-        </td>
-        <td>
-          21734
-          -
-          21739
+          22373
         </td>
         <td>
           ApplyToImplicitArgs
@@ -15839,15 +16157,15 @@ else
         </td>
       </tr><tr>
         <td>
-          539
+          552
         </td>
         <td>
-          1835
+          1847
         </td>
         <td>
-          21712
+          22346
           -
-          21712
+          22346
         </td>
         <td>
           ApplyToImplicitArgs
@@ -15860,78 +16178,15 @@ else
         </td>
       </tr><tr>
         <td>
-          539
+          552
         </td>
         <td>
-          1829
+          1846
         </td>
         <td>
-          21754
+          22346
           -
-          21798
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;User not known yet, please register first.&quot;
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1831
-        </td>
-        <td>
-          21754
-          -
-          21798
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1825
-        </td>
-        <td>
-          21734
-          -
-          21734
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1834
-        </td>
-        <td>
-          21712
-          -
-          21712
+          22346
         </td>
         <td>
           Select
@@ -15944,78 +16199,15 @@ else
         </td>
       </tr><tr>
         <td>
-          539
+          552
         </td>
         <td>
-          1828
+          1837
         </td>
         <td>
-          21741
+          22368
           -
-          21750
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1836
-        </td>
-        <td>
-          21700
-          -
-          21800
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1827
-        </td>
-        <td>
-          21722
-          -
-          21739
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          539
-        </td>
-        <td>
-          1830
-        </td>
-        <td>
-          21754
-          -
-          21754
+          22368
         </td>
         <td>
           Select
@@ -16028,15 +16220,141 @@ else
         </td>
       </tr><tr>
         <td>
-          540
+          552
         </td>
         <td>
-          1875
+          1840
         </td>
         <td>
-          21598
+          22375
           -
-          22378
+          22384
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1843
+        </td>
+        <td>
+          22388
+          -
+          22408
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1836
+        </td>
+        <td>
+          22368
+          -
+          22373
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ERR&quot;
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1845
+        </td>
+        <td>
+          22347
+          -
+          22409
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1839
+        </td>
+        <td>
+          22356
+          -
+          22373
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          552
+        </td>
+        <td>
+          1848
+        </td>
+        <td>
+          22336
+          -
+          22410
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          553
+        </td>
+        <td>
+          1894
+        </td>
+        <td>
+          22231
+          -
+          23461
         </td>
         <td>
           Apply
@@ -16045,10 +16363,13 @@ else
           scala.Option.fold
         </td>
         <td style="background: #F0ADAD">
-          UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-  UserController.this.logger.error(&quot;User not known.&quot;);
-  UserController.this.Unauthorized.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User not known yet, please register first.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+  UserController.this.logger.error(&quot;User create error.&quot;);
+  UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
 })(((user: models.users.User) =&gt; {
+  val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+  UserController.this.collectionsService.createUserDefaultCollection(newUser);
+  UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
   val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
   val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
   UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
@@ -16066,36 +16387,162 @@ else
         </td>
       </tr><tr>
         <td>
-          541
+          554
         </td>
         <td>
-          1838
+          1851
         </td>
         <td>
-          21917
+          22559
           -
-          21939
+          22576
         </td>
         <td>
           Select
         </td>
         <td>
-          controllers.Security.UserAgentHeaderDefault
+          models.users.User.firstname
         </td>
         <td style="background: #F0ADAD">
-          UserController.this.UserAgentHeaderDefault
+          newUser.firstname
         </td>
       </tr><tr>
         <td>
-          541
+          554
         </td>
         <td>
-          1837
+          1850
         </td>
         <td>
-          21890
+          22522
           -
-          21905
+          22557
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Your GW HUB account is now active&quot;
+        </td>
+      </tr><tr>
+        <td>
+          554
+        </td>
+        <td>
+          1849
+        </td>
+        <td>
+          22507
+          -
+          22520
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          newUser.email
+        </td>
+      </tr><tr>
+        <td>
+          554
+        </td>
+        <td>
+          1852
+        </td>
+        <td>
+          22472
+          -
+          22577
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.EmailService.sendConfirmationEmail
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname)
+        </td>
+      </tr><tr>
+        <td>
+          556
+        </td>
+        <td>
+          1853
+        </td>
+        <td>
+          22663
+          -
+          22718
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.OwcCollectionsService.createUserDefaultCollection
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.collectionsService.createUserDefaultCollection(newUser)
+        </td>
+      </tr><tr>
+        <td>
+          558
+        </td>
+        <td>
+          1855
+        </td>
+        <td>
+          22736
+          -
+          22801
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.info
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut))
+        </td>
+      </tr><tr>
+        <td>
+          558
+        </td>
+        <td>
+          1854
+        </td>
+        <td>
+          22748
+          -
+          22800
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut)
+        </td>
+      </tr><tr>
+        <td>
+          561
+        </td>
+        <td>
+          1856
+        </td>
+        <td>
+          22973
+          -
+          22988
         </td>
         <td>
           Select
@@ -16108,15 +16555,15 @@ else
         </td>
       </tr><tr>
         <td>
-          541
+          561
         </td>
         <td>
-          1839
+          1858
         </td>
         <td>
-          21870
+          22953
           -
-          21940
+          23023
         </td>
         <td>
           Apply
@@ -16129,15 +16576,57 @@ else
         </td>
       </tr><tr>
         <td>
-          543
+          561
         </td>
         <td>
-          1841
+          1857
         </td>
         <td>
-          22041
+          23000
           -
-          22102
+          23022
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.UserAgentHeaderDefault
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.UserAgentHeaderDefault
+        </td>
+      </tr><tr>
+        <td>
+          563
+        </td>
+        <td>
+          1859
+        </td>
+        <td>
+          23160
+          -
+          23170
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          user.email
+        </td>
+      </tr><tr>
+        <td>
+          563
+        </td>
+        <td>
+          1860
+        </td>
+        <td>
+          23124
+          -
+          23185
         </td>
         <td>
           Apply
@@ -16150,78 +16639,15 @@ else
         </td>
       </tr><tr>
         <td>
-          543
+          564
         </td>
         <td>
-          1840
+          1862
         </td>
         <td>
-          22077
+          23208
           -
-          22087
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.User.email
-        </td>
-        <td style="background: #F0ADAD">
-          user.email
-        </td>
-      </tr><tr>
-        <td>
-          544
-        </td>
-        <td>
-          1842
-        </td>
-        <td>
-          22136
-          -
-          22146
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.User.email
-        </td>
-        <td style="background: #F0ADAD">
-          user.email
-        </td>
-      </tr><tr>
-        <td>
-          544
-        </td>
-        <td>
-          1844
-        </td>
-        <td>
-          22119
-          -
-          22147
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.cache.CacheApi.set
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3)
-        </td>
-      </tr><tr>
-        <td>
-          544
-        </td>
-        <td>
-          1843
-        </td>
-        <td>
-          22125
-          -
-          22125
+          23208
         </td>
         <td>
           Select
@@ -16234,204 +16660,15 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          564
         </td>
         <td>
-          1851
+          1861
         </td>
         <td>
-          22205
+          23219
           -
-          22205
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1859
-        </td>
-        <td>
-          22235
-          -
-          22248
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;userprofile&quot;
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1850
-        </td>
-        <td>
-          22194
-          -
-          22201
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;token&quot;
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1853
-        </td>
-        <td>
-          22194
-          -
-          22210
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1862
-        </td>
-        <td>
-          22252
-          -
-          22270
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites)
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1865
-        </td>
-        <td>
-          22166
-          -
-          22166
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1856
-        </td>
-        <td>
-          22228
-          -
-          22228
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1847
-        </td>
-        <td>
-          22188
-          -
-          22188
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1846
-        </td>
-        <td>
-          22188
-          -
-          22192
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;OK&quot;
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1855
-        </td>
-        <td>
-          22223
-          -
-          22233
+          23229
         </td>
         <td>
           Select
@@ -16444,15 +16681,36 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          564
         </td>
         <td>
-          1864
+          1863
         </td>
         <td>
-          22167
+          23202
           -
-          22271
+          23230
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.cache.CacheApi.set
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3)
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1883
+        </td>
+        <td>
+          23250
+          -
+          23354
         </td>
         <td>
           Apply
@@ -16465,36 +16723,36 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1849
+          1874
         </td>
         <td>
-          22176
+          23306
           -
-          22192
+          23316
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          scala.Predef.ArrowAssoc.-&gt;
+          models.users.User.email
         </td>
         <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+          user.email
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1858
+          1877
         </td>
         <td>
-          22212
+          23295
           -
-          22233
+          23316
         </td>
         <td>
           Apply
@@ -16507,15 +16765,36 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1852
+          1868
         </td>
         <td>
-          22205
+          23259
           -
-          22210
+          23275
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1871
+        </td>
+        <td>
+          23288
+          -
+          23293
         </td>
         <td>
           ApplyToImplicitArgs
@@ -16528,15 +16807,15 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1861
+          1880
         </td>
         <td>
-          22268
+          23351
           -
-          22268
+          23351
         </td>
         <td>
           Select
@@ -16549,36 +16828,15 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1860
+          1865
         </td>
         <td>
-          22252
+          23271
           -
-          22270
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.users.User.asProfileJs
-        </td>
-        <td style="background: #F0ADAD">
-          user.asProfileJs()
-        </td>
-      </tr><tr>
-        <td>
-          545
-        </td>
-        <td>
-          1845
-        </td>
-        <td>
-          22176
-          -
-          22184
+          23275
         </td>
         <td>
           Literal
@@ -16587,19 +16845,19 @@ else
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;status&quot;
+          &quot;OK&quot;
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1854
+          1873
         </td>
         <td>
-          22212
+          23295
           -
-          22219
+          23302
         </td>
         <td>
           Literal
@@ -16612,15 +16870,15 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1863
+          1882
         </td>
         <td>
-          22235
+          23318
           -
-          22270
+          23353
         </td>
         <td>
           Apply
@@ -16633,36 +16891,36 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1848
+          1864
         </td>
         <td>
-          22188
+          23259
           -
-          22192
+          23267
         </td>
         <td>
-          ApplyToImplicitArgs
+          Literal
         </td>
         <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+          &quot;status&quot;
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1857
+          1876
         </td>
         <td>
-          22223
+          23306
           -
-          22233
+          23316
         </td>
         <td>
           ApplyToImplicitArgs
@@ -16675,15 +16933,15 @@ else
         </td>
       </tr><tr>
         <td>
-          545
+          565
         </td>
         <td>
-          1866
+          1885
         </td>
         <td>
-          22166
+          23249
           -
-          22166
+          23249
         </td>
         <td>
           ApplyToImplicitArgs
@@ -16696,15 +16954,372 @@ else
         </td>
       </tr><tr>
         <td>
-          546
+          565
         </td>
         <td>
-          1874
+          1867
         </td>
         <td>
-          22164
+          23271
           -
-          22362
+          23275
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1870
+        </td>
+        <td>
+          23288
+          -
+          23288
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1879
+        </td>
+        <td>
+          23335
+          -
+          23353
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.User.asProfileJs
+        </td>
+        <td style="background: #F0ADAD">
+          user.asProfileJs()
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1878
+        </td>
+        <td>
+          23318
+          -
+          23331
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;userprofile&quot;
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1869
+        </td>
+        <td>
+          23277
+          -
+          23284
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;token&quot;
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1881
+        </td>
+        <td>
+          23335
+          -
+          23353
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites)
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1872
+        </td>
+        <td>
+          23277
+          -
+          23293
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1875
+        </td>
+        <td>
+          23311
+          -
+          23311
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1884
+        </td>
+        <td>
+          23249
+          -
+          23249
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          565
+        </td>
+        <td>
+          1866
+        </td>
+        <td>
+          23271
+          -
+          23271
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1892
+        </td>
+        <td>
+          23387
+          -
+          23444
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1886
+        </td>
+        <td>
+          23394
+          -
+          23412
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.AuthTokenCookieKey
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.AuthTokenCookieKey
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1889
+        </td>
+        <td>
+          23387
+          -
+          23387
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1891
+        </td>
+        <td>
+          23387
+          -
+          23387
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1888
+        </td>
+        <td>
+          23438
+          -
+          23443
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1887
+        </td>
+        <td>
+          23421
+          -
+          23425
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1890
+        </td>
+        <td>
+          23387
+          -
+          23387
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          566
+        </td>
+        <td>
+          1893
+        </td>
+        <td>
+          23247
+          -
+          23445
         </td>
         <td>
           Apply
@@ -16726,687 +17341,75 @@ else
         </td>
       </tr><tr>
         <td>
-          546
+          569
         </td>
         <td>
-          1868
+          1934
         </td>
         <td>
-          22338
+          21647
           -
-          22342
+          24025
         </td>
         <td>
-          Select
+          Block
         </td>
         <td>
-          scala.None
+          scala.Option.fold
         </td>
         <td style="background: #F0ADAD">
-          scala.None
+          UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
+  val regLinkId: String = java.util.UUID.randomUUID().toString();
+  val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
+  val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
+  UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+    UserController.this.logger.error(&quot;User create error.&quot;);
+    UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  })(((user: models.users.User) =&gt; {
+    val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+    UserController.this.collectionsService.createUserDefaultCollection(newUser);
+    UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
+    val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+    val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+    UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+    UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+      &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
+      &lt;artifact&gt; val x$9: String = token;
+      &lt;artifact&gt; val x$10: None.type = scala.None;
+      &lt;artifact&gt; val x$11: Boolean = false;
+      &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
+      &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+      &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
+      play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+    })
+  }))
+})(((user: models.users.User) =&gt; {
+  val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+  val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+  UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+  UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+    &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+    &lt;artifact&gt; val x$16: String = token;
+    &lt;artifact&gt; val x$17: None.type = scala.None;
+    &lt;artifact&gt; val x$18: Boolean = false;
+    &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+    &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+    &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+    play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
+  })
+}))
         </td>
       </tr><tr>
         <td>
-          546
+          569
         </td>
         <td>
-          1871
+          1933
         </td>
         <td>
-          22304
+          21647
           -
-          22304
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Cookie.apply$default$5
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.mvc.Cookie.apply$default$5
-        </td>
-      </tr><tr>
-        <td>
-          546
-        </td>
-        <td>
-          1873
-        </td>
-        <td>
-          22304
-          -
-          22361
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Cookie.apply
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
-        </td>
-      </tr><tr>
-        <td>
-          546
-        </td>
-        <td>
-          1867
-        </td>
-        <td>
-          22311
-          -
-          22329
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.Security.AuthTokenCookieKey
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.AuthTokenCookieKey
-        </td>
-      </tr><tr>
-        <td>
-          546
-        </td>
-        <td>
-          1870
-        </td>
-        <td>
-          22304
-          -
-          22304
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Cookie.apply$default$4
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.mvc.Cookie.apply$default$4
-        </td>
-      </tr><tr>
-        <td>
-          546
-        </td>
-        <td>
-          1869
-        </td>
-        <td>
-          22355
-          -
-          22360
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          false
-        </td>
-      </tr><tr>
-        <td>
-          546
-        </td>
-        <td>
-          1872
-        </td>
-        <td>
-          22304
-          -
-          22304
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Cookie.apply$default$6
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.mvc.Cookie.apply$default$6
-        </td>
-      </tr><tr>
-        <td>
-          553
-        </td>
-        <td>
-          1876
-        </td>
-        <td>
-          22596
-          -
-          22634
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #F0ADAD">
-          java.util.UUID.randomUUID().toString()
-        </td>
-      </tr><tr>
-        <td>
-          554
-        </td>
-        <td>
-          1877
-        </td>
-        <td>
-          22667
-          -
-          22704
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          utils.PasswordHashing.createHash
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.passwordHashing.createHash(regLinkId)
-        </td>
-      </tr><tr>
-        <td>
-          556
-        </td>
-        <td>
-          1885
-        </td>
-        <td>
-          22736
-          -
-          23046
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.users.User.apply
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)))
-        </td>
-      </tr><tr>
-        <td>
-          557
-        </td>
-        <td>
-          1878
-        </td>
-        <td>
-          22766
-          -
-          22785
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId)
-        </td>
-      </tr><tr>
-        <td>
-          558
-        </td>
-        <td>
-          1880
-        </td>
-        <td>
-          22805
-          -
-          22847
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          givenName.getOrElse[String](name.getOrElse[String](email))
-        </td>
-      </tr><tr>
-        <td>
-          558
-        </td>
-        <td>
-          1879
-        </td>
-        <td>
-          22825
-          -
-          22846
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          name.getOrElse[String](email)
-        </td>
-      </tr><tr>
-        <td>
-          559
-        </td>
-        <td>
-          1881
-        </td>
-        <td>
-          22867
-          -
-          22891
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          familyName.getOrElse[String](&quot;&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          561
-        </td>
-        <td>
-          1882
-        </td>
-        <td>
-          22940
-          -
-          22964
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId)
-        </td>
-      </tr><tr>
-        <td>
-          562
-        </td>
-        <td>
-          1883
-        </td>
-        <td>
-          23022
-          -
-          23044
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZoneId.of
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZoneId.of(UserController.this.appTimeZone)
-        </td>
-      </tr><tr>
-        <td>
-          562
-        </td>
-        <td>
-          1884
-        </td>
-        <td>
-          22984
-          -
-          23045
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZonedDateTime.withZoneSameInstant
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone))
-        </td>
-      </tr><tr>
-        <td>
-          565
-        </td>
-        <td>
-          1886
-        </td>
-        <td>
-          23120
-          -
-          23154
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.error
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.logger.error(&quot;User create error.&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1892
-        </td>
-        <td>
-          23212
-          -
-          23221
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1895
-        </td>
-        <td>
-          23225
-          -
-          23245
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1889
-        </td>
-        <td>
-          23205
-          -
-          23205
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1898
-        </td>
-        <td>
-          23183
-          -
-          23183
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1897
-        </td>
-        <td>
-          23184
-          -
-          23246
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.Json.obj
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites)))
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1891
-        </td>
-        <td>
-          23193
-          -
-          23210
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1900
-        </td>
-        <td>
-          23173
-          -
-          23247
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1894
-        </td>
-        <td>
-          23225
-          -
-          23225
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1888
-        </td>
-        <td>
-          23205
-          -
-          23210
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;ERR&quot;
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1896
-        </td>
-        <td>
-          23212
-          -
-          23245
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1887
-        </td>
-        <td>
-          23193
-          -
-          23201
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1890
-        </td>
-        <td>
-          23205
-          -
-          23210
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1899
-        </td>
-        <td>
-          23183
-          -
-          23183
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          566
-        </td>
-        <td>
-          1893
-        </td>
-        <td>
-          23225
-          -
-          23245
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;User create error.&quot;
-        </td>
-      </tr><tr>
-        <td>
-          567
-        </td>
-        <td>
-          1913
-        </td>
-        <td>
-          23064
-          -
-          23712
+          24025
         </td>
         <td>
           Apply
@@ -17415,236 +17418,226 @@ else
           scala.Option.fold
         </td>
         <td style="background: #F0ADAD">
-          UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
-  UserController.this.logger.error(&quot;User create error.&quot;);
-  UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+          UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
+  val regLinkId: String = java.util.UUID.randomUUID().toString();
+  val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
+  val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, &quot;ACTIVE:REGCONFIRMED&quot;, java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
+  UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
+    UserController.this.logger.error(&quot;User create error.&quot;);
+    UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  })(((user: models.users.User) =&gt; {
+    val emailWentOut: Boolean = UserController.this.emailService.sendConfirmationEmail(newUser.email, &quot;Your GW HUB account is now active&quot;, newUser.firstname);
+    UserController.this.collectionsService.createUserDefaultCollection(newUser);
+    UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
+    val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+    val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+    UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+    UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+      &lt;artifact&gt; val x$8: String = UserController.this.AuthTokenCookieKey;
+      &lt;artifact&gt; val x$9: String = token;
+      &lt;artifact&gt; val x$10: None.type = scala.None;
+      &lt;artifact&gt; val x$11: Boolean = false;
+      &lt;artifact&gt; val x$12: String = play.api.mvc.Cookie.apply$default$4;
+      &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+      &lt;artifact&gt; val x$14: Boolean = play.api.mvc.Cookie.apply$default$6;
+      play.api.mvc.Cookie.apply(x$8, x$9, x$10, x$12, x$13, x$14, x$11)
+    })
+  }))
 })(((user: models.users.User) =&gt; {
-  val emailWentOut: Boolean = UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId);
-  UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
-  UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  val uaIdentifier: String = request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault);
+  val token: String = UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier);
+  UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3);
+  UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+    &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+    &lt;artifact&gt; val x$16: String = token;
+    &lt;artifact&gt; val x$17: None.type = scala.None;
+    &lt;artifact&gt; val x$18: Boolean = false;
+    &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+    &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+    &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+    play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
+  })
 }))
-        </td>
-      </tr><tr>
-        <td>
-          568
-        </td>
-        <td>
-          1901
-        </td>
-        <td>
-          23355
-          -
-          23391
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;Please confirm your GW HUB account&quot;
-        </td>
-      </tr><tr>
-        <td>
-          568
-        </td>
-        <td>
-          1904
-        </td>
-        <td>
-          23313
-          -
-          23447
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          services.EmailService.sendRegistrationEmail
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId)
-        </td>
-      </tr><tr>
-        <td>
-          568
-        </td>
-        <td>
-          1903
-        </td>
-        <td>
-          23393
-          -
-          23435
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          givenName.getOrElse[String](name.getOrElse[String](email))
-        </td>
-      </tr><tr>
-        <td>
-          568
-        </td>
-        <td>
-          1902
-        </td>
-        <td>
-          23413
-          -
-          23434
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          name.getOrElse[String](email)
-        </td>
-      </tr><tr>
-        <td>
-          569
-        </td>
-        <td>
-          1906
-        </td>
-        <td>
-          23466
-          -
-          23531
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.info
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut))
-        </td>
-      </tr><tr>
-        <td>
-          569
-        </td>
-        <td>
-          1905
-        </td>
-        <td>
-          23478
-          -
-          23530
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut)
         </td>
       </tr><tr>
         <td>
           571
         </td>
         <td>
-          1910
+          1895
         </td>
         <td>
-          23661
+          23549
           -
-          23661
+          23564
         </td>
         <td>
           Select
         </td>
         <td>
-          play.api.mvc.Codec.utf_8
+          controllers.Security.UserAgentHeader
         </td>
         <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
+          UserController.this.UserAgentHeader
         </td>
       </tr><tr>
         <td>
           571
         </td>
         <td>
-          1907
+          1897
         </td>
         <td>
-          23674
+          23529
           -
-          23692
+          23599
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.users.User.asProfileJs
+          scala.Option.getOrElse
         </td>
         <td style="background: #F0ADAD">
-          user.asProfileJs()
+          request.headers.get(UserController.this.UserAgentHeader).getOrElse[String](UserController.this.UserAgentHeaderDefault)
         </td>
       </tr><tr>
         <td>
           571
         </td>
         <td>
-          1909
+          1896
         </td>
         <td>
-          23662
+          23576
           -
-          23693
+          23598
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          play.api.libs.json.Json.toJson
+          controllers.Security.UserAgentHeaderDefault
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites)
+          UserController.this.UserAgentHeaderDefault
         </td>
       </tr><tr>
         <td>
-          571
+          573
         </td>
         <td>
-          1912
+          1898
         </td>
         <td>
-          23659
+          23732
           -
-          23694
+          23742
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          play.api.mvc.Results.Status.apply
+          models.users.User.email
         </td>
         <td style="background: #F0ADAD">
-          UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+          user.email
         </td>
       </tr><tr>
         <td>
-          571
+          573
         </td>
         <td>
-          1908
+          1899
         </td>
         <td>
-          23673
+          23696
           -
-          23673
+          23757
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.PasswordHashing.createSessionCookie
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.passwordHashing.createSessionCookie(user.email, uaIdentifier)
+        </td>
+      </tr><tr>
+        <td>
+          574
+        </td>
+        <td>
+          1901
+        </td>
+        <td>
+          23778
+          -
+          23778
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.cache.CacheApi.set$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.cache.set$default$3
+        </td>
+      </tr><tr>
+        <td>
+          574
+        </td>
+        <td>
+          1900
+        </td>
+        <td>
+          23789
+          -
+          23799
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          user.email
+        </td>
+      </tr><tr>
+        <td>
+          574
+        </td>
+        <td>
+          1902
+        </td>
+        <td>
+          23772
+          -
+          23800
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.cache.CacheApi.set
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.cache.set(token, user.email, UserController.this.cache.set$default$3)
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1919
+        </td>
+        <td>
+          23919
+          -
+          23919
         </td>
         <td>
           Select
@@ -17657,15 +17650,183 @@ else
         </td>
       </tr><tr>
         <td>
-          571
+          575
         </td>
         <td>
-          1911
+          1910
         </td>
         <td>
-          23661
+          23856
           -
-          23661
+          23861
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1904
+        </td>
+        <td>
+          23839
+          -
+          23843
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1913
+        </td>
+        <td>
+          23874
+          -
+          23884
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          user.email
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1922
+        </td>
+        <td>
+          23818
+          -
+          23922
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1907
+        </td>
+        <td>
+          23827
+          -
+          23843
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1916
+        </td>
+        <td>
+          23863
+          -
+          23884
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1906
+        </td>
+        <td>
+          23839
+          -
+          23843
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1915
+        </td>
+        <td>
+          23874
+          -
+          23884
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1924
+        </td>
+        <td>
+          23817
+          -
+          23817
         </td>
         <td>
           ApplyToImplicitArgs
@@ -17678,114 +17839,15 @@ else
         </td>
       </tr><tr>
         <td>
-          573
-        </td>
-        <td>
-          1929
-        </td>
-        <td>
-          22477
-          -
-          23956
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.fold
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.userDAO.findUserByEmail(email).fold[play.api.mvc.Result]({
-  val regLinkId: String = java.util.UUID.randomUUID().toString();
-  val cryptPass: String = UserController.this.passwordHashing.createHash(regLinkId);
-  val newUser: models.users.User = models.users.User.apply(email, scala.StringContext.apply(&quot;google:&quot;, &quot;&quot;).s(userId), givenName.getOrElse[String](name.getOrElse[String](email)), familyName.getOrElse[String](&quot;&quot;), cryptPass, scala.StringContext.apply(&quot;REGISTERED:&quot;, &quot;&quot;).s(regLinkId), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserController.this.appTimeZone)));
-  UserController.this.userDAO.createWithNps(newUser).fold[play.api.mvc.Result]({
-    UserController.this.logger.error(&quot;User create error.&quot;);
-    UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;User create error.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-  })(((user: models.users.User) =&gt; {
-    val emailWentOut: Boolean = UserController.this.emailService.sendRegistrationEmail(email, &quot;Please confirm your GW HUB account&quot;, givenName.getOrElse[String](name.getOrElse[String](email)), regLinkId);
-    UserController.this.logger.info(scala.StringContext.apply(&quot;New user registered. Email went out &quot;, &quot;&quot;).s(emailWentOut));
-    UserController.this.Ok.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-  }))
-})(((user: models.users.User) =&gt; {
-  UserController.this.logger.error(&quot;Email already in use.&quot;);
-  UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-}))
-        </td>
-      </tr><tr>
-        <td>
           575
         </td>
         <td>
-          1914
+          1909
         </td>
         <td>
-          23809
+          23856
           -
-          23846
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.error
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.logger.error(&quot;Email already in use.&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1928
-        </td>
-        <td>
-          23863
-          -
-          23940
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1919
-        </td>
-        <td>
-          23883
-          -
-          23900
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1922
-        </td>
-        <td>
-          23915
-          -
-          23915
+          23856
         </td>
         <td>
           Select
@@ -17798,36 +17860,36 @@ else
         </td>
       </tr><tr>
         <td>
-          576
+          575
         </td>
         <td>
-          1925
+          1918
         </td>
         <td>
-          23874
+          23903
           -
-          23939
+          23921
         </td>
         <td>
           Apply
         </td>
         <td>
-          play.api.libs.json.Json.obj
+          models.users.User.asProfileJs
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites)))
+          user.asProfileJs()
         </td>
       </tr><tr>
         <td>
-          576
+          575
         </td>
         <td>
-          1916
+          1912
         </td>
         <td>
-          23895
+          23863
           -
-          23900
+          23870
         </td>
         <td>
           Literal
@@ -17836,19 +17898,40 @@ else
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;ERR&quot;
+          &quot;email&quot;
         </td>
       </tr><tr>
         <td>
-          576
+          575
         </td>
         <td>
-          1915
+          1921
         </td>
         <td>
-          23883
+          23886
           -
-          23891
+          23921
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))
+        </td>
+      </tr><tr>
+        <td>
+          575
+        </td>
+        <td>
+          1903
+        </td>
+        <td>
+          23827
+          -
+          23835
         </td>
         <td>
           Literal
@@ -17861,120 +17944,15 @@ else
         </td>
       </tr><tr>
         <td>
-          576
-        </td>
-        <td>
-          1924
-        </td>
-        <td>
-          23902
-          -
-          23938
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1918
-        </td>
-        <td>
-          23895
-          -
-          23900
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1927
-        </td>
-        <td>
-          23873
-          -
-          23873
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1921
-        </td>
-        <td>
-          23915
-          -
-          23938
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;Email already in use.&quot;
-        </td>
-      </tr><tr>
-        <td>
-          576
+          575
         </td>
         <td>
           1920
         </td>
         <td>
-          23902
+          23903
           -
-          23911
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          576
-        </td>
-        <td>
-          1923
-        </td>
-        <td>
-          23915
-          -
-          23938
+          23921
         </td>
         <td>
           ApplyToImplicitArgs
@@ -17983,19 +17961,19 @@ else
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;Email already in use.&quot;)(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites)
         </td>
       </tr><tr>
         <td>
-          576
+          575
         </td>
         <td>
-          1917
+          1914
         </td>
         <td>
-          23895
+          23879
           -
-          23895
+          23879
         </td>
         <td>
           Select
@@ -18008,15 +17986,15 @@ else
         </td>
       </tr><tr>
         <td>
-          576
+          575
         </td>
         <td>
-          1926
+          1923
         </td>
         <td>
-          23873
+          23817
           -
-          23873
+          23817
         </td>
         <td>
           Select
@@ -18029,57 +18007,15 @@ else
         </td>
       </tr><tr>
         <td>
-          580
+          575
         </td>
         <td>
-          1934
+          1905
         </td>
         <td>
-          24014
+          23839
           -
-          24031
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1943
-        </td>
-        <td>
-          23994
-          -
-          24078
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1937
-        </td>
-        <td>
-          24046
-          -
-          24046
+          23839
         </td>
         <td>
           Select
@@ -18092,36 +18028,15 @@ else
         </td>
       </tr><tr>
         <td>
-          580
+          575
         </td>
         <td>
-          1940
+          1917
         </td>
         <td>
-          24005
+          23886
           -
-          24077
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.Json.obj
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites)))
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1931
-        </td>
-        <td>
-          24026
-          -
-          24031
+          23899
         </td>
         <td>
           Literal
@@ -18130,61 +18045,19 @@ else
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;ERR&quot;
+          &quot;userprofile&quot;
         </td>
       </tr><tr>
         <td>
-          580
+          575
         </td>
         <td>
-          1933
+          1908
         </td>
         <td>
-          24026
+          23845
           -
-          24031
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1942
-        </td>
-        <td>
-          24004
-          -
-          24004
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1936
-        </td>
-        <td>
-          24046
-          -
-          24076
+          23852
         </td>
         <td>
           Literal
@@ -18193,40 +18066,19 @@ else
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;invalid accesstype requested&quot;
+          &quot;token&quot;
         </td>
       </tr><tr>
         <td>
-          580
+          575
         </td>
         <td>
-          1930
+          1911
         </td>
         <td>
-          24014
+          23845
           -
-          24022
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          580
-        </td>
-        <td>
-          1939
-        </td>
-        <td>
-          24033
-          -
-          24076
+          23861
         </td>
         <td>
           Apply
@@ -18235,19 +18087,196 @@ else
           scala.Predef.ArrowAssoc.-&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))
+          scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites))
         </td>
       </tr><tr>
         <td>
-          580
+          576
         </td>
         <td>
-          1938
+          1928
         </td>
         <td>
-          24046
+          23953
           -
-          24076
+          23953
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1931
+        </td>
+        <td>
+          23953
+          -
+          24010
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1925
+        </td>
+        <td>
+          23960
+          -
+          23978
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.AuthTokenCookieKey
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.AuthTokenCookieKey
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1927
+        </td>
+        <td>
+          24004
+          -
+          24009
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1930
+        </td>
+        <td>
+          23953
+          -
+          23953
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1929
+        </td>
+        <td>
+          23953
+          -
+          23953
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1932
+        </td>
+        <td>
+          23815
+          -
+          24011
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.withCookies
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs())(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+  &lt;artifact&gt; val x$15: String = UserController.this.AuthTokenCookieKey;
+  &lt;artifact&gt; val x$16: String = token;
+  &lt;artifact&gt; val x$17: None.type = scala.None;
+  &lt;artifact&gt; val x$18: Boolean = false;
+  &lt;artifact&gt; val x$19: String = play.api.mvc.Cookie.apply$default$4;
+  &lt;artifact&gt; val x$20: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+  &lt;artifact&gt; val x$21: Boolean = play.api.mvc.Cookie.apply$default$6;
+  play.api.mvc.Cookie.apply(x$15, x$16, x$17, x$19, x$20, x$21, x$18)
+})
+        </td>
+      </tr><tr>
+        <td>
+          576
+        </td>
+        <td>
+          1926
+        </td>
+        <td>
+          23987
+          -
+          23991
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1943
+        </td>
+        <td>
+          24109
+          -
+          24139
         </td>
         <td>
           ApplyToImplicitArgs
@@ -18260,15 +18289,15 @@ else
         </td>
       </tr><tr>
         <td>
-          580
+          579
         </td>
         <td>
-          1941
+          1946
         </td>
         <td>
-          24004
+          24067
           -
-          24004
+          24067
         </td>
         <td>
           Select
@@ -18281,15 +18310,15 @@ else
         </td>
       </tr><tr>
         <td>
-          580
+          579
         </td>
         <td>
-          1932
+          1937
         </td>
         <td>
-          24026
+          24089
           -
-          24026
+          24089
         </td>
         <td>
           Select
@@ -18302,15 +18331,15 @@ else
         </td>
       </tr><tr>
         <td>
-          580
+          579
         </td>
         <td>
-          1935
+          1940
         </td>
         <td>
-          24033
+          24096
           -
-          24042
+          24105
         </td>
         <td>
           Literal
@@ -18323,15 +18352,246 @@ else
         </td>
       </tr><tr>
         <td>
-          593
+          579
         </td>
         <td>
-          1955
+          1949
         </td>
         <td>
-          24208
+          24057
           -
-          24443
+          24141
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1942
+        </td>
+        <td>
+          24109
+          -
+          24109
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1945
+        </td>
+        <td>
+          24068
+          -
+          24140
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1936
+        </td>
+        <td>
+          24089
+          -
+          24094
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ERR&quot;
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1948
+        </td>
+        <td>
+          24057
+          -
+          24141
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserController.this.BadRequest.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1939
+        </td>
+        <td>
+          24077
+          -
+          24094
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1938
+        </td>
+        <td>
+          24089
+          -
+          24094
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;ERR&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1947
+        </td>
+        <td>
+          24067
+          -
+          24067
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1941
+        </td>
+        <td>
+          24109
+          -
+          24139
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;invalid accesstype requested&quot;
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1935
+        </td>
+        <td>
+          24077
+          -
+          24085
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          579
+        </td>
+        <td>
+          1944
+        </td>
+        <td>
+          24096
+          -
+          24139
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;invalid accesstype requested&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          641
+        </td>
+        <td>
+          1961
+        </td>
+        <td>
+          26942
+          -
+          27177
         </td>
         <td>
           Apply
@@ -18347,15 +18607,15 @@ else
         </td>
       </tr><tr>
         <td>
-          593
+          641
         </td>
         <td>
-          1947
+          1953
         </td>
         <td>
-          24217
+          26951
           -
-          24228
+          26962
         </td>
         <td>
           Select
@@ -18368,15 +18628,15 @@ else
         </td>
       </tr><tr>
         <td>
-          597
+          645
         </td>
         <td>
-          1948
+          1954
         </td>
         <td>
-          24298
+          27032
           -
-          24317
+          27051
         </td>
         <td>
           Apply
@@ -18389,36 +18649,15 @@ else
         </td>
       </tr><tr>
         <td>
-          599
+          647
         </td>
         <td>
-          1952
+          1955
         </td>
         <td>
-          24395
+          27153
           -
-          24395
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.DiscardingCookie.apply$default$4
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.mvc.DiscardingCookie.apply$default$4
-        </td>
-      </tr><tr>
-        <td>
-          599
-        </td>
-        <td>
-          1949
-        </td>
-        <td>
-          24419
-          -
-          24437
+          27171
         </td>
         <td>
           Select
@@ -18431,15 +18670,36 @@ else
         </td>
       </tr><tr>
         <td>
-          599
+          647
         </td>
         <td>
-          1951
+          1958
         </td>
         <td>
-          24395
+          27129
           -
-          24395
+          27129
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.DiscardingCookie.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.DiscardingCookie.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          647
+        </td>
+        <td>
+          1957
+        </td>
+        <td>
+          27129
+          -
+          27129
         </td>
         <td>
           Select
@@ -18452,15 +18712,15 @@ else
         </td>
       </tr><tr>
         <td>
-          599
+          647
         </td>
         <td>
-          1954
+          1960
         </td>
         <td>
-          24374
+          27108
           -
-          24439
+          27173
         </td>
         <td>
           Apply
@@ -18473,15 +18733,15 @@ else
         </td>
       </tr><tr>
         <td>
-          599
+          647
         </td>
         <td>
-          1950
+          1956
         </td>
         <td>
-          24395
+          27129
           -
-          24395
+          27129
         </td>
         <td>
           Select
@@ -18494,15 +18754,15 @@ else
         </td>
       </tr><tr>
         <td>
-          599
+          647
         </td>
         <td>
-          1953
+          1959
         </td>
         <td>
-          24395
+          27129
           -
-          24438
+          27172
         </td>
         <td>
           Apply
@@ -18515,15 +18775,15 @@ else
         </td>
       </tr><tr>
         <td>
-          606
+          654
         </td>
         <td>
-          1960
+          1966
         </td>
         <td>
-          24501
+          27235
           -
-          24540
+          27274
         </td>
         <td>
           Apply
@@ -18536,15 +18796,15 @@ else
         </td>
       </tr><tr>
         <td>
-          607
+          655
         </td>
         <td>
-          1958
+          1964
         </td>
         <td>
-          24514
+          27248
           -
-          24514
+          27248
         </td>
         <td>
           Select
@@ -18557,15 +18817,15 @@ else
         </td>
       </tr><tr>
         <td>
-          607
+          655
         </td>
         <td>
-          1957
+          1963
         </td>
         <td>
-          24514
+          27248
           -
-          24514
+          27248
         </td>
         <td>
           Select
@@ -18578,36 +18838,15 @@ else
         </td>
       </tr><tr>
         <td>
-          607
+          655
         </td>
         <td>
-          1956
+          1965
         </td>
         <td>
-          24523
+          27248
           -
-          24535
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;/#/account&quot;
-        </td>
-      </tr><tr>
-        <td>
-          607
-        </td>
-        <td>
-          1959
-        </td>
-        <td>
-          24514
-          -
-          24536
+          27270
         </td>
         <td>
           Apply
@@ -18617,6 +18856,27 @@ else
         </td>
         <td style="background: #F0ADAD">
           UserController.this.Redirect(&quot;/#/account&quot;, UserController.this.Redirect$default$2, UserController.this.Redirect$default$3)
+        </td>
+      </tr><tr>
+        <td>
+          655
+        </td>
+        <td>
+          1962
+        </td>
+        <td>
+          27257
+          -
+          27269
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;/#/account&quot;
         </td>
       </tr>
     </table>

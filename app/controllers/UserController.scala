@@ -532,7 +532,55 @@ class UserController @Inject()(config: Configuration,
 
           logger.debug(s"payload.toPrettyString: ${payload.toPrettyString}")
 
-          credentials.accesstype match {
+          if (credentials.accesstype.equalsIgnoreCase("LOGIN") || credentials.accesstype.equalsIgnoreCase("REGISTER")) {
+
+            userDAO.findUserByEmail(email).fold {
+              // well, must be a new user coming through from Google
+              val regLinkId = java.util.UUID.randomUUID().toString()
+              val cryptPass = passwordHashing.createHash(regLinkId)
+
+              val newUser = User(email,
+                s"google:${userId}",
+                givenName.getOrElse(name.getOrElse(email)),
+                familyName.getOrElse(""),
+                cryptPass,
+                s"ACTIVE:REGCONFIRMED",
+                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+              userDAO.createWithNps(newUser).fold {
+                logger.error("User create error.")
+                BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+              } { user =>
+                val emailWentOut = emailService.sendConfirmationEmail(newUser.email, "Your GW HUB account is now active", newUser.firstname)
+                // all good here, creating default collection (Unit)
+                collectionsService.createUserDefaultCollection(newUser)
+
+                logger.info(s"New user registered. Email went out $emailWentOut")
+                // creating default collection only after registration, account is only barely usable here
+
+                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+                // logger.debug(s"Logging in email from $uaIdentifier")
+                val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+                cache.set(token, user.email)
+                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
+                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+              }
+
+            } { user =>
+
+              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+              // logger.debug(s"Logging in email from $uaIdentifier")
+              val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+              cache.set(token, user.email)
+              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
+                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+            }
+          } else {
+            BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
+          }
+
+          // Google Sign up always logs in, might create user AND collection on the fly
+/*          credentials.accesstype match {
             case "LOGIN" => {
               userDAO.findUserByEmail(email).fold {
                 logger.error("User not known.")
@@ -578,7 +626,7 @@ class UserController @Inject()(config: Configuration,
             }
 
             case _ => BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
-          }
+          }*/
         }
       }
     )

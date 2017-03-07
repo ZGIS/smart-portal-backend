@@ -444,8 +444,8 @@ object OwcPropertiesJs extends ClassnameLogger {
   * @param owcProperties this contains the file name
   * @param owcOperation  this contains the URL where it was uploaded to
   */
-case class UploadedFileProperties(owcProperties: OwcProperties,
-                                  owcOperation: OwcOperation) {
+case class UploadedFileProperties(val owcProperties: OwcProperties,
+                                  val owcOperation: OwcOperation) {
   implicit val reads: Reads[UploadedFileProperties] = (
     (JsPath \ "properties").read[OwcProperties] and
       (JsPath \ "operation").read[OwcOperation]

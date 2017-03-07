@@ -118,7 +118,7 @@ class OwcPropertiesDAO @Inject()(db: Database,
   }
 
   /**
-    * parse an uploaded file property + the getfile operation
+    * parseOm2Measurements an uploaded file property + the getfile operation
     */
   val uploadedFilePropertiesParser: RowParser[UploadedFileProperties] = {
     owcPropertiesParser ~

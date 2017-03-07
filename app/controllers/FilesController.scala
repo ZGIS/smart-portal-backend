@@ -176,7 +176,7 @@ class FilesController @Inject()(config: Configuration,
           }
   }
 
-  /*  def uploadDirect = Action(parse.temporaryFile) { request =>
+  /*  def uploadDirect = Action(parseOm2Measurements.temporaryFile) { request =>
       request.body.moveTo(new File("/tmp/uploaded.bin"))
       Ok("File uploaded")
     }*/

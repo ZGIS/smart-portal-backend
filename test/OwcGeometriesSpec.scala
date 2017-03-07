@@ -47,7 +47,7 @@ class OwcGeometriesSpec extends PlaySpec {
     lazy val rectReads = new JtsPolygonReader()
     lazy val rectWrites = new RectangleWriter()
 
-    "parse without errors" in {
+    "parseWml2TvpSeries without errors" in {
 
     }
 

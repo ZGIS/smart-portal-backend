@@ -83,7 +83,7 @@ object MdMetadataExtent extends MdMetadataExtentTrait with JsonableCompanion[MdM
     ) (unlift(MdMetadataExtent.unapply))
 
   /**
-    * parse object from Json
+    * parseOm2Measurements object from Json
     *
     * @param json
     * @return Option if parsing error

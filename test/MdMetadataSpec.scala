@@ -44,7 +44,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite wit
   /**
     * parses a resource into MdMetadata Option
     *
-    * @param name name of the resource to parse
+    * @param name name of the resource to parseWml2TvpSeries
     * @return Option[MdMetadata]
     */
   def parsedResource(name: String): Option[MdMetadata] = {
@@ -55,7 +55,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite wit
   /**
     * parses a resource into JsValue
     *
-    * @param name name of the resource to parse
+    * @param name name of the resource to parseWml2TvpSeries
     * @return JsValue
     */
   def parsedResourceAsJsValue(name: String): JsValue = {
@@ -185,7 +185,7 @@ class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite wit
   }
 
   "MdMetadata" should {
-    "parse valid Json document" when {
+    "parseWml2TvpSeries valid Json document" when {
       "all values are set " in {
         val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
 

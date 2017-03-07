@@ -84,7 +84,7 @@ trait JsonableCompanion[A] extends ClassnameLogger {
   val format: Format[A] = Format(reads, writes)
 
   /**
-    * parse object from Json
+    * parseOm2Measurements object from Json
     *
     * @param json
     * @return Option if parsing error

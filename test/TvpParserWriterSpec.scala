@@ -17,8 +17,9 @@
  * limitations under the License.
  */
 
-import models.tvp.{Om2TvpParser, Wml2TvpParser}
+import models.tvp._
 import org.locationtech.spatial4j.context.SpatialContext
+import org.scalatest._
 import org.scalatestplus.play.PlaySpec
 import utils.ClassnameLogger
 
@@ -38,42 +39,123 @@ class TvpParserWriterSpec extends PlaySpec with ClassnameLogger {
 
     "om2 1 " in {
       val xml = Source.fromURL(om2Resource1)
-      val parser = new Om2TvpParser()
-      val ts = parser.parse(xml)
-      // ts.size must be > 0
+      val parser = new XmlTvpParser()
+      val ts = parser.parseOm2Measurements(xml)
+      ts.size mustBe 7
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 7
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 7
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 7
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 7
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
 
-    "om2 2 " in {
+    "om2 2" in {
       val xml = Source.fromURL(om2Resource2)
-      val parser = new Om2TvpParser()
-      val ts = parser.parse(xml)
+      val parser = new XmlTvpParser()
+      val ts = parser.parseOm2Measurements(xml)
+      ts.size mustBe 9
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 9
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 9
+
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 7
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/14")).size mustBe 2
+
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 9
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
 
-    "om2 3 " in {
+    "om2 3" in {
       val xml = Source.fromURL(om2Resource3)
-      val parser = new Om2TvpParser()
-      val ts = parser.parse(xml)
+      val parser = new XmlTvpParser()
+      val ts = parser.parseOm2Measurements(xml)
+      ts.size mustBe 28
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 10
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 10
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1662")).size mustBe 18
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1662")).size mustBe 18
+
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 16
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/14")).size mustBe 10
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/44")).size mustBe 2
+
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 10
+      ts.filter(_.measUnit.equalsIgnoreCase("B0C")).size mustBe 18
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
   }
 
   "WML2 TVP Parser" should {
 
-    "wml2 1 " in {
+    "wml2 1" in {
       val xml = Source.fromURL(wml2Resource1)
-      val parser = new Wml2TvpParser()
-      val ts = parser.parse(xml)
+      val parser = new XmlTvpParser()
+      val ts = parser.parseWml2TvpSeries(xml)
+      ts.size mustBe 7
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 7
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 7
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 7
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 7
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
 
-    "wml2 2 " in {
+    "wml2 2" in {
       val xml = Source.fromURL(wml2Resource2)
-      val parser = new Wml2TvpParser()
-      val ts = parser.parse(xml)
+      val parser = new XmlTvpParser()
+      val ts = parser.parseWml2TvpSeries(xml)
+      ts.size mustBe 9
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 9
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 9
+
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 7
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/14")).size mustBe 2
+
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 9
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
 
-    "wml2 3 " in {
+    "wml3 2" in {
       val xml = Source.fromURL(wml2Resource3)
-      val parser = new Wml2TvpParser()
-      val ts = parser.parse(xml)
+      val parser = new XmlTvpParser()
+      val ts = parser.parseWml2TvpSeries(xml)
+      ts.size mustBe 28
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1679")).size mustBe 10
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1679")).size mustBe 10
+
+      ts.filter(_.procedure.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/procedure/1662")).size mustBe 18
+      ts.filter(_.obsProp.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/phenomenon/1662")).size mustBe 18
+
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/68")).size mustBe 16
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/14")).size mustBe 10
+      ts.filter(_.foiId.equalsIgnoreCase("http://vocab.smart-project.info/ngmp/feature/44")).size mustBe 2
+
+      ts.filter(_.measUnit.equalsIgnoreCase("m")).size mustBe 10
+      ts.filter(_.measUnit.equalsIgnoreCase("B0C")).size mustBe 18
+
+      ts.exists(_.datetime.equalsIgnoreCase("2013-06-25T00:15:00.000Z")) mustBe true
+      ts.exists(_.measValue.equalsIgnoreCase("10.58")) mustBe true
+      ts.exists(_.geom.isDefined) mustBe false
     }
 
   }

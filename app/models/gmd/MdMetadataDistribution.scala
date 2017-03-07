@@ -101,7 +101,7 @@ object MdMetadataDistribution extends MdMetadataDistributionTrait with
     ) (unlift(MdMetadataDistribution.unapply))
 
   /**
-    * parse object from Json
+    * parseOm2Measurements object from Json
     *
     * @param json
     * @return Option if parsing error

@@ -307,7 +307,7 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
 
     }
 
-    "parse full OwcDocuments" in {
+    "parseWml2TvpSeries full OwcDocuments" in {
 
       val jsonTestCollection1 = scala.io.Source.fromURL(owcResource1).getLines.mkString
       val jsonTestCollection2 = scala.io.Source.fromURL(owcResource2).getLines.mkString
@@ -318,7 +318,7 @@ class OwcDocumentJsonSpec extends PlaySpec with ClassnameLogger {
       val owcDoc1JsResult = OwcDocument.parseJson(jsonTestCollection1)
       owcDoc1JsResult mustBe defined
       val owcDoc1 = owcDoc1JsResult.get
-      // Json.stringify(owcDoc1.get.toJson) mustEqual Json.stringify(Json.parse(jsonTestCollection1))
+      // Json.stringify(owcDoc1.get.toJson) mustEqual Json.stringify(Json.parseWml2TvpSeries(jsonTestCollection1))
       owcDoc1.id mustEqual "http://portal.smart-project.info/context/smart-nz"
       owcDoc1.features.size mustBe 16
 

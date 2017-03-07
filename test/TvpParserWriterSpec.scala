@@ -18,8 +18,6 @@
  */
 
 import models.tvp._
-import org.locationtech.spatial4j.context.SpatialContext
-import org.scalatest._
 import org.scalatestplus.play.PlaySpec
 import utils.ClassnameLogger
 
@@ -27,7 +25,6 @@ import scala.io.Source
 
 class TvpParserWriterSpec extends PlaySpec with ClassnameLogger {
 
-  private lazy val ctx = SpatialContext.GEO
   private lazy val om2Resource1  = this.getClass().getResource("tvp/sos-om2-one-series.xml")
   private lazy val wml2Resource1 = this.getClass().getResource("tvp/sos-wml2-one-series.xml")
   private lazy val om2Resource2  = this.getClass().getResource("tvp/sos-om2-two-series-same-obs-proc-two-features.xml")

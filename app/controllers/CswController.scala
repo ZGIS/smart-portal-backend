@@ -19,9 +19,9 @@
 
 package controllers
 
-//import java.util
 import javax.inject.{Inject, Provider}
 
+import models.ErrorResult
 import models.gmd.MdMetadata
 import play.api.cache.CacheApi
 import play.api.libs.json._
@@ -51,7 +51,8 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
 }
 
 /**
-  * Controllers
+  * Contoller that serves all CSW related requests
+  *
   * @param configuration
   * @param cache
   * @param passwordHashing
@@ -71,7 +72,6 @@ class CswController @Inject()(val configuration: Configuration,
                               collectionsService: OwcCollectionsService
                              )
   extends Controller with ClassnameLogger with Security {
-
 
   lazy val app = appProvider.get()
   lazy val cswtInsertResource = app.resource("csw/transaction.insert.xml").get
@@ -94,8 +94,8 @@ class CswController @Inject()(val configuration: Configuration,
     logger.debug(s"returning valid values for '${topic}'")
     val validValuesOption = metadataService.getValidValuesFor(topic)
     if (validValuesOption.isEmpty) {
-      //TODO SR should we have a generic error return object that we return as JSON?
-      BadRequest(s"There are not valid values for '${topic}'")
+      val error = ErrorResult(s"There are no valid values for '${topic}'", None)
+      BadRequest(Json.toJson(error)).as(JSON)
     }
     else {
       Ok(Json.toJson(validValuesOption.get))
@@ -156,7 +156,9 @@ class CswController @Inject()(val configuration: Configuration,
           futureResponse.recover {
             case e: Exception =>
               logger.error("Insert CSW threw exception", e)
-              InternalServerError(e.getMessage)
+              val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on CSW insert: ${e.getMessage}",
+                None)
+              InternalServerError(Json.toJson(error)).as(JSON)
           }
 
           futureResponse.map(response => {
@@ -175,9 +177,14 @@ class CswController @Inject()(val configuration: Configuration,
               case e: Elem if e.label == "ExceptionReport" => {
                 val message = (e \\ "Exception" \\ "ExceptionText").text
                 //TODO SR make this InternalServerError
-                Ok(Json.obj("type" -> "danger", "message" -> message))
+                val error = ErrorResult(message, None)
+                InternalServerError(Json.toJson(error)).as(JSON)
               }
-              case _ => InternalServerError(s"Unexpected Response: ${response}")
+              case _ => {
+                val error = ErrorResult(s"Unexpected Response from CSW: ${response.status} - ${response.statusText}",
+                  Some(response.body))
+                InternalServerError(Json.toJson(error)).as(JSON)
+              }
             }
           })
         }

@@ -27,10 +27,11 @@ import javax.inject.Inject
 import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
 import com.google.common.io.Files
-
+import models.ErrorResult
 import models.owc.{HttpLinkOffering, OwcEntry, OwcLink, OwcOperation, OwcProperties}
 import play.api.Configuration
 import play.api.cache.CacheApi
+import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.Json
 import play.api.libs.ws.WSClient
 import play.api.mvc._
@@ -128,7 +129,7 @@ class FilesController @Inject()(config: Configuration,
     *
     * @return
     */
-  def uploadMultipartForm = HasToken(parse.multipartFormData) {
+  def uploadMultipartForm: Action[MultipartFormData[TemporaryFile]] = HasToken(parse.multipartFormData) {
     token =>
       authUser =>
         implicit request =>
@@ -165,14 +166,17 @@ class FilesController @Inject()(config: Configuration,
 
             if (insertOk) {
               logger.debug(s"file upload $filename to ${blob.getMediaLink}")
+              //FIXME SR do we also want to have a general "return" object? Status is always in the respone so it does not need to be in here
               Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> blob.getMediaLink(), "entry" -> owcEntry.toJson))
             } else {
               logger.error("file metadata insert failed.")
-              BadRequest(Json.obj("status" -> "ERR", "message" -> "file metadata insert failed."))
+              val error = ErrorResult("File metadata insert failed.", None)
+              BadRequest(Json.toJson(error)).as(JSON)
             }
           }.getOrElse {
             logger.error("file upload failed")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "file upload failed."))
+            val error = ErrorResult("File upload failed.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
           }
   }
 

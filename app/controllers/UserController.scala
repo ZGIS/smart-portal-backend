@@ -26,12 +26,12 @@ import javax.inject._
 import com.google.api.client.googleapis.auth.oauth2._
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
-
+import models.ErrorResult
 import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
-import play.api.libs.json.{JsError, Json}
-import play.api.mvc.{Action, Controller, Cookie, DiscardingCookie}
+import play.api.libs.json.{JsError, JsValue, Json}
+import play.api.mvc._
 import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
@@ -97,12 +97,13 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def registerUser = Action(parse.json) { request =>
+  def registerUser: Action[JsValue] = Action(parse.json) { request =>
 
     request.body.validate[RegisterJs].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
-        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+        val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
+        BadRequest(Json.toJson(error)).as(JSON)
       },
       jsuser => {
         // found none, good ...
@@ -121,7 +122,8 @@ class UserController @Inject()(config: Configuration,
 
           userDAO.createWithNps(newUser).fold {
             logger.error("User create error.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+            val error = ErrorResult("User create error.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
           } { user =>
             val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
             logger.info(s"New user registered. Email went out $emailWentOut")
@@ -131,7 +133,8 @@ class UserController @Inject()(config: Configuration,
         } { user =>
           // found user with that email already
           logger.error("Email already in use.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
+          val error = ErrorResult("Email already in use.", None)
+          BadRequest(Json.toJson(error)).as(JSON)
         }
       })
   }
@@ -143,7 +146,7 @@ class UserController @Inject()(config: Configuration,
     * @param linkId
     * @return
     */
-  def registerConfirm(linkId: String) = Action { request =>
+  def registerConfirm(linkId: String): Action[AnyContent] = Action { request =>
     // check db laststatustoken, get user etc, update status
     val uuidTest = Try(java.util.UUID.fromString(linkId))
     uuidTest match {
@@ -195,14 +198,15 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def userSelf = HasToken(parse.empty) {
+  def userSelf: Action[Unit] = HasToken(parse.empty) {
     token =>
       cachedSecUserEmail =>
         implicit request =>
 
           userDAO.findUserByEmail(cachedSecUserEmail).fold {
             logger.error("User email not found.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
+            val error = ErrorResult("User email not found.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
           } { user =>
             Ok(Json.toJson(user.asProfileJs()))
           }
@@ -214,21 +218,23 @@ class UserController @Inject()(config: Configuration,
     * @param email
     * @return
     */
-  def getProfile(email: String) = HasToken(parse.empty) {
+  def getProfile(email: String): Action[Unit] = HasToken(parse.empty) {
     token =>
       cachedSecUserEmail =>
         implicit request =>
 
           userDAO.findUserByEmail(email).fold {
             logger.error("User email not found.")
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
+            val error = ErrorResult("User email not found.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
           } { user =>
             // too much checking here?
             if (user.email.equals(email) && cachedSecUserEmail.equals(email)) {
               Ok(Json.toJson(user.asProfileJs()))
             } else {
               logger.error("User email Security Token mismatch.")
-              Forbidden(Json.obj("status" -> "ERR", "message" -> "User email Security Token mismatch."))
+              val error = ErrorResult("User email Security Token mismatch.", None)
+              Forbidden(Json.toJson(error)).as(JSON)
             }
           }
   }
@@ -240,7 +246,7 @@ class UserController @Inject()(config: Configuration,
     * @param email
     * @return
     */
-  def updateProfile(email: String) = HasToken(parse.json) {
+  def updateProfile(email: String): Action[JsValue] = HasToken(parse.json) {
     token =>
       cachedSecUserEmail =>
         implicit request =>
@@ -248,12 +254,14 @@ class UserController @Inject()(config: Configuration,
           val profileResult = request.body.validate[ProfileJs]
           profileResult.fold(
             errors => {
-              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+              BadRequest(Json.toJson(error)).as(JSON)
             },
             jsuser => {
               userDAO.findUserByEmail(jsuser.email).fold {
                 logger.error("User email not found.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
+                val error = ErrorResult("User email not found.", None)
+                BadRequest(Json.toJson(error)).as(JSON)
               } { dbuser =>
                 // is it really you? by the way you shouldn't / can't (?!) change your email!!!
                 if (dbuser.email.equals(jsuser.email) && cachedSecUserEmail.equals(jsuser.email)) {
@@ -270,8 +278,9 @@ class UserController @Inject()(config: Configuration,
                       ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
                     userDAO.updateNoPass(updateUser).fold {
-                      logger.error("User update error.")
-                      BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
+                      logger.error("Could not update User.")
+                      val error = ErrorResult("Could not update user.", None)
+                      BadRequest(Json.toJson(error)).as(JSON)
                     } { user =>
                       Ok(Json.toJson(user.asProfileJs()))
                     }
@@ -288,23 +297,25 @@ class UserController @Inject()(config: Configuration,
                         ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
                       userDAO.updateNoPass(updateUser).fold {
-                        logger.error("User update error.")
-                        BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
+                        logger.error("Could not update User.")
+                        val error = ErrorResult("Could not update user.", None)
+                        BadRequest(Json.toJson(error)).as(JSON)
                       } { user =>
                         Ok(Json.toJson(user.asProfileJs()))
                       }
                     } else {
                       logger.error("User Email mismatch, email already in use.")
-                      BadRequest(Json.obj("status" -> "ERR", "message" -> "User Email mismatch, email already in use."))
+                      val error = ErrorResult("User Email mismatch, email already in use.", None)
+                      BadRequest(Json.toJson(error)).as(JSON)
                     }
                   }
 
                 } else {
                   logger.error("User email Security Token mismatch.")
-                  Forbidden(Json.obj("status" -> "ERR", "message" -> "User email Security Token mismatch."))
+                  val error = ErrorResult("User email Security Token mismatch.", None)
+                  Forbidden(Json.toJson(error)).as(JSON)
                 }
               }
-
             })
 
   }
@@ -314,7 +325,7 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def updatePassword = HasToken(parse.json) {
+  def updatePassword(): Action[JsValue] = HasToken(parse.json) {
     token =>
       cachedSecUserEmail =>
         implicit request =>
@@ -322,13 +333,16 @@ class UserController @Inject()(config: Configuration,
           request.body.validate[LoginCredentials].fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+              BadRequest(Json.toJson(error)).as(JSON)
             },
             valid = credentials => {
               // find user in db and compare password stuff
+              // FIXME SR At what point exactly do we compare the old password?!
               userDAO.findUserByEmail(credentials.email).fold {
                 logger.error("User not found.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "User not found."))
+                val error = ErrorResult("User not found", None)
+                BadRequest(Json.toJson(error)).as(JSON)
               } { dbuser =>
                 val cryptPass = passwordHashing.createHash(credentials.password)
                 val updateUser = User(dbuser.email,
@@ -341,7 +355,8 @@ class UserController @Inject()(config: Configuration,
 
                 userDAO.updatePassword(updateUser).fold {
                   logger.error("Password update error.")
-                  BadRequest(Json.obj("status" -> "ERR", "message" -> "Password update error."))
+                  val error = ErrorResult("Password update error.", None)
+                  BadRequest(Json.toJson(error)).as(JSON)
                 } { user =>
                   val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                   // logger.info(s"Logging in email from $uaIdentifier")
@@ -352,8 +367,6 @@ class UserController @Inject()(config: Configuration,
                   Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email))
                     .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
                 }
-
-
               }
             })
   }
@@ -362,17 +375,19 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def resetPasswordRequest = Action(parse.json) { request =>
+  def resetPasswordRequest: Action[JsValue] = Action(parse.json) { request =>
     request.body.validate[LoginCredentials].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
-        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+        val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+        BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
         // find user in db and compare password stuff
         userDAO.findUserByEmail(credentials.email).fold {
           logger.error("User email not found.")
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "User email not found."))
+          val error = ErrorResult("User email not found.", None)
+          BadRequest(Json.toJson(error)).as(JSON)
         } { user =>
           val resetLink = java.util.UUID.randomUUID().toString()
 
@@ -389,7 +404,8 @@ class UserController @Inject()(config: Configuration,
           userDAO.updateNoPass(updateUser).fold {
             logger.error("User reset password request update error.")
             // flash error message?
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "User reset password request update error."))
+            val error = ErrorResult("User reset password request update error.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
             // Redirect("/#/register")
           } { user =>
             emailService.sendResetPasswordRequestEmail(user.email, "Password Update on GW HUB", user.firstname, resetLink)
@@ -405,7 +421,7 @@ class UserController @Inject()(config: Configuration,
     * @param linkId
     * @return
     */
-  def resetPasswordRedeem(linkId: String) = Action(parse.json) { request =>
+  def resetPasswordRedeem(linkId: String): Action[JsValue] = Action(parse.json) { request =>
     // check db laststatustoken, get user etc, update status
     val uuidTest = Try(java.util.UUID.fromString(linkId))
     uuidTest match {
@@ -418,7 +434,8 @@ class UserController @Inject()(config: Configuration,
           request.body.validate[LoginCredentials].fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+              BadRequest(Json.toJson(error)).as(JSON)
             },
             valid = credentials => {
               val cryptPass = passwordHashing.createHash(credentials.password)
@@ -460,9 +477,10 @@ class UserController @Inject()(config: Configuration,
     * @param email
     * @return
     */
-  def deleteUser(email: String) = Action { request =>
+  def deleteUser(email: String): Action[AnyContent] = Action { request =>
     val message = "some auth flow going on here"
-    NotImplemented(Json.obj("status" -> "NA", "message" -> message))
+    val error = ErrorResult("This method is not implemented yet.", Some(message))
+    NotImplemented(Json.toJson(error)).as(JSON)
   }
 
   /**
@@ -470,11 +488,12 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def gconnect = Action(parse.json) { implicit request =>
+  def gconnect: Action[JsValue] = Action(parse.json) { implicit request =>
     request.body.validate[GAuthCredentials].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
-        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+        val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+        BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
         // find user in db and compare password stuff
@@ -487,7 +506,8 @@ class UserController @Inject()(config: Configuration,
         // console and specify them directly when you create the GoogleAuthorizationCodeTokenRequest
         // object.
         if (!new java.io.File(googleClientSecret).exists) {
-          BadRequest(Json.obj("status" -> "ERR", "message" -> "service json file not available"))
+          val error = ErrorResult("Service JSON file not available", None)
+          InternalServerError(Json.toJson(error)).as(JSON)
         } else {
           // do lots of Google OAuth2 stuff
           val clientSecrets = GoogleClientSecrets.load(
@@ -549,7 +569,9 @@ class UserController @Inject()(config: Configuration,
 
               userDAO.createWithNps(newUser).fold {
                 logger.error("User create error.")
-                BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
+                val error = ErrorResult("Error while creating user", None)
+                // TODO SR this should probably be InternalServerError and not BadRequest
+                BadRequest(Json.toJson(error)).as(JSON)
               } { user =>
                 val emailWentOut = emailService.sendConfirmationEmail(newUser.email, "Your GW HUB account is now active", newUser.firstname)
                 // all good here, creating default collection (Unit)
@@ -576,7 +598,9 @@ class UserController @Inject()(config: Configuration,
                 .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
             }
           } else {
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
+            logger.error("Invalid accesstype requested")
+            val error = ErrorResult("Invalid accestype requested", None)
+            BadRequest(Json.toJson(error)).as(JSON)
           }
 
           // Google Sign up always logs in, might create user AND collection on the fly
@@ -638,7 +662,7 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def gdisconnect = HasToken(parse.empty) {
+  def gdisconnect: Action[Unit] = HasToken(parse.empty) {
     token =>
       email =>
         implicit request =>
@@ -651,7 +675,7 @@ class UserController @Inject()(config: Configuration,
     *
     * @return
     */
-  def oauth2callback = Action {
+  def oauth2callback: Action[AnyContent] = Action {
     Redirect("/#/account")
   }
 }

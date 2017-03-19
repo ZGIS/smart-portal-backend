@@ -178,7 +178,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       val topicCategories = route(app, FakeRequest(GET, "/api/v1/csw/get-valid-values-for/bogus"))
       topicCategories mustBe defined
       status(topicCategories.get) mustBe 400
-      contentAsString(topicCategories.get) mustBe "There are not valid values for 'bogus'"
+      contentAsString(topicCategories.get) mustBe "{\"message\":\"There are no valid values for 'bogus'\"}"
     }
   }
 }

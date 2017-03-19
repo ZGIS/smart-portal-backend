@@ -236,6 +236,7 @@ class CollectionsController @Inject()(config: Configuration,
             theDoc => {
               val entryTest = theDoc.features.find(_.id.equalsIgnoreCase(entryid))
               if (entryTest.isDefined) {
+                //TODO SR general "response" JSON?
                 Ok(Json.obj("message" -> "owcEntry removed from owcDocument",
                   "document" -> theDoc.toJson))
               }
@@ -258,10 +259,12 @@ class CollectionsController @Inject()(config: Configuration,
         implicit request =>
           val deleted = collectionsService.deleteCollection(id, authUser)
           if (deleted) {
+            //TODO SR general "response" JSON?
             Ok(Json.obj("message" -> "owcDocument deleted", "document" -> id))
           }
           else {
-            BadRequest(Json.obj("status" -> "ERR", "message" -> "deletion of OwcDocument failed", "document" -> id))
+            val error = ErrorResult("Deletion of OwcDocument failed.", Some(s"DocumentId: ${id}"))
+            BadRequest(Json.toJson(error)).as(JSON)
           }
   }
 }

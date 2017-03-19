@@ -21,6 +21,7 @@ package controllers
 
 import javax.inject._
 
+import models.ErrorResult
 import models.users._
 import play.api.Configuration
 import play.api.cache._
@@ -111,13 +112,15 @@ class HomeController @Inject()(config: Configuration,
     request.body.validate[LoginCredentials].fold(
       errors => {
         logger.error(JsError.toJson(errors).toString())
-        BadRequest(Json.obj("status" -> "ERR", "message" -> JsError.toJson(errors)))
+        val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+        BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
         // find user in db and compare password stuff
         userDAO.authenticate(credentials.email, credentials.password).fold {
           logger.error("User email or password wrong.")
-          Unauthorized(Json.obj("status" -> "ERR", "message" -> "User email or password wrong."))
+          val error = ErrorResult("User email or password wrong.", None)
+          Unauthorized(Json.toJson(error)).as(JSON)
         } { user =>
           val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
           // logger.debug(s"Logging in email from $uaIdentifier")
@@ -150,12 +153,13 @@ class HomeController @Inject()(config: Configuration,
         else {
           val errors = (response.json \ "error-codes")
           val jsErrors = errors.getOrElse(JsString("No further errors"))
-          BadRequest(Json.obj("status" -> "OK", "message" -> jsErrors, "success" -> JsBoolean(false)))
+          val error = ErrorResult("User email or password wrong.", Some(jsErrors.toString()))
+          BadRequest(Json.toJson(error)).as(JSON)
         }
     }.recover {
       case e: Exception =>
-        val exceptionData = Map("error" -> Seq(e.getMessage))
-        Ok(Json.obj("status" -> "ERR", "message" -> exceptionData, "success" -> JsBoolean(false)))
+        val error = ErrorResult("Exception on validating captcha.", Some(e.getMessage))
+        InternalServerError(Json.toJson(error)).as(JSON)
     }
   }
 

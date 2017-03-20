@@ -1,0 +1,6788 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/tvp/XmlTvpParser.scala.html
+        </title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.tvp
+</span>21 <span style=''>
+</span>22 <span style=''>import utils.ClassnameLogger
+</span>23 <span style=''>
+</span>24 <span style=''>import scala.collection.mutable.ArrayBuffer
+</span>25 <span style=''>import scala.io.Source
+</span>26 <span style=''>import scala.xml.MetaData
+</span>27 <span style=''>import scala.xml.pull._
+</span>28 <span style=''>
+</span>29 <span style=''>class XmlTvpParser extends ClassnameLogger {
+</span>30 <span style=''>
+</span>31 <span style=''>  private val X_HREF = </span><span style='background: #AEF1AE'>"xlink:href"</span><span style=''>
+</span>32 <span style=''>  private val CODE = </span><span style='background: #AEF1AE'>"code"</span><span style=''>
+</span>33 <span style=''>  private val GMLID = </span><span style='background: #AEF1AE'>"identifier"</span><span style=''>
+</span>34 <span style=''>
+</span>35 <span style=''>  private val OMOBS = </span><span style='background: #AEF1AE'>"OM_Observation"</span><span style=''>
+</span>36 <span style=''>  private val OBSPROP = </span><span style='background: #AEF1AE'>"observedProperty"</span><span style=''>
+</span>37 <span style=''>  private val PROC = </span><span style='background: #AEF1AE'>"procedure"</span><span style=''>
+</span>38 <span style=''>
+</span>39 <span style=''>  private val FOI = </span><span style='background: #AEF1AE'>"featureOfInterest"</span><span style=''>
+</span>40 <span style=''>  private val SFPOS = </span><span style='background: #AEF1AE'>"pos"</span><span style=''>
+</span>41 <span style=''>
+</span>42 <span style=''>  private val TIMEPOS = </span><span style='background: #AEF1AE'>"timePosition"</span><span style=''>
+</span>43 <span style=''>  private val TIME = </span><span style='background: #AEF1AE'>"time"</span><span style=''>
+</span>44 <span style=''>  private val VALUE = </span><span style='background: #AEF1AE'>"value"</span><span style=''>
+</span>45 <span style=''>
+</span>46 <span style=''>  private val TVP = </span><span style='background: #AEF1AE'>"MeasurementTVP"</span><span style=''>
+</span>47 <span style=''>  private val RESULT = </span><span style='background: #AEF1AE'>"result"</span><span style=''>
+</span>48 <span style=''>  private val UOM = </span><span style='background: #AEF1AE'>"uom"</span><span style=''>
+</span>49 <span style=''>
+</span>50 <span style=''>  /**
+</span>51 <span style=''>    *
+</span>52 <span style=''>    * @param source
+</span>53 <span style=''>    * @return
+</span>54 <span style=''>    */
+</span>55 <span style=''>  def parseOm2Measurements(source: Source): Seq[TimeValuePair] = {
+</span>56 <span style=''>
+</span>57 <span style=''>    val eventReader = </span><span style='background: #AEF1AE'>new XMLEventReader(source)</span><span style=''>
+</span>58 <span style=''>
+</span>59 <span style=''>    // phentime = "time";
+</span>60 <span style=''>    var datetime: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>61 <span style=''>    // GMLID = "identifier";
+</span>62 <span style=''>    var foiId: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>63 <span style=''>    // UOM = "uom";
+</span>64 <span style=''>    var measUnit: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>65 <span style=''>    // result = "value";
+</span>66 <span style=''>    var measValue: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>67 <span style=''>    // OBSPROP = "observedProperty";
+</span>68 <span style=''>    var geom: Option[String] = </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>69 <span style=''>    // SFPOS = "pos";
+</span>70 <span style=''>    var obsProp: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>71 <span style=''>    // PROC = "procedure";
+</span>72 <span style=''>    var procedure: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>73 <span style=''>
+</span>74 <span style=''>    val tvps = </span><span style='background: #AEF1AE'>ArrayBuffer[TimeValuePair]()</span><span style=''>
+</span>75 <span style=''>
+</span>76 <span style=''>    </span><span style='background: #AEF1AE'>for (event <- eventReader) {
+</span>77 <span style=''></span><span style='background: #AEF1AE'>      event match {
+</span>78 <span style=''></span><span style='background: #AEF1AE'>        case EvElemStart(prefix, label, attributes, ns) => {
+</span>79 <span style=''></span><span style='background: #AEF1AE'>          if (label == OMOBS) {
+</span>80 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label start"</span><span style='background: #AEF1AE'>)
+</span>81 <span style=''></span><span style='background: #AEF1AE'>            // new obs
+</span>82 <span style=''></span><span style='background: #AEF1AE'>            obsProp = "" // OBSPROP = "observedProperty";
+</span>83 <span style=''></span><span style='background: #AEF1AE'>            foiId = "" // GMLID = "identifier";
+</span>84 <span style=''></span><span style='background: #AEF1AE'>            geom = None // SFPOS = "pos";
+</span>85 <span style=''></span><span style='background: #AEF1AE'>            measUnit = "" // UOM = "uom";
+</span>86 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>87 <span style=''></span><span style='background: #AEF1AE'>          if (label == GMLID) {
+</span>88 <span style=''></span><span style='background: #AEF1AE'>            // this would be the observation id of the enclosing OM_Observation
+</span>89 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>90 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text}"</span><span style='background: #AEF1AE'>)
+</span>91 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>92 <span style=''></span><span style='background: #AEF1AE'>
+</span>93 <span style=''></span><span style='background: #AEF1AE'>          if (label == OBSPROP) {
+</span>94 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>95 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>96 <span style=''></span><span style='background: #AEF1AE'>            obsProp = att
+</span>97 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>98 <span style=''></span><span style='background: #AEF1AE'>          if (label == PROC) {
+</span>99 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>100 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>101 <span style=''></span><span style='background: #AEF1AE'>            procedure = att
+</span>102 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>103 <span style=''></span><span style='background: #AEF1AE'>          if (label == TIMEPOS) {
+</span>104 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>105 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text}"</span><span style='background: #AEF1AE'>)
+</span>106 <span style=''></span><span style='background: #AEF1AE'>            datetime = next.text
+</span>107 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>108 <span style=''></span><span style='background: #AEF1AE'>          if (label == FOI) {
+</span>109 <span style=''></span><span style='background: #AEF1AE'>            // should check if actual geometry is in here or an xlink:href
+</span>110 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>111 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>112 <span style=''></span><span style='background: #AEF1AE'>            foiId = att
+</span>113 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>114 <span style=''></span><span style='background: #AEF1AE'>          if (label == SFPOS) </span><span style='background: #F0ADAD'>{
+</span>115 <span style=''></span><span style='background: #F0ADAD'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>116 <span style=''></span><span style='background: #F0ADAD'>            logger.trace(s"$prefix:$label ${Some(next.text)}")
+</span>117 <span style=''></span><span style='background: #F0ADAD'>            geom = Some(next.text)
+</span>118 <span style=''></span><span style='background: #F0ADAD'>          }</span><span style='background: #AEF1AE'>
+</span>119 <span style=''></span><span style='background: #AEF1AE'>          if (label == RESULT) {
+</span>120 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>121 <span style=''></span><span style='background: #AEF1AE'>            measUnit = extractAttrib(attributes, UOM)
+</span>122 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text} ${extractAttrib(attributes, UOM)}"</span><span style='background: #AEF1AE'>)
+</span>123 <span style=''></span><span style='background: #AEF1AE'>            measValue = next.text
+</span>124 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>125 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>126 <span style=''></span><span style='background: #AEF1AE'>        // If we reach the end of an item element, we add it to the list
+</span>127 <span style=''></span><span style='background: #AEF1AE'>        case EvElemEnd(prefix, label) => {
+</span>128 <span style=''></span><span style='background: #AEF1AE'>          if (label == OMOBS) {
+</span>129 <span style=''></span><span style='background: #AEF1AE'>            logger.debug(</span><span style='background: #F0ADAD'>s"$prefix:$label end"</span><span style='background: #AEF1AE'>)
+</span>130 <span style=''></span><span style='background: #AEF1AE'>            // full build and add
+</span>131 <span style=''></span><span style='background: #AEF1AE'>            val tvp = TimeValuePair(
+</span>132 <span style=''></span><span style='background: #AEF1AE'>              datetime,
+</span>133 <span style=''></span><span style='background: #AEF1AE'>              foiId,
+</span>134 <span style=''></span><span style='background: #AEF1AE'>              measUnit,
+</span>135 <span style=''></span><span style='background: #AEF1AE'>              measValue,
+</span>136 <span style=''></span><span style='background: #AEF1AE'>              geom,
+</span>137 <span style=''></span><span style='background: #AEF1AE'>              obsProp,
+</span>138 <span style=''></span><span style='background: #AEF1AE'>              procedure
+</span>139 <span style=''></span><span style='background: #AEF1AE'>            )
+</span>140 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>tvp.toJson.toString()</span><span style='background: #AEF1AE'>)
+</span>141 <span style=''></span><span style='background: #AEF1AE'>            tvps.append(tvp)
+</span>142 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>143 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>144 <span style=''></span><span style='background: #AEF1AE'>        case EvText(t) => {
+</span>145 <span style=''></span><span style='background: #AEF1AE'>          if (t.trim.size > 0) {
+</span>146 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>logger.debug(s"missed text: $t ")</span><span style='background: #AEF1AE'>
+</span>147 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>148 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>149 <span style=''></span><span style='background: #AEF1AE'>        case _ </span><span style='background: #F0ADAD'>=></span><span style='background: #AEF1AE'> // ignore
+</span>150 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>151 <span style=''>    }
+</span>152 <span style=''>
+</span>153 <span style=''>    </span><span style='background: #AEF1AE'>tvps.toSeq</span><span style=''>
+</span>154 <span style=''>  }
+</span>155 <span style=''>
+</span>156 <span style=''>  /**
+</span>157 <span style=''>    *
+</span>158 <span style=''>    * @param attrs
+</span>159 <span style=''>    * @param prefixedLabel
+</span>160 <span style=''>    * @return
+</span>161 <span style=''>    */
+</span>162 <span style=''>  def extractPrefixedAtrrib(attrs: Iterable[MetaData], prefixedLabel: String): String = {
+</span>163 <span style=''>    val attOpt = </span><span style='background: #AEF1AE'>attrs.find(meta => meta.prefixedKey.equalsIgnoreCase(prefixedLabel))</span><span style=''>
+</span>164 <span style=''>    </span><span style='background: #AEF1AE'>attOpt.map(meta => meta.value.text).getOrElse("")</span><span style=''>
+</span>165 <span style=''>  }
+</span>166 <span style=''>
+</span>167 <span style=''>  /**
+</span>168 <span style=''>    *
+</span>169 <span style=''>    * @param attrs
+</span>170 <span style=''>    * @param label
+</span>171 <span style=''>    * @return
+</span>172 <span style=''>    */
+</span>173 <span style=''>  def extractAttrib(attrs: Iterable[MetaData], label: String): String = {
+</span>174 <span style=''>    val attOpt = </span><span style='background: #AEF1AE'>attrs.find(meta => meta.key.equalsIgnoreCase(label))</span><span style=''>
+</span>175 <span style=''>    </span><span style='background: #AEF1AE'>attOpt.map(meta => meta.value.text).getOrElse("")</span><span style=''>
+</span>176 <span style=''>  }
+</span>177 <span style=''>
+</span>178 <span style=''>  /**
+</span>179 <span style=''>    *
+</span>180 <span style=''>    * @param source
+</span>181 <span style=''>    * @return
+</span>182 <span style=''>    */
+</span>183 <span style=''>  def parseWml2TvpSeries(source: Source): Seq[TimeValuePair] = {
+</span>184 <span style=''>
+</span>185 <span style=''>    val eventReader = </span><span style='background: #AEF1AE'>new XMLEventReader(source)</span><span style=''>
+</span>186 <span style=''>
+</span>187 <span style=''>    // TIME = "time";
+</span>188 <span style=''>    var datetime: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>189 <span style=''>    // GMLID = "identifier";
+</span>190 <span style=''>    var foiId: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>191 <span style=''>    // UOM = "uom";
+</span>192 <span style=''>    var measUnit: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>193 <span style=''>    // VALUE = "value";
+</span>194 <span style=''>    var measValue: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>195 <span style=''>    // SFPOS = "pos";
+</span>196 <span style=''>    var geom: Option[String] = </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>197 <span style=''>    // OBSPROP = "observedProperty";
+</span>198 <span style=''>    var obsProp: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>199 <span style=''>    // PROC = "procedure";
+</span>200 <span style=''>    var procedure: String = </span><span style='background: #AEF1AE'>null</span><span style=''>
+</span>201 <span style=''>
+</span>202 <span style=''>    val tvps = </span><span style='background: #AEF1AE'>ArrayBuffer[TimeValuePair]()</span><span style=''>
+</span>203 <span style=''>
+</span>204 <span style=''>    </span><span style='background: #AEF1AE'>for (event <- eventReader) {
+</span>205 <span style=''></span><span style='background: #AEF1AE'>      event match {
+</span>206 <span style=''></span><span style='background: #AEF1AE'>        case EvElemStart(prefix, label, attributes, ns) => {
+</span>207 <span style=''></span><span style='background: #AEF1AE'>          if (label == OMOBS) {
+</span>208 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label start"</span><span style='background: #AEF1AE'>)
+</span>209 <span style=''></span><span style='background: #AEF1AE'>            // new obs
+</span>210 <span style=''></span><span style='background: #AEF1AE'>            obsProp = "" // OBSPROP = "observedProperty";
+</span>211 <span style=''></span><span style='background: #AEF1AE'>            foiId = "" // GMLID = "identifier";
+</span>212 <span style=''></span><span style='background: #AEF1AE'>            geom = None // SFPOS = "pos";
+</span>213 <span style=''></span><span style='background: #AEF1AE'>            measUnit = "" // UOM = "uom";
+</span>214 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>215 <span style=''></span><span style='background: #AEF1AE'>          if (label == GMLID) {
+</span>216 <span style=''></span><span style='background: #AEF1AE'>            // this would be the observation identifier of the enclosing OM_Observation
+</span>217 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>218 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text}"</span><span style='background: #AEF1AE'>)
+</span>219 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>220 <span style=''></span><span style='background: #AEF1AE'>          if (label == OBSPROP) {
+</span>221 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>222 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>223 <span style=''></span><span style='background: #AEF1AE'>            obsProp = att
+</span>224 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>225 <span style=''></span><span style='background: #AEF1AE'>          if (label == PROC) {
+</span>226 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>227 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>228 <span style=''></span><span style='background: #AEF1AE'>            procedure = att
+</span>229 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>230 <span style=''></span><span style='background: #AEF1AE'>          if (label == FOI) {
+</span>231 <span style=''></span><span style='background: #AEF1AE'>            // should check if actual geometry is in here or an xlink:href
+</span>232 <span style=''></span><span style='background: #AEF1AE'>            val att = extractPrefixedAtrrib(attributes, X_HREF)
+</span>233 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label $att"</span><span style='background: #AEF1AE'>)
+</span>234 <span style=''></span><span style='background: #AEF1AE'>            foiId = att
+</span>235 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>236 <span style=''></span><span style='background: #AEF1AE'>          if (label == SFPOS) </span><span style='background: #F0ADAD'>{
+</span>237 <span style=''></span><span style='background: #F0ADAD'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>238 <span style=''></span><span style='background: #F0ADAD'>            logger.trace(s"$prefix:$label ${Some(next.text)}")
+</span>239 <span style=''></span><span style='background: #F0ADAD'>            geom = Some(next.text)
+</span>240 <span style=''></span><span style='background: #F0ADAD'>          }</span><span style='background: #AEF1AE'>
+</span>241 <span style=''></span><span style='background: #AEF1AE'>
+</span>242 <span style=''></span><span style='background: #AEF1AE'>          if (label == UOM) {
+</span>243 <span style=''></span><span style='background: #AEF1AE'>            measUnit = extractAttrib(attributes, CODE)
+</span>244 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${extractAttrib(attributes, CODE)}"</span><span style='background: #AEF1AE'>)
+</span>245 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>246 <span style=''></span><span style='background: #AEF1AE'>
+</span>247 <span style=''></span><span style='background: #AEF1AE'>          // here result contains the actual timeseriew, thus all former information is needed for many tvp points
+</span>248 <span style=''></span><span style='background: #AEF1AE'>          if (label == TIME) {
+</span>249 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>250 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text}"</span><span style='background: #AEF1AE'>)
+</span>251 <span style=''></span><span style='background: #AEF1AE'>            datetime = next.text
+</span>252 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>253 <span style=''></span><span style='background: #AEF1AE'>          if (label == VALUE) {
+</span>254 <span style=''></span><span style='background: #AEF1AE'>            val next = eventReader.next().asInstanceOf[EvText]
+</span>255 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s"$prefix:$label ${next.text}"</span><span style='background: #AEF1AE'>)
+</span>256 <span style=''></span><span style='background: #AEF1AE'>            measValue = next.text
+</span>257 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>258 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>259 <span style=''></span><span style='background: #AEF1AE'>        // If we reach the end of an tvp element, we already have to add it to the list
+</span>260 <span style=''></span><span style='background: #AEF1AE'>        case EvElemEnd(prefix, label) => {
+</span>261 <span style=''></span><span style='background: #AEF1AE'>          if (label == TVP) {
+</span>262 <span style=''></span><span style='background: #AEF1AE'>            logger.debug(</span><span style='background: #F0ADAD'>s"$prefix:$label end"</span><span style='background: #AEF1AE'>)
+</span>263 <span style=''></span><span style='background: #AEF1AE'>            // full build and add
+</span>264 <span style=''></span><span style='background: #AEF1AE'>            val tvp = TimeValuePair(
+</span>265 <span style=''></span><span style='background: #AEF1AE'>              datetime,
+</span>266 <span style=''></span><span style='background: #AEF1AE'>              foiId,
+</span>267 <span style=''></span><span style='background: #AEF1AE'>              measUnit,
+</span>268 <span style=''></span><span style='background: #AEF1AE'>              measValue,
+</span>269 <span style=''></span><span style='background: #AEF1AE'>              geom,
+</span>270 <span style=''></span><span style='background: #AEF1AE'>              obsProp,
+</span>271 <span style=''></span><span style='background: #AEF1AE'>              procedure
+</span>272 <span style=''></span><span style='background: #AEF1AE'>            )
+</span>273 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>tvp.toJson.toString()</span><span style='background: #AEF1AE'>)
+</span>274 <span style=''></span><span style='background: #AEF1AE'>            tvps.append(tvp)
+</span>275 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>276 <span style=''></span><span style='background: #AEF1AE'>          // If we reach the end of an OM_observation element, we don't have to act really
+</span>277 <span style=''></span><span style='background: #AEF1AE'>          if (label == OMOBS) {
+</span>278 <span style=''></span><span style='background: #AEF1AE'>            logger.debug(</span><span style='background: #F0ADAD'>s"$prefix:$label end"</span><span style='background: #AEF1AE'>)
+</span>279 <span style=''></span><span style='background: #AEF1AE'>            // refresh obsProp, procedure etc?
+</span>280 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>281 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>282 <span style=''></span><span style='background: #AEF1AE'>        case EvText(t) => {
+</span>283 <span style=''></span><span style='background: #AEF1AE'>          if (t.trim.size > 0) {
+</span>284 <span style=''></span><span style='background: #AEF1AE'>            logger.debug(</span><span style='background: #F0ADAD'>s"missed text: $t "</span><span style='background: #AEF1AE'>)
+</span>285 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>286 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>287 <span style=''></span><span style='background: #AEF1AE'>        case _ </span><span style='background: #F0ADAD'>=></span><span style='background: #AEF1AE'> // ignore
+</span>288 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>289 <span style=''>    }
+</span>290 <span style=''>
+</span>291 <span style=''>    </span><span style='background: #AEF1AE'>tvps.toSeq</span><span style=''>
+</span>292 <span style=''>  }
+</span>293 <span style=''>
+</span>294 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          31
+        </td>
+        <td>
+          5605
+        </td>
+        <td>
+          1116
+          -
+          1128
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;xlink:href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          32
+        </td>
+        <td>
+          5606
+        </td>
+        <td>
+          1150
+          -
+          1156
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;code&quot;
+        </td>
+      </tr><tr>
+        <td>
+          33
+        </td>
+        <td>
+          5607
+        </td>
+        <td>
+          1179
+          -
+          1191
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;identifier&quot;
+        </td>
+      </tr><tr>
+        <td>
+          35
+        </td>
+        <td>
+          5608
+        </td>
+        <td>
+          1215
+          -
+          1231
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;OM_Observation&quot;
+        </td>
+      </tr><tr>
+        <td>
+          36
+        </td>
+        <td>
+          5609
+        </td>
+        <td>
+          1256
+          -
+          1274
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;observedProperty&quot;
+        </td>
+      </tr><tr>
+        <td>
+          37
+        </td>
+        <td>
+          5610
+        </td>
+        <td>
+          1296
+          -
+          1307
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;procedure&quot;
+        </td>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          5611
+        </td>
+        <td>
+          1329
+          -
+          1348
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;featureOfInterest&quot;
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          5612
+        </td>
+        <td>
+          1371
+          -
+          1376
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;pos&quot;
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          5613
+        </td>
+        <td>
+          1402
+          -
+          1416
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;timePosition&quot;
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          5614
+        </td>
+        <td>
+          1438
+          -
+          1444
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;time&quot;
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          5615
+        </td>
+        <td>
+          1467
+          -
+          1474
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;value&quot;
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          5616
+        </td>
+        <td>
+          1496
+          -
+          1512
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;MeasurementTVP&quot;
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          5617
+        </td>
+        <td>
+          1536
+          -
+          1544
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;result&quot;
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          5618
+        </td>
+        <td>
+          1565
+          -
+          1570
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;uom&quot;
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          5619
+        </td>
+        <td>
+          1715
+          -
+          1741
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.xml.pull.XMLEventReader.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new scala.xml.pull.XMLEventReader(source)
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          5620
+        </td>
+        <td>
+          1796
+          -
+          1800
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          5621
+        </td>
+        <td>
+          1854
+          -
+          1858
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          5622
+        </td>
+        <td>
+          1906
+          -
+          1910
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          5623
+        </td>
+        <td>
+          1964
+          -
+          1968
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          5624
+        </td>
+        <td>
+          2037
+          -
+          2041
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          5625
+        </td>
+        <td>
+          2090
+          -
+          2094
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          5626
+        </td>
+        <td>
+          2150
+          -
+          2154
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          5627
+        </td>
+        <td>
+          2171
+          -
+          2199
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.collection.mutable.ArrayBuffer.apply[models.tvp.TimeValuePair]()
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          5746
+        </td>
+        <td>
+          2205
+          -
+          4896
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.Iterator.foreach
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.foreach[Unit](((event: scala.xml.pull.XMLEvent) =&gt; event match {
+  case (pre: String, label: String, attrs: scala.xml.MetaData, scope: scala.xml.NamespaceBinding)scala.xml.pull.EvElemStart((prefix @ _), (label @ _), (attributes @ _), (ns @ _)) =&gt; {
+    if (label.==(XmlTvpParser.this.OMOBS))
+      {
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label));
+        obsProp = &quot;&quot;;
+        foiId = &quot;&quot;;
+        geom = scala.None;
+        measUnit = &quot;&quot;
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.GMLID))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.OBSPROP))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        obsProp = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.PROC))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        procedure = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.TIMEPOS))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+        datetime = next.text
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.FOI))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        foiId = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.SFPOS))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)));
+        geom = scala.Some.apply[String](next.text)
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.RESULT))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        measUnit = XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM)));
+        measValue = next.text
+      }
+    else
+      ()
+  }
+  case (pre: String, label: String)scala.xml.pull.EvElemEnd((prefix @ _), (label @ _)) =&gt; if (label.==(XmlTvpParser.this.OMOBS))
+    {
+      XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label));
+      val tvp: models.tvp.TimeValuePair = TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure);
+      XmlTvpParser.this.logger.trace(tvp.toJson.toString());
+      tvps.append(tvp)
+    }
+  else
+    ()
+  case (text: String)scala.xml.pull.EvText((t @ _)) =&gt; if (scala.this.Predef.augmentString(t.trim()).size.&gt;(0))
+    XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+  else
+    ()
+  case _ =&gt; ()
+}))
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          5628
+        </td>
+        <td>
+          2338
+          -
+          2343
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OMOBS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OMOBS
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          5637
+        </td>
+        <td>
+          2325
+          -
+          2325
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          5636
+        </td>
+        <td>
+          2345
+          -
+          2621
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label));
+  obsProp = &quot;&quot;;
+  foiId = &quot;&quot;;
+  geom = scala.None;
+  measUnit = &quot;&quot;
+}
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          5629
+        </td>
+        <td>
+          2329
+          -
+          2343
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OMOBS)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          5638
+        </td>
+        <td>
+          2325
+          -
+          2325
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          5630
+        </td>
+        <td>
+          2372
+          -
+          2395
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          5631
+        </td>
+        <td>
+          2359
+          -
+          2396
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          5632
+        </td>
+        <td>
+          2442
+          -
+          2444
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          5633
+        </td>
+        <td>
+          2498
+          -
+          2500
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          5634
+        </td>
+        <td>
+          2545
+          -
+          2549
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          5635
+        </td>
+        <td>
+          2591
+          -
+          2593
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          5639
+        </td>
+        <td>
+          2645
+          -
+          2650
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.GMLID
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.GMLID
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          5651
+        </td>
+        <td>
+          2632
+          -
+          2632
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          5650
+        </td>
+        <td>
+          2632
+          -
+          2632
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          5640
+        </td>
+        <td>
+          2636
+          -
+          2650
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.GMLID)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          5649
+        </td>
+        <td>
+          2652
+          -
+          2865
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+}
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          5641
+        </td>
+        <td>
+          2757
+          -
+          2796
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5646
+        </td>
+        <td>
+          2841
+          -
+          2850
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5645
+        </td>
+        <td>
+          2851
+          -
+          2852
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5648
+        </td>
+        <td>
+          2809
+          -
+          2853
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5642
+        </td>
+        <td>
+          2824
+          -
+          2825
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5644
+        </td>
+        <td>
+          2838
+          -
+          2840
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5647
+        </td>
+        <td>
+          2822
+          -
+          2852
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5643
+        </td>
+        <td>
+          2831
+          -
+          2833
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5660
+        </td>
+        <td>
+          2877
+          -
+          2877
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5659
+        </td>
+        <td>
+          2877
+          -
+          2877
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5653
+        </td>
+        <td>
+          2881
+          -
+          2897
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OBSPROP)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5658
+        </td>
+        <td>
+          2899
+          -
+          3051
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  obsProp = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5652
+        </td>
+        <td>
+          2890
+          -
+          2897
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OBSPROP
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OBSPROP
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          5655
+        </td>
+        <td>
+          2923
+          -
+          2964
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          5654
+        </td>
+        <td>
+          2957
+          -
+          2963
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          5657
+        </td>
+        <td>
+          2977
+          -
+          3013
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          5656
+        </td>
+        <td>
+          2990
+          -
+          3012
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          5669
+        </td>
+        <td>
+          3062
+          -
+          3062
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          5668
+        </td>
+        <td>
+          3062
+          -
+          3062
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          5662
+        </td>
+        <td>
+          3066
+          -
+          3079
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.PROC)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          5667
+        </td>
+        <td>
+          3081
+          -
+          3235
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  procedure = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          5661
+        </td>
+        <td>
+          3075
+          -
+          3079
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.PROC
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.PROC
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          5664
+        </td>
+        <td>
+          3105
+          -
+          3146
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          5663
+        </td>
+        <td>
+          3139
+          -
+          3145
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          5666
+        </td>
+        <td>
+          3159
+          -
+          3195
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          5665
+        </td>
+        <td>
+          3172
+          -
+          3194
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          5681
+        </td>
+        <td>
+          3268
+          -
+          3434
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+  datetime = next.text
+}
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          5671
+        </td>
+        <td>
+          3250
+          -
+          3266
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.TIMEPOS)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          5683
+        </td>
+        <td>
+          3246
+          -
+          3246
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          5682
+        </td>
+        <td>
+          3246
+          -
+          3246
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          5670
+        </td>
+        <td>
+          3259
+          -
+          3266
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.TIMEPOS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.TIMEPOS
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          5672
+        </td>
+        <td>
+          3293
+          -
+          3332
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5673
+        </td>
+        <td>
+          3360
+          -
+          3361
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5675
+        </td>
+        <td>
+          3374
+          -
+          3376
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5678
+        </td>
+        <td>
+          3358
+          -
+          3388
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5677
+        </td>
+        <td>
+          3377
+          -
+          3386
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5674
+        </td>
+        <td>
+          3367
+          -
+          3369
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5676
+        </td>
+        <td>
+          3387
+          -
+          3388
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          5679
+        </td>
+        <td>
+          3345
+          -
+          3389
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          5680
+        </td>
+        <td>
+          3413
+          -
+          3422
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #AEF1AE">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          5690
+        </td>
+        <td>
+          3463
+          -
+          3688
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  foiId = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          5684
+        </td>
+        <td>
+          3458
+          -
+          3461
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.FOI
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.FOI
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          5692
+        </td>
+        <td>
+          3445
+          -
+          3445
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          5691
+        </td>
+        <td>
+          3445
+          -
+          3445
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          5685
+        </td>
+        <td>
+          3449
+          -
+          3461
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.FOI)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          5687
+        </td>
+        <td>
+          3562
+          -
+          3603
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          5686
+        </td>
+        <td>
+          3596
+          -
+          3602
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          5689
+        </td>
+        <td>
+          3616
+          -
+          3652
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          5688
+        </td>
+        <td>
+          3629
+          -
+          3651
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          5708
+        </td>
+        <td>
+          3699
+          -
+          3699
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          5693
+        </td>
+        <td>
+          3712
+          -
+          3717
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.SFPOS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.SFPOS
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          5707
+        </td>
+        <td>
+          3699
+          -
+          3699
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          5694
+        </td>
+        <td>
+          3703
+          -
+          3717
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.SFPOS)
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          5706
+        </td>
+        <td>
+          3719
+          -
+          3893
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)));
+  geom = scala.Some.apply[String](next.text)
+}
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          5695
+        </td>
+        <td>
+          3744
+          -
+          3783
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #F0ADAD">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5696
+        </td>
+        <td>
+          3811
+          -
+          3812
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5699
+        </td>
+        <td>
+          3844
+          -
+          3845
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5702
+        </td>
+        <td>
+          3809
+          -
+          3845
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text))
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5698
+        </td>
+        <td>
+          3825
+          -
+          3827
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5701
+        </td>
+        <td>
+          3828
+          -
+          3843
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](next.text)
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5700
+        </td>
+        <td>
+          3833
+          -
+          3842
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5703
+        </td>
+        <td>
+          3796
+          -
+          3846
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)))
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          5697
+        </td>
+        <td>
+          3818
+          -
+          3820
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          5705
+        </td>
+        <td>
+          3866
+          -
+          3881
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](next.text)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          5704
+        </td>
+        <td>
+          3871
+          -
+          3880
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          5726
+        </td>
+        <td>
+          3904
+          -
+          3904
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          5725
+        </td>
+        <td>
+          3925
+          -
+          4180
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  measUnit = XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM)));
+  measValue = next.text
+}
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          5710
+        </td>
+        <td>
+          3908
+          -
+          3923
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.RESULT)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          5727
+        </td>
+        <td>
+          3904
+          -
+          3904
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          5709
+        </td>
+        <td>
+          3917
+          -
+          3923
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.RESULT
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.RESULT
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          5711
+        </td>
+        <td>
+          3950
+          -
+          3989
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          5713
+        </td>
+        <td>
+          4013
+          -
+          4043
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractAttrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          5712
+        </td>
+        <td>
+          4039
+          -
+          4042
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.UOM
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.UOM
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5714
+        </td>
+        <td>
+          4071
+          -
+          4072
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5723
+        </td>
+        <td>
+          4056
+          -
+          4134
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM)))
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5717
+        </td>
+        <td>
+          4098
+          -
+          4100
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5720
+        </td>
+        <td>
+          4127
+          -
+          4130
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.UOM
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.UOM
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5719
+        </td>
+        <td>
+          4088
+          -
+          4097
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5722
+        </td>
+        <td>
+          4069
+          -
+          4133
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM))
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5716
+        </td>
+        <td>
+          4085
+          -
+          4087
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5718
+        </td>
+        <td>
+          4132
+          -
+          4133
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5721
+        </td>
+        <td>
+          4101
+          -
+          4131
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractAttrib
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.UOM)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5715
+        </td>
+        <td>
+          4078
+          -
+          4080
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          5724
+        </td>
+        <td>
+          4159
+          -
+          4168
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #AEF1AE">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          5729
+        </td>
+        <td>
+          4321
+          -
+          4335
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OMOBS)
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          5738
+        </td>
+        <td>
+          4317
+          -
+          4317
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          5737
+        </td>
+        <td>
+          4317
+          -
+          4317
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          5728
+        </td>
+        <td>
+          4330
+          -
+          4335
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OMOBS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OMOBS
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          5736
+        </td>
+        <td>
+          4337
+          -
+          4721
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label));
+  val tvp: models.tvp.TimeValuePair = TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure);
+  XmlTvpParser.this.logger.trace(tvp.toJson.toString());
+  tvps.append(tvp)
+}
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          5731
+        </td>
+        <td>
+          4351
+          -
+          4386
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          5730
+        </td>
+        <td>
+          4364
+          -
+          4385
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          5732
+        </td>
+        <td>
+          4443
+          -
+          4632
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.TimeValuePair.apply
+        </td>
+        <td style="background: #AEF1AE">
+          TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure)
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          5734
+        </td>
+        <td>
+          4645
+          -
+          4680
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(tvp.toJson.toString())
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          5733
+        </td>
+        <td>
+          4658
+          -
+          4679
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.toJson.toString()
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          5735
+        </td>
+        <td>
+          4693
+          -
+          4709
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.mutable.BufferLike.append
+        </td>
+        <td style="background: #AEF1AE">
+          tvps.append(tvp)
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          5744
+        </td>
+        <td>
+          4770
+          -
+          4770
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          5743
+        </td>
+        <td>
+          4770
+          -
+          4770
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          5739
+        </td>
+        <td>
+          4774
+          -
+          4789
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(t.trim()).size.&gt;(0)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          5741
+        </td>
+        <td>
+          4805
+          -
+          4838
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          5740
+        </td>
+        <td>
+          4818
+          -
+          4837
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          5742
+        </td>
+        <td>
+          4805
+          -
+          4838
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          5745
+        </td>
+        <td>
+          4876
+          -
+          4878
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          5747
+        </td>
+        <td>
+          4908
+          -
+          4918
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.SeqLike.toSeq
+        </td>
+        <td style="background: #AEF1AE">
+          tvps.toSeq
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          5749
+        </td>
+        <td>
+          5110
+          -
+          5178
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableLike.find
+        </td>
+        <td style="background: #AEF1AE">
+          attrs.find(((meta: scala.xml.MetaData) =&gt; meta.prefixedKey.equalsIgnoreCase(prefixedLabel)))
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          5748
+        </td>
+        <td>
+          5129
+          -
+          5177
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.equalsIgnoreCase
+        </td>
+        <td style="background: #AEF1AE">
+          meta.prefixedKey.equalsIgnoreCase(prefixedLabel)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          5750
+        </td>
+        <td>
+          5183
+          -
+          5232
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          attOpt.map[String](((meta: scala.xml.MetaData) =&gt; xml.this.NodeSeq.seqToNodeSeq(meta.value).text)).getOrElse[String](&quot;&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          5752
+        </td>
+        <td>
+          5400
+          -
+          5452
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableLike.find
+        </td>
+        <td style="background: #AEF1AE">
+          attrs.find(((meta: scala.xml.MetaData) =&gt; meta.key.equalsIgnoreCase(label)))
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          5751
+        </td>
+        <td>
+          5419
+          -
+          5451
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.equalsIgnoreCase
+        </td>
+        <td style="background: #AEF1AE">
+          meta.key.equalsIgnoreCase(label)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          5753
+        </td>
+        <td>
+          5457
+          -
+          5506
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          attOpt.map[String](((meta: scala.xml.MetaData) =&gt; xml.this.NodeSeq.seqToNodeSeq(meta.value).text)).getOrElse[String](&quot;&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          185
+        </td>
+        <td>
+          5754
+        </td>
+        <td>
+          5653
+          -
+          5679
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.xml.pull.XMLEventReader.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new scala.xml.pull.XMLEventReader(source)
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          5755
+        </td>
+        <td>
+          5730
+          -
+          5734
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          5756
+        </td>
+        <td>
+          5788
+          -
+          5792
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          5757
+        </td>
+        <td>
+          5840
+          -
+          5844
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          5758
+        </td>
+        <td>
+          5897
+          -
+          5901
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          5759
+        </td>
+        <td>
+          5955
+          -
+          5959
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          5760
+        </td>
+        <td>
+          6023
+          -
+          6027
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          5761
+        </td>
+        <td>
+          6083
+          -
+          6087
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          null
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          5762
+        </td>
+        <td>
+          6104
+          -
+          6132
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.collection.mutable.ArrayBuffer.apply[models.tvp.TimeValuePair]()
+        </td>
+      </tr><tr>
+        <td>
+          204
+        </td>
+        <td>
+          5898
+        </td>
+        <td>
+          6138
+          -
+          9280
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.Iterator.foreach
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.foreach[Unit](((event: scala.xml.pull.XMLEvent) =&gt; event match {
+  case (pre: String, label: String, attrs: scala.xml.MetaData, scope: scala.xml.NamespaceBinding)scala.xml.pull.EvElemStart((prefix @ _), (label @ _), (attributes @ _), (ns @ _)) =&gt; {
+    if (label.==(XmlTvpParser.this.OMOBS))
+      {
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label));
+        obsProp = &quot;&quot;;
+        foiId = &quot;&quot;;
+        geom = scala.None;
+        measUnit = &quot;&quot;
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.GMLID))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.OBSPROP))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        obsProp = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.PROC))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        procedure = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.FOI))
+      {
+        val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+        foiId = att
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.SFPOS))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)));
+        geom = scala.Some.apply[String](next.text)
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.UOM))
+      {
+        measUnit = XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE);
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE)))
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.TIME))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+        datetime = next.text
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.VALUE))
+      {
+        val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+        XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+        measValue = next.text
+      }
+    else
+      ()
+  }
+  case (pre: String, label: String)scala.xml.pull.EvElemEnd((prefix @ _), (label @ _)) =&gt; {
+    if (label.==(XmlTvpParser.this.TVP))
+      {
+        XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label));
+        val tvp: models.tvp.TimeValuePair = TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure);
+        XmlTvpParser.this.logger.trace(tvp.toJson.toString());
+        tvps.append(tvp)
+      }
+    else
+      ();
+    if (label.==(XmlTvpParser.this.OMOBS))
+      XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label))
+    else
+      ()
+  }
+  case (text: String)scala.xml.pull.EvText((t @ _)) =&gt; if (scala.this.Predef.augmentString(t.trim()).size.&gt;(0))
+    XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+  else
+    ()
+  case _ =&gt; ()
+}))
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          5771
+        </td>
+        <td>
+          6278
+          -
+          6554
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label));
+  obsProp = &quot;&quot;;
+  foiId = &quot;&quot;;
+  geom = scala.None;
+  measUnit = &quot;&quot;
+}
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          5773
+        </td>
+        <td>
+          6258
+          -
+          6258
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          5764
+        </td>
+        <td>
+          6262
+          -
+          6276
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OMOBS)
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          5772
+        </td>
+        <td>
+          6258
+          -
+          6258
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          207
+        </td>
+        <td>
+          5763
+        </td>
+        <td>
+          6271
+          -
+          6276
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OMOBS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OMOBS
+        </td>
+      </tr><tr>
+        <td>
+          208
+        </td>
+        <td>
+          5765
+        </td>
+        <td>
+          6305
+          -
+          6328
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label)
+        </td>
+      </tr><tr>
+        <td>
+          208
+        </td>
+        <td>
+          5766
+        </td>
+        <td>
+          6292
+          -
+          6329
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; start&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          210
+        </td>
+        <td>
+          5767
+        </td>
+        <td>
+          6375
+          -
+          6377
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          211
+        </td>
+        <td>
+          5768
+        </td>
+        <td>
+          6431
+          -
+          6433
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          212
+        </td>
+        <td>
+          5769
+        </td>
+        <td>
+          6478
+          -
+          6482
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          213
+        </td>
+        <td>
+          5770
+        </td>
+        <td>
+          6524
+          -
+          6526
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          5774
+        </td>
+        <td>
+          6578
+          -
+          6583
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.GMLID
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.GMLID
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          5786
+        </td>
+        <td>
+          6565
+          -
+          6565
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          5785
+        </td>
+        <td>
+          6565
+          -
+          6565
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          5784
+        </td>
+        <td>
+          6585
+          -
+          6806
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+}
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          5775
+        </td>
+        <td>
+          6569
+          -
+          6583
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.GMLID)
+        </td>
+      </tr><tr>
+        <td>
+          217
+        </td>
+        <td>
+          5776
+        </td>
+        <td>
+          6698
+          -
+          6737
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5783
+        </td>
+        <td>
+          6750
+          -
+          6794
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5777
+        </td>
+        <td>
+          6765
+          -
+          6766
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5780
+        </td>
+        <td>
+          6792
+          -
+          6793
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5779
+        </td>
+        <td>
+          6779
+          -
+          6781
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5782
+        </td>
+        <td>
+          6763
+          -
+          6793
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text)
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5778
+        </td>
+        <td>
+          6772
+          -
+          6774
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          5781
+        </td>
+        <td>
+          6782
+          -
+          6791
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          5795
+        </td>
+        <td>
+          6817
+          -
+          6817
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          5788
+        </td>
+        <td>
+          6821
+          -
+          6837
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OBSPROP)
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          5794
+        </td>
+        <td>
+          6817
+          -
+          6817
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          5787
+        </td>
+        <td>
+          6830
+          -
+          6837
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OBSPROP
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OBSPROP
+        </td>
+      </tr><tr>
+        <td>
+          220
+        </td>
+        <td>
+          5793
+        </td>
+        <td>
+          6839
+          -
+          6991
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  obsProp = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          221
+        </td>
+        <td>
+          5789
+        </td>
+        <td>
+          6897
+          -
+          6903
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          221
+        </td>
+        <td>
+          5790
+        </td>
+        <td>
+          6863
+          -
+          6904
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          222
+        </td>
+        <td>
+          5792
+        </td>
+        <td>
+          6917
+          -
+          6953
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          222
+        </td>
+        <td>
+          5791
+        </td>
+        <td>
+          6930
+          -
+          6952
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          5804
+        </td>
+        <td>
+          7002
+          -
+          7002
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          5797
+        </td>
+        <td>
+          7006
+          -
+          7019
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.PROC)
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          5803
+        </td>
+        <td>
+          7002
+          -
+          7002
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          5802
+        </td>
+        <td>
+          7021
+          -
+          7175
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  procedure = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          5796
+        </td>
+        <td>
+          7015
+          -
+          7019
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.PROC
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.PROC
+        </td>
+      </tr><tr>
+        <td>
+          226
+        </td>
+        <td>
+          5798
+        </td>
+        <td>
+          7079
+          -
+          7085
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          226
+        </td>
+        <td>
+          5799
+        </td>
+        <td>
+          7045
+          -
+          7086
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          227
+        </td>
+        <td>
+          5801
+        </td>
+        <td>
+          7099
+          -
+          7135
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          227
+        </td>
+        <td>
+          5800
+        </td>
+        <td>
+          7112
+          -
+          7134
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          230
+        </td>
+        <td>
+          5813
+        </td>
+        <td>
+          7186
+          -
+          7186
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          230
+        </td>
+        <td>
+          5806
+        </td>
+        <td>
+          7190
+          -
+          7202
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.FOI)
+        </td>
+      </tr><tr>
+        <td>
+          230
+        </td>
+        <td>
+          5812
+        </td>
+        <td>
+          7186
+          -
+          7186
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          230
+        </td>
+        <td>
+          5811
+        </td>
+        <td>
+          7204
+          -
+          7429
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val att: String = XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att));
+  foiId = att
+}
+        </td>
+      </tr><tr>
+        <td>
+          230
+        </td>
+        <td>
+          5805
+        </td>
+        <td>
+          7199
+          -
+          7202
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.FOI
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.FOI
+        </td>
+      </tr><tr>
+        <td>
+          232
+        </td>
+        <td>
+          5807
+        </td>
+        <td>
+          7337
+          -
+          7343
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.X_HREF
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.X_HREF
+        </td>
+      </tr><tr>
+        <td>
+          232
+        </td>
+        <td>
+          5808
+        </td>
+        <td>
+          7303
+          -
+          7344
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractPrefixedAtrrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractPrefixedAtrrib(attributes, XmlTvpParser.this.X_HREF)
+        </td>
+      </tr><tr>
+        <td>
+          233
+        </td>
+        <td>
+          5810
+        </td>
+        <td>
+          7357
+          -
+          7393
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att))
+        </td>
+      </tr><tr>
+        <td>
+          233
+        </td>
+        <td>
+          5809
+        </td>
+        <td>
+          7370
+          -
+          7392
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, att)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          5828
+        </td>
+        <td>
+          7440
+          -
+          7440
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          5815
+        </td>
+        <td>
+          7444
+          -
+          7458
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.SFPOS)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          5827
+        </td>
+        <td>
+          7460
+          -
+          7634
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)));
+  geom = scala.Some.apply[String](next.text)
+}
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          5829
+        </td>
+        <td>
+          7440
+          -
+          7440
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          5814
+        </td>
+        <td>
+          7453
+          -
+          7458
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.SFPOS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.SFPOS
+        </td>
+      </tr><tr>
+        <td>
+          237
+        </td>
+        <td>
+          5816
+        </td>
+        <td>
+          7485
+          -
+          7524
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #F0ADAD">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5819
+        </td>
+        <td>
+          7566
+          -
+          7568
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5822
+        </td>
+        <td>
+          7569
+          -
+          7584
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](next.text)
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5824
+        </td>
+        <td>
+          7537
+          -
+          7587
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text)))
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5818
+        </td>
+        <td>
+          7559
+          -
+          7561
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5821
+        </td>
+        <td>
+          7574
+          -
+          7583
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5820
+        </td>
+        <td>
+          7585
+          -
+          7586
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5823
+        </td>
+        <td>
+          7550
+          -
+          7586
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, scala.Some.apply[String](next.text))
+        </td>
+      </tr><tr>
+        <td>
+          238
+        </td>
+        <td>
+          5817
+        </td>
+        <td>
+          7552
+          -
+          7553
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          239
+        </td>
+        <td>
+          5825
+        </td>
+        <td>
+          7612
+          -
+          7621
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          239
+        </td>
+        <td>
+          5826
+        </td>
+        <td>
+          7607
+          -
+          7622
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](next.text)
+        </td>
+      </tr><tr>
+        <td>
+          242
+        </td>
+        <td>
+          5843
+        </td>
+        <td>
+          7646
+          -
+          7646
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          242
+        </td>
+        <td>
+          5831
+        </td>
+        <td>
+          7650
+          -
+          7662
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.UOM)
+        </td>
+      </tr><tr>
+        <td>
+          242
+        </td>
+        <td>
+          5842
+        </td>
+        <td>
+          7664
+          -
+          7811
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  measUnit = XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE);
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE)))
+}
+        </td>
+      </tr><tr>
+        <td>
+          242
+        </td>
+        <td>
+          5830
+        </td>
+        <td>
+          7659
+          -
+          7662
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.UOM
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.UOM
+        </td>
+      </tr><tr>
+        <td>
+          242
+        </td>
+        <td>
+          5844
+        </td>
+        <td>
+          7646
+          -
+          7646
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          5833
+        </td>
+        <td>
+          7689
+          -
+          7720
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractAttrib
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE)
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          5832
+        </td>
+        <td>
+          7715
+          -
+          7719
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.CODE
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.CODE
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5834
+        </td>
+        <td>
+          7748
+          -
+          7749
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5837
+        </td>
+        <td>
+          7797
+          -
+          7798
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5840
+        </td>
+        <td>
+          7746
+          -
+          7798
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE))
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5839
+        </td>
+        <td>
+          7765
+          -
+          7796
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.extractAttrib
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE)
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5836
+        </td>
+        <td>
+          7762
+          -
+          7764
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5838
+        </td>
+        <td>
+          7791
+          -
+          7795
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.CODE
+        </td>
+        <td style="background: #F0ADAD">
+          XmlTvpParser.this.CODE
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5841
+        </td>
+        <td>
+          7733
+          -
+          7799
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, XmlTvpParser.this.extractAttrib(attributes, XmlTvpParser.this.CODE)))
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          5835
+        </td>
+        <td>
+          7755
+          -
+          7757
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          5846
+        </td>
+        <td>
+          7942
+          -
+          7955
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.TIME)
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          5858
+        </td>
+        <td>
+          7938
+          -
+          7938
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          5857
+        </td>
+        <td>
+          7938
+          -
+          7938
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          5845
+        </td>
+        <td>
+          7951
+          -
+          7955
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.TIME
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.TIME
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          5856
+        </td>
+        <td>
+          7957
+          -
+          8123
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+  datetime = next.text
+}
+        </td>
+      </tr><tr>
+        <td>
+          249
+        </td>
+        <td>
+          5847
+        </td>
+        <td>
+          7982
+          -
+          8021
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5852
+        </td>
+        <td>
+          8066
+          -
+          8075
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5849
+        </td>
+        <td>
+          8056
+          -
+          8058
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5848
+        </td>
+        <td>
+          8049
+          -
+          8050
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5851
+        </td>
+        <td>
+          8076
+          -
+          8077
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5854
+        </td>
+        <td>
+          8034
+          -
+          8078
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5850
+        </td>
+        <td>
+          8063
+          -
+          8065
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          5853
+        </td>
+        <td>
+          8047
+          -
+          8077
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text)
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          5855
+        </td>
+        <td>
+          8102
+          -
+          8111
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #AEF1AE">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          5870
+        </td>
+        <td>
+          8154
+          -
+          8321
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val next: scala.xml.pull.EvText = eventReader.next().asInstanceOf[scala.xml.pull.EvText];
+  XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text));
+  measValue = next.text
+}
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          5860
+        </td>
+        <td>
+          8138
+          -
+          8152
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.VALUE)
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          5872
+        </td>
+        <td>
+          8134
+          -
+          8134
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          5871
+        </td>
+        <td>
+          8134
+          -
+          8134
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          5859
+        </td>
+        <td>
+          8147
+          -
+          8152
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.VALUE
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.VALUE
+        </td>
+      </tr><tr>
+        <td>
+          254
+        </td>
+        <td>
+          5861
+        </td>
+        <td>
+          8179
+          -
+          8218
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.Any.asInstanceOf
+        </td>
+        <td style="background: #AEF1AE">
+          eventReader.next().asInstanceOf[scala.xml.pull.EvText]
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5864
+        </td>
+        <td>
+          8260
+          -
+          8262
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5867
+        </td>
+        <td>
+          8244
+          -
+          8274
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text)
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5866
+        </td>
+        <td>
+          8263
+          -
+          8272
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #F0ADAD">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5863
+        </td>
+        <td>
+          8253
+          -
+          8255
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:&quot;
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5862
+        </td>
+        <td>
+          8246
+          -
+          8247
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5865
+        </td>
+        <td>
+          8273
+          -
+          8274
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          5868
+        </td>
+        <td>
+          8231
+          -
+          8275
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; &quot;, &quot;&quot;).s(prefix, label, next.text))
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          5869
+        </td>
+        <td>
+          8300
+          -
+          8309
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.xml.pull.EvText.text
+        </td>
+        <td style="background: #AEF1AE">
+          next.text
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          5873
+        </td>
+        <td>
+          8486
+          -
+          8489
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.TVP
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.TVP
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          5882
+        </td>
+        <td>
+          8473
+          -
+          8473
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          5881
+        </td>
+        <td>
+          8491
+          -
+          8875
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label));
+  val tvp: models.tvp.TimeValuePair = TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure);
+  XmlTvpParser.this.logger.trace(tvp.toJson.toString());
+  tvps.append(tvp)
+}
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          5874
+        </td>
+        <td>
+          8477
+          -
+          8489
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.TVP)
+        </td>
+      </tr><tr>
+        <td>
+          261
+        </td>
+        <td>
+          5883
+        </td>
+        <td>
+          8473
+          -
+          8473
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          262
+        </td>
+        <td>
+          5875
+        </td>
+        <td>
+          8518
+          -
+          8539
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label)
+        </td>
+      </tr><tr>
+        <td>
+          262
+        </td>
+        <td>
+          5876
+        </td>
+        <td>
+          8505
+          -
+          8540
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          264
+        </td>
+        <td>
+          5877
+        </td>
+        <td>
+          8597
+          -
+          8786
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.TimeValuePair.apply
+        </td>
+        <td style="background: #AEF1AE">
+          TimeValuePair.apply(datetime, foiId, measUnit, measValue, geom, obsProp, procedure)
+        </td>
+      </tr><tr>
+        <td>
+          273
+        </td>
+        <td>
+          5879
+        </td>
+        <td>
+          8799
+          -
+          8834
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.trace(tvp.toJson.toString())
+        </td>
+      </tr><tr>
+        <td>
+          273
+        </td>
+        <td>
+          5878
+        </td>
+        <td>
+          8812
+          -
+          8833
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.toJson.toString()
+        </td>
+      </tr><tr>
+        <td>
+          274
+        </td>
+        <td>
+          5880
+        </td>
+        <td>
+          8847
+          -
+          8863
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.mutable.BufferLike.append
+        </td>
+        <td style="background: #AEF1AE">
+          tvps.append(tvp)
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          5884
+        </td>
+        <td>
+          8990
+          -
+          8995
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.OMOBS
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.OMOBS
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          5890
+        </td>
+        <td>
+          8977
+          -
+          8977
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          5889
+        </td>
+        <td>
+          8977
+          -
+          8977
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          277
+        </td>
+        <td>
+          5885
+        </td>
+        <td>
+          8981
+          -
+          8995
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Object.==
+        </td>
+        <td style="background: #AEF1AE">
+          label.==(XmlTvpParser.this.OMOBS)
+        </td>
+      </tr><tr>
+        <td>
+          278
+        </td>
+        <td>
+          5888
+        </td>
+        <td>
+          9011
+          -
+          9046
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          278
+        </td>
+        <td>
+          5887
+        </td>
+        <td>
+          9011
+          -
+          9046
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label))
+        </td>
+      </tr><tr>
+        <td>
+          278
+        </td>
+        <td>
+          5886
+        </td>
+        <td>
+          9024
+          -
+          9045
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:&quot;, &quot; end&quot;).s(prefix, label)
+        </td>
+      </tr><tr>
+        <td>
+          283
+        </td>
+        <td>
+          5891
+        </td>
+        <td>
+          9158
+          -
+          9173
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(t.trim()).size.&gt;(0)
+        </td>
+      </tr><tr>
+        <td>
+          283
+        </td>
+        <td>
+          5896
+        </td>
+        <td>
+          9154
+          -
+          9154
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          283
+        </td>
+        <td>
+          5895
+        </td>
+        <td>
+          9154
+          -
+          9154
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          284
+        </td>
+        <td>
+          5893
+        </td>
+        <td>
+          9189
+          -
+          9222
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+        </td>
+      </tr><tr>
+        <td>
+          284
+        </td>
+        <td>
+          5892
+        </td>
+        <td>
+          9202
+          -
+          9221
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t)
+        </td>
+      </tr><tr>
+        <td>
+          284
+        </td>
+        <td>
+          5894
+        </td>
+        <td>
+          9189
+          -
+          9222
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          XmlTvpParser.this.logger.debug(scala.StringContext.apply(&quot;missed text: &quot;, &quot; &quot;).s(t))
+        </td>
+      </tr><tr>
+        <td>
+          287
+        </td>
+        <td>
+          5897
+        </td>
+        <td>
+          9260
+          -
+          9262
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          291
+        </td>
+        <td>
+          5899
+        </td>
+        <td>
+          9292
+          -
+          9302
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.SeqLike.toSeq
+        </td>
+        <td style="background: #AEF1AE">
+          tvps.toSeq
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

@@ -82,6 +82,9 @@ class HomeController @Inject()(config: Configuration,
   /**
     * idea is to provide a listing of api usable endpoints with some parameter description,selectable by the fields param
     *
+    * the BuildInfo object is generated through sbt-buildinfo plugin, src under target/scala-2.11/src_managed
+    * configuration of this in build.sbt buildinfokeys
+    *
     * @param fields
     * @return
     */

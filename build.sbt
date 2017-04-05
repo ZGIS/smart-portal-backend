@@ -29,7 +29,7 @@ name := """smart-portal-backend"""
 version := "1.0-SNAPSHOT"
 
 // new sbt-site 1.0.0 config SiteScaladocPlugin incompatible with activator sbt-site bundle 0.8.1
-lazy val root = (project in file(".")).enablePlugins(PlayScala, SiteScaladocPlugin, JavaAppPackaging, DockerPlugin)
+lazy val root = (project in file(".")).enablePlugins(PlayScala, BuildInfoPlugin, SiteScaladocPlugin, JavaAppPackaging, DockerPlugin)
 
 scalaVersion := "2.11.8"
 
@@ -154,6 +154,13 @@ git.remoteRepo := "git@github.com:ZGIS/smart-portal-backend.git"
 
 // -----------------
 // packaging options
+val buildNumber = sys.props.getOrElse("buildNumber", default = System.currentTimeMillis().toString)
+
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, "buildNumber" -> buildNumber)
+
+buildInfoPackage := "utils"
+
+buildInfoObject := "BuildInfo"
 
 version in Docker := version.value
 

@@ -86,7 +86,13 @@ class HomeController @Inject()(config: Configuration,
     * @return
     */
   def discovery(fields: Option[String]): Action[AnyContent] = Action { request =>
-    Ok(Json.obj("status" -> "OK", "POST" -> "/api/v1/users/register"))
+    val appName = utils.BuildInfo.name
+    val appVersion = utils.BuildInfo.version
+    val buildNumber = utils.BuildInfo.buildNumber
+    Ok(Json.obj(
+      "appName" -> appName,
+      "version" -> s"$appVersion-$buildNumber"
+    ))
   }
 
   /**

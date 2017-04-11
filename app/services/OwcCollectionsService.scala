@@ -149,31 +149,21 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
     * @param email
     * @return
     */
-  def addMdEntryToUserDefaultCollection(mdMetadata: MdMetadata, email: String) : Boolean = {
+  def addMdEntryToUserDefaultCollection(catalogUrl: String, mdMetadata: MdMetadata, email: String) : Boolean = {
 
     val cswGetCapaOps = OwcOperation(UUID.randomUUID(),
       "GetCapabilities",
       "GET",
       "application/xml",
-      "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
+      s"$catalogUrl/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
       None, None)
 
     val cswGetRecordOps = OwcOperation(UUID.randomUUID(),
-      "GetRecordsById", "POST", "application/xml",
-      "http://portal.smart-project.info/pycsw/csw",
-      Some(OwcPostRequestConfig(
-        Some("application/xml"),
-        Some(s"""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
-               |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
-               |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
-               |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
-               |service="CSW" version="2.0.2">
-               |<csw:Id>${mdMetadata.fileIdentifier}</csw:Id>
-               |<csw:ElementSetName>full</csw:ElementSetName>
-               |</csw:GetRecordById>""".stripMargin)
-        )
-      ), None)
+      "GetRecordById",
+      "GET",
+      "application/xml",
+      s"$catalogUrl/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}",
+      None, None)
 
     val propsUuid = UUID.randomUUID()
     val updatedTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
@@ -185,7 +175,8 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
       List()
     )
 
-    val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/${propsUuid.toString}", None)
+    // self link should concur with EntryId Thhtp URI
+    val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/entry/${propsUuid.toString}", None)
     val defaultCollection = owcDocumentDAO.findUserDefaultOwcDocument(email)
 
     val upsertOk = defaultCollection.map{ owcDoc => {
@@ -211,7 +202,7 @@ class OwcCollectionsService @Inject()(userDAO: UserDAO,
           List(),
           List(link1)
         )
-        val owcEntry = OwcEntry("http://portal.smart-project.info/context/" + mdMetadata.fileIdentifier,
+        val owcEntry = OwcEntry("http://portal.smart-project.info/context/entry/" + mdMetadata.fileIdentifier,
           None, entryProps, List(cswOffering))
         val entries = owcDoc.features ++ Seq(owcEntry)
         val newDoc = owcDoc.copy(features = entries)

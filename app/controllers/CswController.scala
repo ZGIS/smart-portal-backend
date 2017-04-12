@@ -115,7 +115,7 @@ class CswController @Inject()(val configuration: Configuration,
 
           //FIXME SR I find that pretty hard to read. Is there a better way of chaining WS calls?
           // see https://www.playframework.com/documentation/2.5.x/ScalaWS#chaining-ws-calls
-          val futureResponse: Future[WSResponse] = for {
+          val futureResponse: Future[(WSResponse, WSResponse)] = for {
             getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
             insertResponse <- {
               //check if getCapaResponse indicates, that the CSW can perform Transactions
@@ -151,7 +151,7 @@ class CswController @Inject()(val configuration: Configuration,
               }
               response
             }
-          } yield insertResponse
+          } yield (insertResponse, updateIngesterIndexResponse)
 
           futureResponse.recover {
             case e: Exception =>
@@ -162,8 +162,8 @@ class CswController @Inject()(val configuration: Configuration,
           }
 
           futureResponse.map(response => {
-            logger.debug(response.xml.toString())
-            response.xml match {
+            logger.debug(response._1.xml.toString())
+            response._1.xml match {
               case e: Elem if e.label == "TransactionResponse" => {
                 val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
                 logger.debug(s"Adding ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
@@ -181,8 +181,8 @@ class CswController @Inject()(val configuration: Configuration,
                 InternalServerError(Json.toJson(error)).as(JSON)
               }
               case _ => {
-                val error = ErrorResult(s"Unexpected Response from CSW: ${response.status} - ${response.statusText}",
-                  Some(response.body))
+                val error = ErrorResult(s"Unexpected Response from CSW: ${response._1.status} - ${response._1.statusText}",
+                  Some(response._1.body))
                 InternalServerError(Json.toJson(error)).as(JSON)
               }
             }

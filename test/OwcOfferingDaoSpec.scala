@@ -51,7 +51,7 @@ class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
     val operation3 = OwcOperation(UUID.randomUUID(), "GetCapabilities", "GET", "application/xml", "http://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities", None, None)
 
-    val operation4 = OwcOperation(UUID.randomUUID(), "GetRecordsById", "POST", "application/xml", "http://portal.smart-project.info/pycsw/csw", Some(OwcPostRequestConfig(
+    val operation4 = OwcOperation(UUID.randomUUID(), "GetRecordById", "POST", "application/xml", "http://portal.smart-project.info/pycsw/csw", Some(OwcPostRequestConfig(
             Some("application/xml"),
             Some("""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
               |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"

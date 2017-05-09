@@ -46,7 +46,7 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
-  "info.smart-project" %% "smart-owc-geojson" % "0.9.3",
+  "info.smart-project" %% "smart-owc-geojson" % "0.9.4",
   "com.sendgrid" % "sendgrid-java"  % "3.1.0",
 
   "com.typesafe.play" %% "anorm" % "2.5.2",

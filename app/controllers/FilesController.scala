@@ -28,7 +28,7 @@ import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
 import com.google.common.io.Files
 import models.ErrorResult
-import models.owc.{HttpLinkOffering, OwcEntry, OwcLink, OwcOperation, OwcProperties}
+import info.smart.models.owc._
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.Files.TemporaryFile

@@ -30,6 +30,8 @@ import java.util.UUID
 
 import com.google.inject.Provider
 
+import info.smart.models.owc._
+
 /**
   * OwcPropertiesDAO - store and retrieve OWS Context Documents
   * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata

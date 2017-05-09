@@ -46,6 +46,7 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
+  "info.smart-project" %% "smart-owc-geojson" % "0.9.3",
   "com.sendgrid" % "sendgrid-java"  % "3.1.0",
 
   "com.typesafe.play" %% "anorm" % "2.5.2",
@@ -73,6 +74,7 @@ libraryDependencies ++= Seq(
   specs2 % Test
 )
 
+resolvers += Resolver.bintrayIvyRepo("allixender", "ivy2")
 
 scalacOptions in ThisBuild ++= Seq(
   "-encoding", "UTF-8",

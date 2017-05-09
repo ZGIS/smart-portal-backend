@@ -23,7 +23,8 @@ import java.util.UUID
 
 import anorm.{SQL, SqlParser}
 import com.typesafe.config.ConfigFactory
-import models.owc.{OwcOfferingDAO, _}
+import models.owc._
+import info.smart.models.owc._
 import models.users.{User, UserDAO}
 import org.locationtech.spatial4j.context.SpatialContext
 import org.scalatest.{BeforeAndAfter, TestData}
@@ -33,7 +34,7 @@ import play.api.{Application, Configuration}
 import utils.PasswordHashing
 
 /**
-  * Test Spec for [[OwcDocumentDAO]] with [[OwcDocument]] and [[OwcEntry]]
+  * Test Spec for [[models.owc.OwcDocumentDAO]] with [[OwcDocument]] and [[OwcEntry]]
   */
 class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 

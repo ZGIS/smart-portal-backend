@@ -25,6 +25,7 @@ import org.locationtech.spatial4j.context.SpatialContext
 import org.scalatestplus.play.PlaySpec
 import play.api.libs.json._
 import models.owc._
+import info.smart.models.owc._
 import org.locationtech.spatial4j.io.ShapeIO
 import org.locationtech.spatial4j.shape.{Rectangle, SpatialRelation}
 import utils.ClassnameLogger

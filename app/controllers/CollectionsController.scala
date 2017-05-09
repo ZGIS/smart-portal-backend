@@ -21,7 +21,8 @@ package controllers
 
 import javax.inject._
 
-import models.owc.{OwcDocument, OwcEntry}
+import info.smart.models.owc.{OwcDocument, OwcDocumentJs, OwcEntry}
+
 import models.ErrorResult
 import play.api.Configuration
 import play.api.cache.CacheApi

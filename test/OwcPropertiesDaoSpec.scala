@@ -22,6 +22,7 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import models.owc._
+import info.smart.models.owc._
 import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder

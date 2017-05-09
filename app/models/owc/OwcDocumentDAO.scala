@@ -32,6 +32,10 @@ import org.locationtech.spatial4j.shape.Rectangle
 import play.api.db.Database
 import utils.ClassnameLogger
 
+import info.smart.models.owc._
+
+//{OwcEntry, OwcDocument,OwcLink,OwcFeatureType,OwcProperties,UploadedFileProperties}
+
 /**
   * OwcDocumentDAO - store and retrieve OWS Context Documents
   * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata

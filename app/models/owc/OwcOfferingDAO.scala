@@ -28,6 +28,8 @@ import anorm.{RowParser, SQL, SqlParser, ~}
 import play.api.db.Database
 import utils.ClassnameLogger
 
+import info.smart.models.owc._
+
 /**
   * OwcOfferingDAO - store and retrieve OWS Context Documents
   * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata

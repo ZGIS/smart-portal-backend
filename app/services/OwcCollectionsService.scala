@@ -28,6 +28,8 @@ import models.owc._
 import models.users._
 import utils.ClassnameLogger
 
+import info.smart.models.owc._
+
 @Singleton
 class OwcCollectionsService @Inject()(userDAO: UserDAO,
                                       owcPropertiesDAO: OwcPropertiesDAO,

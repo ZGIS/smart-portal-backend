@@ -132,6 +132,7 @@ coverageCopyTask := {
   val result = Seq("cp", "-r", "./target/scala-2.11/scoverage-report", genSiteDir + "/scoverage-report") !!
 }
 
+// sbt-dependency-graph
 dependencyCheckOutputDirectory := Some(file(genSiteDir + "/dep-sec"))
 
 // Use e.g. yEd to format the graph
@@ -140,13 +141,17 @@ dependencyGraphMLFile := file(genSiteDir + "/dep-sec/dependencies.graphml")
 // Use e.g.graphviz to render
 dependencyDotFile := file(genSiteDir + "/dep-sec/dependencies.dot")
 
+// sbt-updates
+dependencyUpdatesReportFile := file(genSiteDir + "/dep-sec/dependency-updates.txt")
+
 // -----------------
 // publish docs on github
 // new sbt-site 1.0.0 config incompatible with activator sbt-site bundle 0.8.1
 includeFilter in makeSite := "*.txt" | "*.html" | "*.md" | "*.css" | "*.png" | "*.jpg" | "*.gif" | "*.js"
 
-// Puts ScalaDoc output in `target/site/latest/api`, will automatically be included with makeSite
-siteSubdirName in SiteScaladoc := "latest/api"
+// will automatically be included with makeSite
+// Puts Scaladoc output in `target/site/api/latest`
+siteSubdirName in SiteScaladoc := "api/latest"
 
 previewLaunchBrowser := false
 

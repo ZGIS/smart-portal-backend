@@ -78,7 +78,7 @@ class XmlTvpParser extends ClassnameLogger {
         case EvElemStart(prefix, label, attributes, ns) => {
           if (label == OMOBS) {
             logger.trace(s"$prefix:$label start")
-            // new obs
+            // new observation
             obsProp = "" // OBSPROP = "observedProperty";
             foiId = "" // GMLID = "identifier";
             geom = None // SFPOS = "pos";
@@ -89,7 +89,6 @@ class XmlTvpParser extends ClassnameLogger {
             val next = eventReader.next().asInstanceOf[EvText]
             logger.trace(s"$prefix:$label ${next.text}")
           }
-
           if (label == OBSPROP) {
             val att = extractPrefixedAtrrib(attributes, X_HREF)
             logger.trace(s"$prefix:$label $att")

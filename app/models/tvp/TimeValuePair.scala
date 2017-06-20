@@ -54,7 +54,6 @@ case class TimeValuePair(
   *
   */
 object TimeValuePair extends ClassnameLogger {
-
   implicit val tvpWrites: Writes[TimeValuePair] = (
     (JsPath \ "datetime").write[String] and
       (JsPath \ "foiId").write[String] and
@@ -64,5 +63,4 @@ object TimeValuePair extends ClassnameLogger {
       (JsPath \ "obsProp").write[String] and
       (JsPath \ "procedure").write[String]
     ) (unlift(TimeValuePair.unapply))
-
 }

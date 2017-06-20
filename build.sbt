@@ -46,7 +46,7 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
-  "info.smart-project" %% "smart-owc-geojson" % "0.9.4",
+  "info.smart-project" %% "smart-owc-geojson" % "1.0.0",
   "com.sendgrid" % "sendgrid-java"  % "3.1.0",
 
   "com.typesafe.play" %% "anorm" % "2.5.2",
@@ -73,6 +73,8 @@ libraryDependencies ++= Seq(
   "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" % Test,
   specs2 % Test
 )
+
+resolvers += Resolver.bintrayRepo("hmrc", "releases")
 
 resolvers += Resolver.bintrayIvyRepo("allixender", "ivy2")
 

@@ -46,15 +46,15 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
-  "info.smart-project" %% "smart-owc-geojson" % "1.0.0",
+  "info.smart-project" %% "smart-owc-geojson" % "1.0.3",
   "com.sendgrid" % "sendgrid-java"  % "3.1.0",
 
   "com.typesafe.play" %% "anorm" % "2.5.2",
   "org.postgresql" % "postgresql" % postgresDriver,
 
-  "com.vividsolutions" % "jts-core" % "1.14.0",
+  // "com.vividsolutions" % "jts-core" % "1.14.0",
   "org.locationtech.spatial4j" % "spatial4j" % "0.6",
-  "org.noggit" % "noggit" % "0.7",
+  // "org.noggit" % "noggit" % "0.7",
 
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,
@@ -143,7 +143,8 @@ dependencyGraphMLFile := file(genSiteDir + "/dep-sec/dependencies.graphml")
 // Use e.g.graphviz to render
 dependencyDotFile := file(genSiteDir + "/dep-sec/dependencies.dot")
 
-// sbt-updates
+// updates of libs and dependencies
+dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang")
 dependencyUpdatesReportFile := file(genSiteDir + "/dep-sec/dependency-updates.txt")
 
 // -----------------
@@ -173,7 +174,7 @@ buildInfoObject := "BuildInfo"
 
 version in Docker := version.value
 
-maintainer in Docker := "allixender@googlemail.com"
+maintainer in Docker := "allixender@gmail.com"
 
 dockerBaseImage in Docker := "java:8-jre"
 

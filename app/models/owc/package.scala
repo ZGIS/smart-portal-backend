@@ -19,28 +19,50 @@
 
 package models
 
+import anorm.{Column, MetaDataItem, TypeDoesNotMatch}
+
 package object owc {
 
-  implicit val tableOwcDocumentsHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
-  implicit val tableOwcEntriesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
-  implicit val tableOwcFeatureTypesHasOwcProperties = "owc_feature_types_has_owc_properties"
-  implicit val tableOwcFeatureTypesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
-  implicit val tableOwcFeatureTypesAsDocumentHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
-  implicit val tableOwcFeatureTypesAsEntryHasOwcOfferings ="owc_feature_types_as_entry_has_owc_offerings"
-  implicit val tableOwcPropertiesHasOwcAuthors = "owc_properties_has_owc_authors"
-  implicit val tableOwcPropertiesHasOwcAuthorsAsContributors = "owc_properties_has_owc_authors_as_contributors"
-  implicit val tableOwcPropertiesHasOwcCategories = "owc_properties_has_owc_categories"
-  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
-  implicit val tableOwcOfferingsHasOwcOperations = "owc_offerings_has_owc_operations"
+  //  implicit val tableOwcDocumentsHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
+  //  implicit val tableOwcEntriesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
+  //  implicit val tableOwcFeatureTypesHasOwcProperties = "owc_feature_types_has_owc_properties"
+  //  implicit val tableOwcFeatureTypesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
+  //  implicit val tableOwcFeatureTypesAsDocumentHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
+  //  implicit val tableOwcFeatureTypesAsEntryHasOwcOfferings ="owc_feature_types_as_entry_has_owc_offerings"
+  //  implicit val tableOwcPropertiesHasOwcAuthors = "owc_properties_has_owc_authors"
+  //  implicit val tableOwcPropertiesHasOwcAuthorsAsContributors = "owc_properties_has_owc_authors_as_contributors"
+  //  implicit val tableOwcPropertiesHasOwcCategories = "owc_properties_has_owc_categories"
+  //  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
+  //  implicit val tableOwcOfferingsHasOwcOperations = "owc_offerings_has_owc_operations"
 
+  implicit val tableOwcContextHasOwcResource = "owc_context_has_owc_resources"
+  implicit val tableUserHasOwcContextRights = "user_has_owc_context_rights"
+
+  implicit val tableUsers = "users"
+
+  implicit val tableOwcStyleSets = "owc_stylesets"
+  implicit val tableOwcContents = "owc_contents"
   implicit val tableOwcOperations = "owc_operations"
   implicit val tableOwcOfferings = "owc_offerings"
-  implicit val tableOwcProperties = "owc_properties"
   implicit val tableOwcLinks = "owc_links"
+  implicit val tableOwcCreatorDisplays = "owc_creator_displays"
+  implicit val tableOwcCreatorApplications = "owc_creator_applications"
   implicit val tableOwcCategories = "owc_categories"
   implicit val tableOwcAuthors = "owc_authors"
-  implicit val tableOwcFeatureTypes = "owc_feature_types"
+  implicit val tableOwcResources = "owc_resources"
+  implicit val tableOwcContexts = "owc_contexts"
 
-  implicit val tableUserHasOwcDocuments = "user_has_owc_feature_types_as_document"
-
+  // Custom conversion from JDBC column to Boolean
+  implicit def columnToBoolean: Column[Boolean] = {
+    Column.nonNull1 { (value, meta) =>
+      val MetaDataItem(qualified, nullable, clazz) = meta
+      value match {
+        case bool: Boolean => Right(bool) // Provided-default case
+        case bit: Int => Right(bit == 1) // Custom conversion
+        case _ => {
+          Left(TypeDoesNotMatch(s"Cannot convert $value: ${value.asInstanceOf[AnyRef].getClass} to Boolean for column $qualified"))
+        }
+      }
+    }
+  }
 }

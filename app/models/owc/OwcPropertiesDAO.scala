@@ -19,18 +19,19 @@
 
 package models.owc
 
-import java.time.ZonedDateTime
+import java.net.URL
+import java.util.UUID
 import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser._
 import anorm._
+import info.smart.models.owc100._
 import play.api.db._
+import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.ClassnameLogger
-import java.util.UUID
+import utils.StringUtils.OptionUuidConverters
 
-import com.google.inject.Provider
-
-import info.smart.models.owc._
+import anorm.Column
 
 /**
   * OwcPropertiesDAO - store and retrieve OWS Context Documents
@@ -41,8 +42,7 @@ import info.smart.models.owc._
   * @param db
   */
 @Singleton
-class OwcPropertiesDAO @Inject()(db: Database,
-                                 owcOfferingDAO: OwcOfferingDAO) extends ClassnameLogger {
+class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
 
   /** *********
     * OwcAuthor
@@ -52,81 +52,40 @@ class OwcPropertiesDAO @Inject()(db: Database,
     * Parse a OwcAuthor from a ResultSet
     */
   val owcAuthorParser = {
-    str("uuid") ~
-      str("name") ~
+    get[Option[String]]("name") ~
       get[Option[String]]("email") ~
-      get[Option[String]]("uri") map {
-      case uuid ~ name ~ email ~ uri =>
-        OwcAuthor(UUID.fromString(uuid), name, email, uri)
-    }
-  }
-  /**
-    * Parse a OwcCategory from a ResultSet
-    */
-  val owcCategoryParser = {
-    str("uuid") ~
-      str("scheme") ~
-      str("term") ~
-      get[Option[String]]("label") map {
-      case uuid ~ scheme ~ term ~ label =>
-        OwcCategory(UUID.fromString(uuid), scheme, term, label)
-    }
-  }
-  /**
-    * Parse a OwcLink from a ResultSet
-    */
-  val owcLinkParser = {
-    str("uuid") ~
-      str("rel") ~
-      get[Option[String]]("mime_type") ~
-      str("href") ~
-      get[Option[String]]("title") map {
-      case uuid ~ rel ~ mimeType ~ href ~ title =>
-        OwcLink(UUID.fromString(uuid), rel, mimeType, href, title)
+      get[Option[String]]("uri") ~
+      str("uuid") map {
+      case name ~ email ~ uri ~ uuid =>
+        OwcAuthor(name, email.map(EmailAddress(_)), uri.map(new URL(_)), UUID.fromString(uuid))
     }
   }
 
   /**
-    * Parse a OwcProperties from a ResultSet
+    * Create an owcAuthor.
+    *
+    * @param owcAuthor
+    * @return
     */
-  val owcPropertiesParser: RowParser[OwcProperties] = {
-    str("uuid") ~
-      str("language") ~
-      str("title") ~
-      get[Option[String]]("subtitle") ~
-      get[Option[ZonedDateTime]]("updated") ~
-      get[Option[String]]("generator") ~
-      get[Option[String]]("rights") ~
-      get[Option[String]]("creator") ~
-      get[Option[String]]("publisher") map {
+  def createOwcAuthor(owcAuthor: OwcAuthor): Option[OwcAuthor] = {
 
-      case uuid ~ language ~ title ~ subtitle ~ updated ~ generator ~ rights ~ creator ~ publisher =>
-        OwcProperties(
-          UUID.fromString(uuid),
-          language,
-          title,
-          subtitle,
-          updated,
-          generator,
-          rights,
-          findOwcAuthorsByPropertiesUUID(UUID.fromString(uuid)).toList,
-          findOwcAuthorsAsContributorsByPropertiesUUID(UUID.fromString(uuid)).toList,
-          creator,
-          publisher,
-          findOwcCategoriesByPropertiesUUID(UUID.fromString(uuid)).toList,
-          findOwcLinksByPropertiesUUID(UUID.fromString(uuid)).toList
-        )
-    }
-  }
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+          insert into $tableOwcAuthors values (
+            {uuid}, {name}, {email}, {uri}
+          )
+        """).on(
+        'uuid -> owcAuthor.uuid.toString,
+        'name -> owcAuthor.name,
+        'email -> owcAuthor.email.map(_.toString()),
+        'uri -> owcAuthor.uri.map(_.toString)
+      ).executeUpdate()
 
-  /**
-    * parseOm2Measurements an uploaded file property + the getfile operation
-    */
-  val uploadedFilePropertiesParser: RowParser[UploadedFileProperties] = {
-    owcPropertiesParser ~
-    owcOfferingDAO.owcOperationParser map {
-      case properties ~ operation =>
-        UploadedFileProperties(properties, operation)
+      rowCount match {
+        case 1 => Some(owcAuthor)
+        case _ => None
+      }
     }
   }
 
@@ -138,6 +97,18 @@ class OwcPropertiesDAO @Inject()(db: Database,
   def getAllOwcAuthors: Seq[OwcAuthor] = {
     db.withConnection { implicit connection =>
       SQL(s"select * from $tableOwcAuthors").as(owcAuthorParser *)
+    }
+  }
+
+  /**
+    * Find specific OwcAuthor.
+    *
+    * @param uuid
+    * @return
+    */
+  def findOwcAuthorByUuid(uuid: UUID): Option[OwcAuthor] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcAuthors where uuid = '${uuid.toString}'""").as(owcAuthorParser.singleOpt)
     }
   }
 
@@ -159,34 +130,14 @@ class OwcPropertiesDAO @Inject()(db: Database,
     * @param propertiesUuid
     * @return
     */
-  def findOwcAuthorsByPropertiesUUID(propertiesUuid: UUID): Seq[OwcAuthor] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""SELECT a.uuid as uuid, a.name as name, a.email as email, a.uri as uri
-           | FROM $tableOwcAuthors a JOIN $tableOwcPropertiesHasOwcAuthors pa ON a.uuid=pa.owc_authors_uuid
-           | WHERE pa.owc_properties_uuid={uuid}""".stripMargin).on(
-        'uuid -> propertiesUuid.toString
-      )
-        .as(owcAuthorParser *)
-    }
-  }
-
-  /**
-    * finds owc authors as contributors from the properties relation
-    *
-    * @param propertiesUuid
-    * @return
-    */
-  def findOwcAuthorsAsContributorsByPropertiesUUID(propertiesUuid: UUID): Seq[OwcAuthor] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""SELECT a.uuid as uuid, a.name as name, a.email as email, a.uri as uri
-           | FROM $tableOwcAuthors a JOIN $tableOwcPropertiesHasOwcAuthorsAsContributors pac ON a.uuid=pac.owc_authors_as_contributors_uuid
-           | WHERE pac.owc_properties_uuid = {uuid}""".stripMargin).on(
-        'uuid -> propertiesUuid.toString
-      )
-        .as(owcAuthorParser *)
-    }
+  def findOwcAuthorsByPropertiesUUID(propertiesUuid: Option[String]): Seq[OwcAuthor] = {
+    val values = propertiesUuid.map(_.split(":").toSeq).map(
+      potUuids => {
+        val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
+        uuids.map(findOwcAuthorByUuid(_)).filter(_.isDefined).map(_.get)
+      }
+    )
+    values.getOrElse(Seq())
   }
 
   /**
@@ -206,8 +157,8 @@ class OwcPropertiesDAO @Inject()(db: Database,
             uri = {uri} where uuid = {uuid}
         """).on(
         'name -> owcAuthor.name,
-        'email -> owcAuthor.email,
-        'uri -> owcAuthor.uri,
+        'email -> owcAuthor.email.map(_.toString()),
+        'uri -> owcAuthor.uri.map(_.toString()),
         'uuid -> owcAuthor.uuid.toString
       ).executeUpdate()
 
@@ -219,9 +170,42 @@ class OwcPropertiesDAO @Inject()(db: Database,
 
   }
 
+
+  /**
+    * delete an OwcAuthor
+    *
+    * @param owcAuthor
+    * @return
+    */
+  def deleteOwcAuthor(owcAuthor: OwcAuthor): Boolean = {
+    val rowCount = db.withConnection { implicit connection =>
+      SQL(s"delete from $tableOwcAuthors where uuid = {uuid}").on(
+        'uuid -> owcAuthor.uuid.toString
+      ).executeUpdate()
+    }
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
   /** ************
     * OwcCategory
     * ************/
+
+  /**
+    * Parse a OwcCategory from a ResultSet
+    */
+  val owcCategoryParser = {
+    str("uuid") ~
+      get[Option[String]]("scheme") ~
+      str("term") ~
+      get[Option[String]]("label") map {
+      case uuid ~ scheme ~ term ~ label =>
+        OwcCategory(term, scheme, label, UUID.fromString(uuid))
+    }
+  }
 
   /**
     * Retrieve all OwcCategory.
@@ -231,6 +215,46 @@ class OwcPropertiesDAO @Inject()(db: Database,
   def getAllOwcCategories: Seq[OwcCategory] = {
     db.withConnection { implicit connection =>
       SQL(s"select * from $tableOwcCategories").as(owcCategoryParser *)
+    }
+  }
+
+  /**
+    * Find OwcCategories by uuid
+    *
+    * @param uuid
+    * @return
+    */
+  def findOwcCategoriesByUuid(uuid: UUID): Option[OwcCategory] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcCategories where uuid like '${uuid.toString()}'""").as(owcCategoryParser.singleOpt)
+    }
+  }
+
+  /**
+    * Create an OwcCategory.
+    *
+    * @param owcCategory
+    * @return
+    */
+  def createOwcCategory(owcCategory: OwcCategory): Option[OwcCategory] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+          insert into $tableOwcCategories values (
+            {uuid}, {scheme}, {term}, {label}
+          )
+        """).on(
+        'uuid -> owcCategory.uuid.toString,
+        'scheme -> owcCategory.scheme,
+        'term -> owcCategory.term,
+        'label -> owcCategory.label
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(owcCategory)
+        case _ => None
+      }
     }
   }
 
@@ -281,16 +305,14 @@ class OwcPropertiesDAO @Inject()(db: Database,
     * @param propertiesUuid
     * @return
     */
-  def findOwcCategoriesByPropertiesUUID(propertiesUuid: UUID): Seq[OwcCategory] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""SELECT c.uuid as uuid, c.scheme as scheme, c.term as term, c.label as label
-           |FROM $tableOwcCategories c JOIN $tableOwcPropertiesHasOwcCategories pc ON c.uuid=pc.owc_categories_uuid
-           |WHERE pc.owc_properties_uuid={uuid}""".stripMargin).on(
-        'uuid -> propertiesUuid.toString
-      )
-        .as(owcCategoryParser *)
-    }
+  def findOwcCategoriesByPropertiesUUID(propertiesUuid: Option[String]): Seq[OwcCategory] = {
+    val values = propertiesUuid.map(_.split(":").toSeq).map(
+      potUuids => {
+        val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
+        uuids.map(findOwcCategoriesByUuid(_)).filter(_.isDefined).map(_.get)
+      }
+    )
+    values.getOrElse(Seq())
   }
 
   /**
@@ -324,6 +346,45 @@ class OwcPropertiesDAO @Inject()(db: Database,
   }
 
   /**
+    * delete an OwcCategory
+    *
+    * @param owcCategory
+    * @return
+    */
+  def deleteOwcCategory(owcCategory: OwcCategory): Boolean = {
+    val rowCount = db.withConnection { implicit connection =>
+      SQL(s"delete from $tableOwcCategories where uuid = {uuid}").on(
+        'uuid -> owcCategory.uuid.toString
+      ).executeUpdate()
+    }
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
+  /** ************
+    * OwcLink
+    * ************/
+
+  /**
+    * Parse a OwcLink from a ResultSet
+    */
+  val owcLinkParser = {
+    str("uuid") ~
+      str("href") ~
+      get[Option[String]]("mime_type") ~
+      get[Option[String]]("lang") ~
+      get[Option[String]]("title") ~
+      get[Option[Int]]("length") ~
+      str("rel") map {
+      case uuid ~ href ~ mimeType ~ lang ~ title ~ length ~ rel =>
+        OwcLink(new URL(href), mimeType, lang, title, length, rel, UUID.fromString(uuid))
+    }
+  }
+
+  /**
     * Retrieve all OwcLink.
     *
     * @return
@@ -340,26 +401,9 @@ class OwcPropertiesDAO @Inject()(db: Database,
     * @param href
     * @return
     */
-  def findOwcLinksByHref(href: String): Seq[OwcLink] = {
+  def findOwcLinksByHref(href: URL): Seq[OwcLink] = {
     db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcLinks where href like '${href}'""").as(owcLinkParser *)
-    }
-  }
-
-  /**
-    * Find OwcLink by term and scheme
-    *
-    * @param rel
-    * @param href
-    * @return
-    */
-  def findOwcLinksByRelAndHref(rel: String, href: String): Seq[OwcLink] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""select * from $tableOwcLinks
-           |where rel like '${rel}'
-           |AND href like '${href}'
-           |""".stripMargin).as(owcLinkParser *)
+      SQL(s"""select * from $tableOwcLinks where href like '${href.toString}'""").as(owcLinkParser *)
     }
   }
 
@@ -369,21 +413,16 @@ class OwcPropertiesDAO @Inject()(db: Database,
     * @param propertiesUuid
     * @return
     */
-  def findOwcLinksByPropertiesUUID(propertiesUuid: UUID): Seq[OwcLink] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""SELECT l.uuid as uuid, l.rel as rel, l.mime_type as mime_type, l.href as href, l.title as title
-           |FROM $tableOwcLinks l JOIN $tableOwcPropertiesHasOwcLinks pl ON l.uuid=pl.owc_links_uuid
-           |WHERE pl.owc_properties_uuid={uuid}""".stripMargin).on(
-        'uuid -> propertiesUuid.toString
-      )
-        .as(owcLinkParser *)
-    }
+  def findOwcLinksByPropertiesUUID(propertiesUuid: Option[String]): Seq[OwcLink] = {
+    val values = propertiesUuid.map(_.split(":").toSeq).map(
+      potUuids => {
+        val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
+        uuids.map(findOwcLinksByUuid(_)).filter(_.isDefined).map(_.get)
+      }
+    )
+    values.getOrElse(Seq())
   }
 
-  /** ************
-    * OwcLink
-    * ************/
 
   /**
     * Update single OwcLink
@@ -397,15 +436,19 @@ class OwcPropertiesDAO @Inject()(db: Database,
       val rowCount = SQL(
         s"""
           update $tableOwcLinks set
-            rel = {rel},
-            mime_type = {mimeType},
             href = {href},
-            title = {title} where uuid = {uuid}
+            mime_type = {mimeType},
+            lang = {lang},
+            title = {title},
+            length = {length},
+            rel = {rel} where uuid = {uuid}
         """).on(
-        'rel -> owcLink.rel,
+        'href -> owcLink.href.toString,
         'mimeType -> owcLink.mimeType,
-        'href -> owcLink.href,
+        'lang -> owcLink.lang,
         'title -> owcLink.title,
+        'length -> owcLink.length,
+        'rel -> owcLink.rel,
         'uuid -> owcLink.uuid.toString
       ).executeUpdate()
 
@@ -415,249 +458,6 @@ class OwcPropertiesDAO @Inject()(db: Database,
       }
     }
 
-  }
-
-  /**
-    * get all the owc properties objects
-    *
-    * @return
-    */
-  def getAllOwcProperties: Seq[OwcProperties] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcProperties""").as(owcPropertiesParser *)
-    }
-  }
-
-  /**
-    * find a distinct owc properties by its uuid
-    *
-    * @param uuid
-    * @return
-    */
-  def findOwcPropertiesByUuid(uuid: UUID): Option[OwcProperties] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcProperties where uuid = '${uuid.toString}'""").as(owcPropertiesParser.singleOpt)
-    }
-  }
-
-  /**
-    * find owc properties by title, title has unique constraint, that's why wild card search is intended
-    *
-    * @param title
-    * @return
-    */
-  def findOwcPropertiesByTitle(title: String): Seq[OwcProperties] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcProperties where title like '%${title}%'""").as(owcPropertiesParser *)
-    }
-  }
-
-  /**
-    * get properties for a featuretype (OwcEntry or OwcDocument)
-    *
-    * @param featureTypeId
-    * @return
-    */
-  def findOwcPropertiesForOwcFeatureType(featureTypeId: String): Option[OwcProperties] = {
-    db.withConnection { implicit connection =>
-      SQL(
-        s"""SELECT
-           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,
-           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher
-           |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
-           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
-        'owc_feature_types_id -> featureTypeId
-      )
-        .as(owcPropertiesParser.singleOpt)
-    }
-  }
-
-  /**
-    * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
-    *
-    * @param owcProperties
-    * @return
-    */
-  def createOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = {
-
-    db.withTransaction {
-      implicit connection => {
-
-        val rowCount = SQL(
-          s"""
-          insert into $tableOwcProperties values (
-            {uuid}, {language}, {title}, {subtitle}, {updated}, {generator}, {rights}, {creator}, {publisher}
-          )
-        """).on(
-          'uuid -> owcProperties.uuid.toString,
-          'language -> owcProperties.language,
-          'title -> owcProperties.title,
-          'subtitle -> owcProperties.subtitle,
-          'updated -> owcProperties.updated,
-          'generator -> owcProperties.generator,
-          'rights -> owcProperties.rights,
-          'creator -> owcProperties.creator,
-          'publisher -> owcProperties.publisher
-        ).executeUpdate()
-
-        owcProperties.authors.foreach {
-          author => {
-            if (findOwcAuthorByUuid(author.uuid).isEmpty) {
-              createOwcAuthor(author)
-            }
-
-            SQL(
-              s"""insert into $tableOwcPropertiesHasOwcAuthors values (
-                 |{owc_properties_uuid}, {owc_authors_uuid}
-                 |)
-               """.stripMargin).on(
-              'owc_properties_uuid -> owcProperties.uuid.toString,
-              'owc_authors_uuid -> author.uuid.toString
-            ).executeUpdate()
-          }
-        }
-
-        owcProperties.contributors.foreach {
-          authorAsContributor => {
-            if (findOwcAuthorByUuid(authorAsContributor.uuid).isEmpty) {
-              createOwcAuthor(authorAsContributor)
-            }
-
-            SQL(
-              s"""insert into $tableOwcPropertiesHasOwcAuthorsAsContributors values (
-                 |{owc_properties_uuid}, {owc_authors_as_contributors_uuid}
-                 |)
-               """.stripMargin).on(
-              'owc_properties_uuid -> owcProperties.uuid.toString,
-              'owc_authors_as_contributors_uuid -> authorAsContributor.uuid.toString
-            ).executeUpdate()
-          }
-        }
-
-        owcProperties.categories.foreach {
-          category => {
-            if (findOwcCategoriesByUuid(category.uuid).isEmpty) {
-              createOwcCategory(category)
-            }
-
-            SQL(
-              s"""insert into $tableOwcPropertiesHasOwcCategories  values (
-                 |{owc_properties_uuid}, {owc_categories_uuid}
-                 |)
-               """.stripMargin).on(
-              'owc_properties_uuid -> owcProperties.uuid.toString,
-              'owc_categories_uuid -> category.uuid.toString
-            ).executeUpdate()
-          }
-        }
-
-        owcProperties.links.foreach {
-          owcLink => {
-            if (findOwcLinksByUuid(owcLink.uuid).isEmpty) {
-              createOwcLink(owcLink)
-            }
-
-            SQL(
-              s"""insert into $tableOwcPropertiesHasOwcLinks  values (
-                 |{owc_properties_uuid}, {owc_links_uuid}
-                 |)
-               """.stripMargin).on(
-              'owc_properties_uuid -> owcProperties.uuid.toString,
-              'owc_links_uuid -> owcLink.uuid.toString
-            ).executeUpdate()
-          }
-        }
-
-        rowCount match {
-          case 1 => Some(owcProperties)
-          case _ => None
-        }
-      }
-    }
-  }
-
-  /**
-    * Find specific OwcAuthor.
-    *
-    * @param uuid
-    * @return
-    */
-  def findOwcAuthorByUuid(uuid: UUID): Option[OwcAuthor] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcAuthors where uuid = '${uuid.toString}'""").as(owcAuthorParser.singleOpt)
-    }
-  }
-
-  /**
-    * Create an owcAuthor.
-    *
-    * @param owcAuthor
-    * @return
-    */
-  def createOwcAuthor(owcAuthor: OwcAuthor): Option[OwcAuthor] = {
-
-    db.withConnection { implicit connection =>
-      val rowCount = SQL(
-        s"""
-          insert into $tableOwcAuthors values (
-            {uuid}, {name}, {email}, {uri}
-          )
-        """).on(
-        'uuid -> owcAuthor.uuid.toString,
-        'name -> owcAuthor.name,
-        'email -> owcAuthor.email,
-        'uri -> owcAuthor.uri
-      ).executeUpdate()
-
-      rowCount match {
-        case 1 => Some(owcAuthor)
-        case _ => None
-      }
-    }
-  }
-
-  /** ************
-    * OwcProperties
-    * ************/
-
-  /**
-    * Find OwcCategories by uuid
-    *
-    * @param uuid
-    * @return
-    */
-  def findOwcCategoriesByUuid(uuid: UUID): Option[OwcCategory] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcCategories where uuid like '${uuid.toString()}'""").as(owcCategoryParser.singleOpt)
-    }
-  }
-
-  /**
-    * Create an OwcCategory.
-    *
-    * @param owcCategory
-    * @return
-    */
-  def createOwcCategory(owcCategory: OwcCategory): Option[OwcCategory] = {
-
-    db.withConnection { implicit connection =>
-      val rowCount = SQL(
-        s"""
-          insert into $tableOwcCategories values (
-            {uuid}, {scheme}, {term}, {label}
-          )
-        """).on(
-        'uuid -> owcCategory.uuid.toString,
-        'scheme -> owcCategory.scheme,
-        'term -> owcCategory.term,
-        'label -> owcCategory.label
-      ).executeUpdate()
-
-      rowCount match {
-        case 1 => Some(owcCategory)
-        case _ => None
-      }
-    }
   }
 
   /**
@@ -684,142 +484,22 @@ class OwcPropertiesDAO @Inject()(db: Database,
       val rowCount = SQL(
         s"""
           insert into $tableOwcLinks values (
-            {uuid}, {rel}, {mimeType}, {href}, {title}
+            {uuid}, {href}, {mimeType}, {lang}, {title}, {length}, {rel}
           )
         """).on(
         'uuid -> owcLink.uuid.toString,
-        'rel -> owcLink.rel,
+        'href -> owcLink.href.toString,
         'mimeType -> owcLink.mimeType,
-        'href -> owcLink.href,
-        'title -> owcLink.title
+        'lang -> owcLink.lang,
+        'title -> owcLink.title,
+        'length -> owcLink.length,
+        'rel -> owcLink.rel
       ).executeUpdate()
 
       rowCount match {
         case 1 => Some(owcLink)
         case _ => None
       }
-    }
-  }
-
-  /**
-    * Not yet implemented, update OwcProperties object and hierarchical dependents
-    *
-    * @param owcProperties
-    * @return
-    */
-  def updateOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = ???
-
-  /**
-    * delete an OwcProperties object and its dependents
-    *
-    * @param owcProperties
-    * @return
-    */
-  def deleteOwcProperties(owcProperties: OwcProperties): Boolean = {
-    val rowCount = db.withTransaction {
-      implicit connection => {
-
-        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthors where owc_properties_uuid = {uuid}""").on(
-          'uuid -> owcProperties.uuid.toString
-        ).executeUpdate()
-
-        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthorsAsContributors where owc_properties_uuid = {uuid}""").on(
-          'uuid -> owcProperties.uuid.toString
-        ).executeUpdate()
-
-        SQL(s"""delete from $tableOwcPropertiesHasOwcCategories where owc_properties_uuid = {uuid}""").on(
-          'uuid -> owcProperties.uuid.toString
-        ).executeUpdate()
-
-        SQL(s"""delete from $tableOwcPropertiesHasOwcLinks where owc_properties_uuid = {uuid}""").on(
-          'uuid -> owcProperties.uuid.toString
-        ).executeUpdate()
-
-        SQL(s"delete from $tableOwcProperties where uuid = {uuid}").on(
-          'uuid -> owcProperties.uuid.toString
-        ).executeUpdate()
-      }
-    }
-
-    db.withConnection(
-      implicit connection => {
-        (owcProperties.authors ++ owcProperties.contributors).distinct.filter {
-          author => {
-            val authorsEmpty = SQL(
-              s"""select owc_authors_uuid from $tableOwcPropertiesHasOwcAuthors where owc_authors_uuid = {uuid}""").on(
-              'uuid -> author.uuid.toString
-            ).as(SqlParser.str("owc_authors_uuid") *).isEmpty
-
-            val authorsAsContributorsEmpty = SQL(
-              s"""select owc_authors_as_contributors_uuid from $tableOwcPropertiesHasOwcAuthorsAsContributors
-                 |where owc_authors_as_contributors_uuid = {uuid}""".stripMargin).on(
-              'uuid -> author.uuid.toString
-            ).as(SqlParser.str("owc_authors_as_contributors_uuid") *).isEmpty
-
-            authorsEmpty && authorsAsContributorsEmpty
-          }
-        }.foreach(deleteOwcAuthor(_))
-
-        owcProperties.categories.filter {
-          category => {
-            SQL(
-              s"""select owc_categories_uuid from $tableOwcPropertiesHasOwcCategories where owc_categories_uuid = {uuid}""").on(
-              'uuid -> category.uuid.toString
-            ).as(SqlParser.str("owc_categories_uuid") *).isEmpty
-          }
-        }.foreach(deleteOwcCategory(_))
-
-        owcProperties.links.filter {
-          owcLink => {
-            SQL(s"""select owc_links_uuid from $tableOwcPropertiesHasOwcLinks where owc_links_uuid = {uuid}""").on(
-              'uuid -> owcLink.uuid.toString
-            ).as(SqlParser.str("owc_links_uuid") *).isEmpty
-          }
-        }.foreach(deleteOwcLink(_))
-      }
-    )
-
-    rowCount match {
-      case 1 => true
-      case _ => false
-    }
-  }
-
-  /**
-    * delete an OwcAuthor
-    *
-    * @param owcAuthor
-    * @return
-    */
-  def deleteOwcAuthor(owcAuthor: OwcAuthor): Boolean = {
-    val rowCount = db.withConnection { implicit connection =>
-      SQL(s"delete from $tableOwcAuthors where uuid = {uuid}").on(
-        'uuid -> owcAuthor.uuid.toString
-      ).executeUpdate()
-    }
-
-    rowCount match {
-      case 1 => true
-      case _ => false
-    }
-  }
-
-  /**
-    * delete an OwcCategory
-    *
-    * @param owcCategory
-    * @return
-    */
-  def deleteOwcCategory(owcCategory: OwcCategory): Boolean = {
-    val rowCount = db.withConnection { implicit connection =>
-      SQL(s"delete from $tableOwcCategories where uuid = {uuid}").on(
-        'uuid -> owcCategory.uuid.toString
-      ).executeUpdate()
-    }
-
-    rowCount match {
-      case 1 => true
-      case _ => false
     }
   }
 
@@ -843,4 +523,604 @@ class OwcPropertiesDAO @Inject()(db: Database,
     }
   }
 
-}
+  /** ************
+    * OwcContent
+    * ************/
+
+  /**
+    * Parse a OwcContent from a ResultSet
+    *
+    */
+  val owcContentParser = {
+    str("uuid") ~
+      str("mime_type") ~
+      get[Option[String]]("url") ~
+      get[Option[String]]("title") ~
+      get[Option[String]]("content") map {
+      case uuid ~ mimeType ~ url ~ title ~ content =>
+        OwcContent(mimeType = mimeType, url = url.map(new URL(_)), title = title, content = content, uuid = UUID.fromString(uuid))
+    }
+  }
+
+  /**
+    * Retrieve all OwcContent.
+    *
+    * @return
+    */
+  def getAllOwcContents: Seq[OwcContent] = {
+    db.withConnection { implicit connection =>
+      SQL(s"select * from $tableOwcContents").as(owcContentParser *)
+    }
+  }
+
+  /**
+    * Update single OwcContent
+    *
+    * @param owcContent
+    * @return
+    */
+  def updateOwcContent(owcContent: OwcContent): Option[OwcContent] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+          update $tableOwcContents set
+            mime_type = {mimeType},
+            url = {url},
+            title = {title},
+            content = {content} where uuid = {uuid}
+        """).on(
+        'mimeType -> owcContent.mimeType,
+        'url -> owcContent.url.map(_.toString),
+        'title -> owcContent.title,
+        'content -> owcContent.content,
+        'uuid -> owcContent.uuid.toString
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(owcContent)
+        case _ => None
+      }
+    }
+
+  }
+
+  /**
+    * Find OwcContents by uuid
+    *
+    * @param uuid
+    * @return
+    */
+  def findOwcContentsByUuid(uuid: UUID): Option[OwcContent] = {
+    db.withConnection { implicit connection =>
+      SQL(s"""select * from $tableOwcContents where uuid = '${uuid.toString}'""").as(owcContentParser.singleOpt)
+    }
+  }
+
+  /**
+    * finds owc stylesets via the properties links relation
+    *
+    * @param propertiesUuid
+    * @return
+    */
+  def findOwcContentsByPropertiesUUID(propertiesUuid: Option[String]): Seq[OwcContent] = {
+    val values = propertiesUuid.map(_.split(":").toSeq).map(
+      potUuids => {
+        val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
+        uuids.map(findOwcContentsByUuid(_)).filter(_.isDefined).map(_.get)
+      }
+    )
+    values.getOrElse(Seq())
+  }
+
+  /**
+    * Create an OwcContent.
+    *
+    * @param owcContent
+    * @return
+    */
+  def createOwcContent(owcContent: OwcContent): Option[OwcContent] = {
+
+    db.withConnection { implicit connection =>
+      val rowCount = SQL(
+        s"""
+          insert into $tableOwcContents values (
+            {uuid}, {mimeType}, {url}, {title}, {content}
+          )
+        """).on(
+        'uuid -> owcContent.uuid.toString,
+        'mimeType -> owcContent.mimeType,
+        'url -> owcContent.url.map(_.toString),
+        'title -> owcContent.title,
+        'content -> owcContent.content
+      ).executeUpdate()
+
+      rowCount match {
+        case 1 => Some(owcContent)
+        case _ => None
+      }
+    }
+  }
+
+  /**
+    * delete an OwcContent by uuid
+    *
+    * @param owcContent
+    * @return
+    */
+  def deleteOwcContent(owcContent: OwcContent): Boolean = {
+    val rowCount = db.withTransaction { implicit connection =>
+
+      SQL(s"delete from $tableOwcContents where uuid = {uuid}").on(
+        'uuid -> owcContent.uuid.toString
+      ).executeUpdate()
+    }
+
+    rowCount match {
+      case 1 => true
+      case _ => false
+    }
+  }
+
+
+  /** ************
+    * OwcStyleSet
+    * ************/
+
+  /**
+    * Parse a OwcStyleSet from a ResultSet
+    *
+    */
+  val owcStyleSetParser = {
+    str("name") ~
+      str("title") ~
+      get[Option[String]]("abstrakt") ~
+      get[Option[Boolean]]("is_default") ~
+      get[Option[String]]("legend_url") ~
+      get[Option[String]]("content_uuid") ~
+      str("uuid") map {
+      case name ~ title ~ abstrakt ~ isDefault ~ legendUrl ~ content_uuid ~ uuid =>
+        OwcStyleSet(name = name,
+          legendUrl = legendUrl.map(new URL(_)),
+          title = title,
+          abstrakt = abstrakt,
+          default = isDefault,
+          content = content_uuid.map(u => u.toUuidOption.map(findOwcContentsByUuid(_)).getOrElse(None)).getOrElse(None),
+          uuid = UUID.fromString(uuid))
+    }
+  }
+
+  /**
+    * Retrieve all OwcStyleSet.
+    *
+    * @return
+    */
+  def getAllOwcStyleSets: Seq[OwcStyleSet] = {
+    db.withConnection { implicit connection =>
+      SQL(s"select * from $tableOwcStyleSets").as(owcStyleSetParser *)
+    }
+  }
+
+  /**
+    * finds owc stylesets via the properties links relation
+    *
+    * @param propertiesUuid
+    * @return
+    */
+  def findOwcStyleSetsByPropertiesUUID(propertiesUuid: Option[String]): Seq[OwcStyleSet] = {
+    val values = propertiesUuid.map(_.split(":").toSeq).map(
+      potUuids => {
+        val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
+        uuids.map(findOwcStyleSetsByUuid(_)).filter(_.isDefined).map(_.get)
+      }
+    )
+    values.getOrElse(Seq())
+  }
+
+
+  /**
+    * Update single OwcStyleSet
+    *
+    * @param owcStyleSet
+    * @return
+    */
+  def updateOwcStyleSet(owcStyleSet: OwcStyleSet): Option[OwcStyleSet] = {
+
+    db.withConnection { implicit connection =>
+
+      val pre: Boolean = if (owcStyleSet.content.isDefined) {
+        val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
+        if (exists) {
+          val update = owcStyleSet.content.map(updateOwcContent(_))
+          update.isDefined
+        } else {
+          val insert = owcStyleSet.content.map(createOwcContent(_))
+          insert.isDefined
+        }
+      } else {
+        true
+      }
+
+      if (pre) {
+        val rowCount1 = SQL(
+          s"""
+          update $tableOwcStyleSets set
+            name = {name},
+            title = {title},
+            abstrakt = {abstrakt},
+            is_default = {isDefault},
+            legend_url = {legendUrl},
+            content = {content} where uuid = {uuid}
+        """).on(
+          'name -> owcStyleSet.name,
+          'title -> owcStyleSet.title,
+          'abstrakt -> owcStyleSet.abstrakt,
+          'isDefault -> owcStyleSet.default,
+          'legendUrl -> owcStyleSet.legendUrl.map(_.toString),
+          'content -> owcStyleSet.content.map(_.uuid.toString),
+          'uuid -> owcStyleSet.uuid.toString
+        ).executeUpdate()
+
+        rowCount1 match {
+          case 1 => Some(owcStyleSet)
+          case _ => None
+        }
+      } else {
+        logger.error(s"Precondition failed, won't update OwcStyleSet")
+      }
+        None
+      }
+
+    }
+
+    /**
+      * Find OwcStyleSets by uuid
+      *
+      * @param uuid
+      * @return
+      */
+    def findOwcStyleSetsByUuid(uuid: UUID): Option[OwcStyleSet] = {
+      db.withConnection { implicit connection =>
+        SQL(s"""select * from $tableOwcStyleSets where uuid = '${uuid.toString}'""").as(owcStyleSetParser.singleOpt)
+      }
+    }
+
+    /**
+      * Create an OwcStyleSet.
+      *
+      * @param owcStyleSet
+      * @return
+      */
+    def createOwcStyleSet(owcStyleSet: OwcStyleSet): Option[OwcStyleSet] = {
+
+      db.withConnection { implicit connection =>
+
+        val pre: Boolean = if (owcStyleSet.content.isDefined) {
+          val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
+          if (exists) {
+            logger.error(s"OwcContent with UUID: ${owcStyleSet.content.get.uuid} exists already, won't create OwcStyleSet")
+            false
+          } else {
+            val insert = owcStyleSet.content.map(createOwcContent(_))
+            insert.isDefined
+          }
+        } else {
+          true
+        }
+
+        if (pre) {
+
+          val rowCount = SQL(
+            s"""
+          insert into $tableOwcStyleSets values (
+            {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}
+          )
+        """).on(
+            'uuid -> owcStyleSet.uuid.toString,
+            'name -> owcStyleSet.name,
+            'title -> owcStyleSet.title,
+            'abstrakt -> owcStyleSet.abstrakt,
+            'isDefault -> owcStyleSet.default,
+            'legendUrl -> owcStyleSet.legendUrl.map(_.toString),
+            'content -> owcStyleSet.content.map(_.uuid.toString)
+          ).executeUpdate()
+
+          rowCount match {
+            case 1 => Some(owcStyleSet)
+            case _ => {
+              logger.error(s"OwcStyleSet couldn't be created")
+              None
+            }
+          }
+
+        } else {
+          None
+        }
+      }
+    }
+
+    /**
+      * delete an OwcStyleSet by uuid
+      *
+      * @param owcStyleSet
+      * @return
+      */
+    def deleteOwcStyleSet(owcStyleSet: OwcStyleSet): Boolean = {
+      val rowCount = db.withTransaction { implicit connection =>
+
+        val pre: Boolean = if (owcStyleSet.content.isDefined) {
+          val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
+          if (exists) {
+            val delete = owcStyleSet.content.exists(deleteOwcContent(_))
+            delete
+          } else {
+            true
+          }
+        } else {
+          true
+        }
+
+        SQL(s"delete from $tableOwcStyleSets where uuid = {uuid}").on(
+          'uuid -> owcStyleSet.uuid.toString
+        ).executeUpdate()
+      }
+
+      rowCount match {
+        case 1 => true
+        case _ => false
+      }
+    }
+
+    //  /** ************
+    //    * OwcProperties
+    //    * ************/
+    //  /**
+    //    * get all the owc properties objects
+    //    *
+    //    * @return
+    //    */
+    //  def getAllOwcProperties: Seq[OwcProperties] = {
+    //    db.withConnection { implicit connection =>
+    //      SQL(s"""select * from $tableOwcProperties""").as(owcPropertiesParser *)
+    //    }
+    //  }
+    //
+    //  /**
+    //    * find a distinct owc properties by its uuid
+    //    *
+    //    * @param uuid
+    //    * @return
+    //    */
+    //  def findOwcPropertiesByUuid(uuid: UUID): Option[OwcProperties] = {
+    //    db.withConnection { implicit connection =>
+    //      SQL(s"""select * from $tableOwcProperties where uuid = '${uuid.toString}'""").as(owcPropertiesParser.singleOpt)
+    //    }
+    //  }
+    //
+    //  /**
+    //    * find owc properties by title, title has unique constraint, that's why wild card search is intended
+    //    *
+    //    * @param title
+    //    * @return
+    //    */
+    //  def findOwcPropertiesByTitle(title: String): Seq[OwcProperties] = {
+    //    db.withConnection { implicit connection =>
+    //      SQL(s"""select * from $tableOwcProperties where title like '%${title}%'""").as(owcPropertiesParser *)
+    //    }
+    //  }
+    //
+    //  /**
+    //    * get properties for a featuretype (OwcEntry or OwcDocument)
+    //    *
+    //    * @param featureTypeId
+    //    * @return
+    //    */
+    //  def findOwcPropertiesForOwcFeatureType(featureTypeId: String): Option[OwcProperties] = {
+    //    db.withConnection { implicit connection =>
+    //      SQL(
+    //        s"""SELECT
+    //           |p.uuid as uuid, p.language as language, p.title as title, p.subtitle as subtitle, p.updated as updated,
+    //           |p.generator as generator, p.rights as rights, p.creator as creator, p.publisher as publisher
+    //           |FROM $tableOwcProperties p JOIN $tableOwcFeatureTypesHasOwcProperties ftp ON p.uuid=ftp.owc_properties_uuid
+    //           |WHERE ftp.owc_feature_types_id={owc_feature_types_id}""".stripMargin).on(
+    //        'owc_feature_types_id -> featureTypeId
+    //      )
+    //        .as(owcPropertiesParser.singleOpt)
+    //    }
+    //  }
+    //
+    //  /**
+    //    * create owc properties in the database, title has additionally unique constraint, uuid will be unique and primary key
+    //    *
+    //    * @param owcProperties
+    //    * @return
+    //    */
+    //  def createOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = {
+    //
+    //    db.withTransaction {
+    //      implicit connection => {
+    //
+    //        val rowCount = SQL(
+    //          s"""
+    //          insert into $tableOwcProperties values (
+    //            {uuid}, {language}, {title}, {subtitle}, {updated}, {generator}, {rights}, {creator}, {publisher}
+    //          )
+    //        """).on(
+    //          'uuid -> owcProperties.uuid.toString,
+    //          'language -> owcProperties.language,
+    //          'title -> owcProperties.title,
+    //          'subtitle -> owcProperties.subtitle,
+    //          'updated -> owcProperties.updated,
+    //          'generator -> owcProperties.generator,
+    //          'rights -> owcProperties.rights,
+    //          'creator -> owcProperties.creator,
+    //          'publisher -> owcProperties.publisher
+    //        ).executeUpdate()
+    //
+    //        owcProperties.authors.foreach {
+    //          author => {
+    //            if (findOwcAuthorByUuid(author.uuid).isEmpty) {
+    //              createOwcAuthor(author)
+    //            }
+    //
+    //            SQL(
+    //              s"""insert into $tableOwcPropertiesHasOwcAuthors values (
+    //                 |{owc_properties_uuid}, {owc_authors_uuid}
+    //                 |)
+    //               """.stripMargin).on(
+    //              'owc_properties_uuid -> owcProperties.uuid.toString,
+    //              'owc_authors_uuid -> author.uuid.toString
+    //            ).executeUpdate()
+    //          }
+    //        }
+    //
+    //        owcProperties.contributors.foreach {
+    //          authorAsContributor => {
+    //            if (findOwcAuthorByUuid(authorAsContributor.uuid).isEmpty) {
+    //              createOwcAuthor(authorAsContributor)
+    //            }
+    //
+    //            SQL(
+    //              s"""insert into $tableOwcPropertiesHasOwcAuthorsAsContributors values (
+    //                 |{owc_properties_uuid}, {owc_authors_as_contributors_uuid}
+    //                 |)
+    //               """.stripMargin).on(
+    //              'owc_properties_uuid -> owcProperties.uuid.toString,
+    //              'owc_authors_as_contributors_uuid -> authorAsContributor.uuid.toString
+    //            ).executeUpdate()
+    //          }
+    //        }
+    //
+    //        owcProperties.categories.foreach {
+    //          category => {
+    //            if (findOwcCategoriesByUuid(category.uuid).isEmpty) {
+    //              createOwcCategory(category)
+    //            }
+    //
+    //            SQL(
+    //              s"""insert into $tableOwcPropertiesHasOwcCategories  values (
+    //                 |{owc_properties_uuid}, {owc_categories_uuid}
+    //                 |)
+    //               """.stripMargin).on(
+    //              'owc_properties_uuid -> owcProperties.uuid.toString,
+    //              'owc_categories_uuid -> category.uuid.toString
+    //            ).executeUpdate()
+    //          }
+    //        }
+    //
+    //        owcProperties.links.foreach {
+    //          owcLink => {
+    //            if (findOwcLinksByUuid(owcLink.uuid).isEmpty) {
+    //              createOwcLink(owcLink)
+    //            }
+    //
+    //            SQL(
+    //              s"""insert into $tableOwcPropertiesHasOwcLinks  values (
+    //                 |{owc_properties_uuid}, {owc_links_uuid}
+    //                 |)
+    //               """.stripMargin).on(
+    //              'owc_properties_uuid -> owcProperties.uuid.toString,
+    //              'owc_links_uuid -> owcLink.uuid.toString
+    //            ).executeUpdate()
+    //          }
+    //        }
+    //
+    //        rowCount match {
+    //          case 1 => Some(owcProperties)
+    //          case _ => None
+    //        }
+    //      }
+    //    }
+    //  }
+    //
+    //
+    //
+    //
+    //
+    //
+    //  /**
+    //    * Not yet implemented, update OwcProperties object and hierarchical dependents
+    //    *
+    //    * @param owcProperties
+    //    * @return
+    //    */
+    //  def updateOwcProperties(owcProperties: OwcProperties): Option[OwcProperties] = ???
+    //
+    //  /**
+    //    * delete an OwcProperties object and its dependents
+    //    *
+    //    * @param owcProperties
+    //    * @return
+    //    */
+    //  def deleteOwcProperties(owcProperties: OwcProperties): Boolean = {
+    //    val rowCount = db.withTransaction {
+    //      implicit connection => {
+    //
+    //        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthors where owc_properties_uuid = {uuid}""").on(
+    //          'uuid -> owcProperties.uuid.toString
+    //        ).executeUpdate()
+    //
+    //        SQL(s"""delete from $tableOwcPropertiesHasOwcAuthorsAsContributors where owc_properties_uuid = {uuid}""").on(
+    //          'uuid -> owcProperties.uuid.toString
+    //        ).executeUpdate()
+    //
+    //        SQL(s"""delete from $tableOwcPropertiesHasOwcCategories where owc_properties_uuid = {uuid}""").on(
+    //          'uuid -> owcProperties.uuid.toString
+    //        ).executeUpdate()
+    //
+    //        SQL(s"""delete from $tableOwcPropertiesHasOwcLinks where owc_properties_uuid = {uuid}""").on(
+    //          'uuid -> owcProperties.uuid.toString
+    //        ).executeUpdate()
+    //
+    //        SQL(s"delete from $tableOwcProperties where uuid = {uuid}").on(
+    //          'uuid -> owcProperties.uuid.toString
+    //        ).executeUpdate()
+    //      }
+    //    }
+    //
+    //    db.withConnection(
+    //      implicit connection => {
+    //        (owcProperties.authors ++ owcProperties.contributors).distinct.filter {
+    //          author => {
+    //            val authorsEmpty = SQL(
+    //              s"""select owc_authors_uuid from $tableOwcPropertiesHasOwcAuthors where owc_authors_uuid = {uuid}""").on(
+    //              'uuid -> author.uuid.toString
+    //            ).as(SqlParser.str("owc_authors_uuid") *).isEmpty
+    //
+    //            val authorsAsContributorsEmpty = SQL(
+    //              s"""select owc_authors_as_contributors_uuid from $tableOwcPropertiesHasOwcAuthorsAsContributors
+    //                 |where owc_authors_as_contributors_uuid = {uuid}""".stripMargin).on(
+    //              'uuid -> author.uuid.toString
+    //            ).as(SqlParser.str("owc_authors_as_contributors_uuid") *).isEmpty
+    //
+    //            authorsEmpty && authorsAsContributorsEmpty
+    //          }
+    //        }.foreach(deleteOwcAuthor(_))
+    //
+    //        owcProperties.categories.filter {
+    //          category => {
+    //            SQL(
+    //              s"""select owc_categories_uuid from $tableOwcPropertiesHasOwcCategories where owc_categories_uuid = {uuid}""").on(
+    //              'uuid -> category.uuid.toString
+    //            ).as(SqlParser.str("owc_categories_uuid") *).isEmpty
+    //          }
+    //        }.foreach(deleteOwcCategory(_))
+    //
+    //        owcProperties.links.filter {
+    //          owcLink => {
+    //            SQL(s"""select owc_links_uuid from $tableOwcPropertiesHasOwcLinks where owc_links_uuid = {uuid}""").on(
+    //              'uuid -> owcLink.uuid.toString
+    //            ).as(SqlParser.str("owc_links_uuid") *).isEmpty
+    //          }
+    //        }.foreach(deleteOwcLink(_))
+    //      }
+    //    )
+    //
+    //    rowCount match {
+    //      case 1 => true
+    //      case _ => false
+    //    }
+    //  }
+
+
+  }

@@ -19,7 +19,7 @@
 
 import com.google.inject.AbstractModule
 import models.gmd._
-import models.owc.{OwcDocumentDAO, OwcOfferingDAO, OwcPropertiesDAO}
+import models.owc.{OwcContextDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
 import services.{EmailService, GoogleServicesDAO, MetadataService, OwcCollectionsService}
 import utils.PasswordHashing
@@ -48,7 +48,7 @@ class Module extends AbstractModule {
     bind(classOf[UserDAO]).asEagerSingleton()
     bind(classOf[OwcPropertiesDAO]).asEagerSingleton()
     bind(classOf[OwcOfferingDAO]).asEagerSingleton()
-    bind(classOf[OwcDocumentDAO]).asEagerSingleton()
+    bind(classOf[OwcContextDAO]).asEagerSingleton()
 
     // companion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
     bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)

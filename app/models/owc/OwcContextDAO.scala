@@ -32,12 +32,12 @@ import org.locationtech.spatial4j.shape.Rectangle
 import play.api.db.Database
 import utils.ClassnameLogger
 
-import info.smart.models.owc._
+import info.smart.models.owc100._
 
-//{OwcEntry, OwcDocument,OwcLink,OwcFeatureType,OwcProperties,UploadedFileProperties}
+//{ OwcContext, OwcResource, UploadedFileProperties}
 
 /**
-  * OwcDocumentDAO - store and retrieve OWS Context Documents
+  * OwcContextDAO - store and retrieve OWS Context Documents
   * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
   * about the things they provide the context for (i.e. other data sets, services, metadata records)
   * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
@@ -45,9 +45,9 @@ import info.smart.models.owc._
   * @param db
   */
 @Singleton
-class OwcDocumentDAO @Inject()(db: Database,
-                               owcOfferingDAO: OwcOfferingDAO,
-                               owcPropertiesDAO: OwcPropertiesDAO
+class OwcContextDAO @Inject()(db: Database,
+                              owcOfferingDAO: OwcOfferingDAO,
+                              owcPropertiesDAO: OwcPropertiesDAO
                               ) extends ClassnameLogger {
 
   private lazy val ctx = SpatialContext.GEO
@@ -865,6 +865,51 @@ class OwcDocumentDAO @Inject()(db: Database,
     rowCount match {
       case 1 => true
       case _ => false
+    }
+  }
+
+
+  /**
+    * Parse a OwcProperties from a ResultSet
+    */
+  val owcPropertiesParser: RowParser[OwcProperties] = {
+    str("uuid") ~
+      str("language") ~
+      str("title") ~
+      get[Option[String]]("subtitle") ~
+      get[Option[ZonedDateTime]]("updated") ~
+      get[Option[String]]("generator") ~
+      get[Option[String]]("rights") ~
+      get[Option[String]]("creator") ~
+      get[Option[String]]("publisher") map {
+
+      case uuid ~ language ~ title ~ subtitle ~ updated ~ generator ~ rights ~ creator ~ publisher =>
+        OwcProperties(
+          UUID.fromString(uuid),
+          language,
+          title,
+          subtitle,
+          updated,
+          generator,
+          rights,
+          findOwcAuthorsByPropertiesUUID(UUID.fromString(uuid)).toList,
+          findOwcAuthorsAsContributorsByPropertiesUUID(UUID.fromString(uuid)).toList,
+          creator,
+          publisher,
+          findOwcCategoriesByPropertiesUUID(UUID.fromString(uuid)).toList,
+          findOwcLinksByPropertiesUUID(UUID.fromString(uuid)).toList
+        )
+    }
+  }
+
+  /**
+    * parseOm2Measurements an uploaded file property + the getfile operation
+    */
+  val uploadedFilePropertiesParser: RowParser[UploadedFileProperties] = {
+    owcPropertiesParser ~
+      owcOfferingDAO.owcOperationParser map {
+      case properties ~ operation =>
+        UploadedFileProperties(properties, operation)
     }
   }
 }

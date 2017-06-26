@@ -34,9 +34,9 @@ import play.api.{Application, Configuration}
 import utils.PasswordHashing
 
 /**
-  * Test Spec for [[models.owc.OwcDocumentDAO]] with [[OwcDocument]] and [[OwcEntry]]
+  * Test Spec for [[models.owc.OwcContextDAO]] with [[OwcDocument]] and [[OwcEntry]]
   */
-class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcContextDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application = new
@@ -183,21 +183,21 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
-        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+        val owcContextDAO = new OwcContextDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
         val owcEntry1 = OwcEntry("http://portal.smart-project.info/context/smart-sac", Some(world), featureProps1, List(offering1, offering2))
         val owcEntry2 = OwcEntry("http://portal.smart-project.info/context/smart-sac-demo", Some(world), featureProps2, List(offering3, offering4))
 
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 0
+        owcContextDAO.getAllOwcEntries.size mustEqual 0
 
-        owcDocumentDAO.createOwcEntry(owcEntry1) mustEqual Some(owcEntry1)
-        owcDocumentDAO.createOwcEntry(owcEntry2) mustEqual Some(owcEntry2)
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 2
+        owcContextDAO.createOwcEntry(owcEntry1) mustEqual Some(owcEntry1)
+        owcContextDAO.createOwcEntry(owcEntry2) mustEqual Some(owcEntry2)
+        owcContextDAO.getAllOwcEntries.size mustEqual 2
 
-        val thrown = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcEntry(owcEntry2)
+        val thrown = the[java.sql.SQLException] thrownBy owcContextDAO.createOwcEntry(owcEntry2)
         thrown.getErrorCode mustEqual 23505
 
-        val entries = owcDocumentDAO.findOwcEntriesById(owcEntry1.id)
+        val entries = owcContextDAO.findOwcEntriesById(owcEntry1.id)
         entries.size mustEqual 1
         entries.headOption.get.id mustEqual "http://portal.smart-project.info/context/smart-sac"
 
@@ -205,8 +205,8 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         owcPropertiesDAO.getAllOwcProperties.size mustBe 2
         owcPropertiesDAO.getAllOwcCategories.size mustBe 4
 
-        owcDocumentDAO.deleteOwcEntry(owcEntry2) mustEqual true
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 1
+        owcContextDAO.deleteOwcEntry(owcEntry2) mustEqual true
+        owcContextDAO.getAllOwcEntries.size mustEqual 1
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 2
         owcPropertiesDAO.getAllOwcProperties.size mustBe 1
 
@@ -218,7 +218,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
-        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+        val owcContextDAO = new OwcContextDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val userDao = new UserDAO(database, passwordHashing)
@@ -238,22 +238,22 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcDocument1 = OwcDocument("http://portal.smart-project.info/context/smart-sac", Some(world), documentProps1, List(owcEntry1, owcEntry2))
 
-        owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM") mustEqual Some(owcDocument1)
+        owcContextDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM") mustEqual Some(owcDocument1)
 
-        owcDocumentDAO.getAllOwcDocuments.size mustEqual 1
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 2
+        owcContextDAO.getAllOwcDocuments.size mustEqual 1
+        owcContextDAO.getAllOwcEntries.size mustEqual 2
 
-        val thrown1 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM")
+        val thrown1 = the[java.sql.SQLException] thrownBy owcContextDAO.createOwcDocument(owcDocument1, testUser1.email, 2, "CUSTOM")
         thrown1.getErrorCode mustEqual 23505
 
-        val thrown2 = the[java.sql.SQLException] thrownBy owcDocumentDAO.createOwcEntry(owcEntry2)
+        val thrown2 = the[java.sql.SQLException] thrownBy owcContextDAO.createOwcEntry(owcEntry2)
         thrown2.getErrorCode mustEqual 23505
 
-        val documents = owcDocumentDAO.findOwcDocumentsById(owcDocument1.id)
+        val documents = owcContextDAO.findOwcDocumentsById(owcDocument1.id)
         documents.size mustEqual 1
         documents.headOption.get.id mustEqual "http://portal.smart-project.info/context/smart-sac"
 
-        val entries = owcDocumentDAO.findOwcEntriesById(owcEntry1.id)
+        val entries = owcContextDAO.findOwcEntriesById(owcEntry1.id)
         entries.size mustEqual 1
         entries.headOption.get.id mustEqual "http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100"
 
@@ -262,7 +262,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         owcPropertiesDAO.getAllOwcProperties.size mustBe 3
         owcPropertiesDAO.getAllOwcCategories.size mustBe 5
 
-        owcDocumentDAO.deleteOwcDocument(owcDocument1) mustBe true
+        owcContextDAO.deleteOwcDocument(owcDocument1) mustBe true
 
         database.withConnection( implicit connecttion =>
           SQL(s"""select owc_feature_types_as_document_id from $tableUserHasOwcDocuments""").as(
@@ -270,8 +270,8 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
           ).isEmpty
         ) mustBe true
 
-        owcDocumentDAO.getAllOwcDocuments.size mustEqual 0
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 0
+        owcContextDAO.getAllOwcDocuments.size mustEqual 0
+        owcContextDAO.getAllOwcEntries.size mustEqual 0
         owcPropertiesDAO.getAllOwcProperties.size mustBe 0
         owcPropertiesDAO.getAllOwcCategories.size mustBe 0
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 0
@@ -295,7 +295,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
-        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+        val owcContextDAO = new OwcContextDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val userDao = new UserDAO(database, passwordHashing)
@@ -322,14 +322,14 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         userDao.create(testUser1) mustEqual Some(testUser1)
         userDao.create(testUser2) mustEqual Some(testUser2)
 
-        owcDocumentDAO.createUsersDefaultOwcDocument(owcDoc1, testUser1.email)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc2, testUser1.email)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc3, testUser1.email)
-        owcDocumentDAO.createCustomOwcDocument(owcDoc4, testUser1.email)
-        owcDocumentDAO.createOwcDocument(owcDoc5, testUser2.email, 2, "CUSTOM")
+        owcContextDAO.createUsersDefaultOwcDocument(owcDoc1, testUser1.email)
+        owcContextDAO.createCustomOwcDocument(owcDoc2, testUser1.email)
+        owcContextDAO.createCustomOwcDocument(owcDoc3, testUser1.email)
+        owcContextDAO.createCustomOwcDocument(owcDoc4, testUser1.email)
+        owcContextDAO.createOwcDocument(owcDoc5, testUser2.email, 2, "CUSTOM")
 
-        owcDocumentDAO.getAllOwcDocuments.size mustEqual 5
-        owcDocumentDAO.getAllOwcEntries.size mustEqual 70
+        owcContextDAO.getAllOwcDocuments.size mustEqual 5
+        owcContextDAO.getAllOwcEntries.size mustEqual 70
         owcPropertiesDAO.getAllOwcProperties.size mustBe 75
         owcPropertiesDAO.getAllOwcCategories.size mustBe 79
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 139
@@ -353,7 +353,7 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val userDao = new UserDAO(database, passwordHashing)
         val owcPropertiesDAO = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
         val owcOfferingDAO = new OwcOfferingDAO(database)
-        val owcDocumentDAO = new OwcDocumentDAO(database, owcOfferingDAO, owcPropertiesDAO)
+        val owcContextDAO = new OwcContextDAO(database, owcOfferingDAO, owcPropertiesDAO)
 
 
         val testUser = User("testuser@test.com",
@@ -365,9 +365,9 @@ class OwcDocumentDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
           ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault()))
 
         userDao.create(testUser) mustEqual Some(testUser)
-        owcDocumentDAO.createUsersDefaultOwcDocument(defaultCollection, testUser.email)
+        owcContextDAO.createUsersDefaultOwcDocument(defaultCollection, testUser.email)
 
-        val ownFiles = owcDocumentDAO.findOwcPropertiesForOwcAuthorOwnFiles(testUser.email)
+        val ownFiles = owcContextDAO.findOwcPropertiesForOwcAuthorOwnFiles(testUser.email)
         ownFiles.length mustEqual 3
 
         ownFiles.map(ufp => ufp.owcProperties.title).sorted mustEqual

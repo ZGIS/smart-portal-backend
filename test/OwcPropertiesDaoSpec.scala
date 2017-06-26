@@ -17,19 +17,18 @@
  * limitations under the License.
  */
 
-import java.time.{ZoneId, ZonedDateTime}
-import java.util.UUID
+import java.net.URL
 
 import com.typesafe.config.ConfigFactory
+import info.smart.models.owc100._
 import models.owc._
-import info.smart.models.owc._
 import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
 
 /**
-  * Test Spec for [[OwcPropertiesDAO]] with [[OwcProperties]], [[OwcAuthor]], [[OwcCategory]] and [[OwcLink]]
+  * Test Spec for [[OwcPropertiesDAO]] with [[OwcAuthor]], [[OwcCategory]] and [[OwcLink]]
   */
 class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
@@ -50,12 +49,12 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
     "handle OwcAuthor with DB" in {
       withTestDatabase { database =>
 
-        val author1 = OwcAuthor(UUID.randomUUID(), "Alex", None, None)
-        val author2 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
-        val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+        val author1 = TestData.author1
+        val author2 = TestData.author2
+        val author3 = TestData.author3
 
         // TODO SR these DAO objects are created by DepInj framework normally and we should think about using it in tests also
-        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
         owcPropsDao.getAllOwcAuthors.size mustEqual 0
         owcPropsDao.createOwcAuthor(author1) mustEqual Some(author1)
@@ -73,19 +72,19 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
         owcPropsDao.deleteOwcAuthor(author2) mustEqual true
 
-        val author3_1 = OwcAuthor(author3.uuid, author3.name, author3.email, Some("https://www.gns.cri.nz"))
+        val author3_1 = TestData.author3_1
         owcPropsDao.updateOwcAuthor(author3_1).get mustEqual author3_1
-        owcPropsDao.findOwcAuthorByName(author3_1.name).headOption.get.uri.get mustEqual "https://www.gns.cri.nz"
+        owcPropsDao.findOwcAuthorByUuid(author3_1.uuid).headOption.get.uri.get.toString mustEqual "https://www.gns.cri.nz"
       }
     }
 
     "handle OwcCategory with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
-        val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
-        val category3 = OwcCategory(UUID.randomUUID(), "glossary", "uncertainty", Some("margin of error of a measurement"))
+        val category1 = TestData.category1
+        val category2 = TestData.category2
+        val category3 = TestData.category3
 
         owcPropsDao.getAllOwcCategories.size mustEqual 0
         owcPropsDao.createOwcCategory(category1) mustEqual Some(category1)
@@ -99,7 +98,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         owcPropsDao.findOwcCategoriesBySchemeAndTerm("search-domain", "uncertainty").head mustEqual category2
         owcPropsDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
 
-        val category3_1 = OwcCategory(category3.uuid, category3.scheme, category3.term, Some("Margin of Error of Measurements"))
+        val category3_1 = TestData.category3_1
         owcPropsDao.updateOwcCategory(category3_1) mustEqual Some(category3_1)
         owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").size mustBe 1
         owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").head.label mustEqual category3_1.label
@@ -111,11 +110,11 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
     "handle OwcLink with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
-        val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
-        val link3 = OwcLink(UUID.randomUUID(), "icon", Some("image/png"), "http://portal.smart-project.info/fs/images/nz_m.png", None)
+        val link1 = TestData.link1
+        val link2 = TestData.link2
+        val link3 = TestData.link3
 
         owcPropsDao.createOwcLink(link1) mustEqual Some(link1)
         owcPropsDao.createOwcLink(link2) mustEqual Some(link2)
@@ -124,89 +123,147 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcLink(link3)
         thrown.getErrorCode mustEqual 23505
 
-        owcPropsDao.findOwcLinksByHref("http://www.opengis.net/spec/owc-atom/1.0/req/core").size mustBe 1
-        owcPropsDao.findOwcLinksByRelAndHref("self", "http://portal.smart-project.info/context/smart-sac.owc.json").size mustBe 1
+        owcPropsDao.findOwcLinksByHref(new URL("http://www.opengis.net/spec/owc-atom/1.0/req/core")).size mustBe 1
+        owcPropsDao.findOwcLinksByUuid(link1.uuid).size mustBe 1
 
-        val link3_1 = OwcLink(link3.uuid, link3.rel, link3.mimeType, link3.href, Some("New Zealand Flag"))
+        val link3_1 = TestData.link3_1
+
         owcPropsDao.updateOwcLink(link3_1) mustEqual Some(link3_1)
-        owcPropsDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").size mustBe 1
-        owcPropsDao.findOwcLinksByRelAndHref("icon", "http://portal.smart-project.info/fs/images/nz_m.png").headOption.get.title mustEqual Some("New Zealand Flag")
+        owcPropsDao.findOwcLinksByUuid(link3_1.uuid).size mustBe 1
+        owcPropsDao.findOwcLinksByUuid(link3_1.uuid).get.title mustEqual Some("New Zealand Flag")
+
+        owcPropsDao.findOwcLinksByPropertiesUUID(Some(s"${link1.uuid.toString}:${link2.uuid.toString}")).size mustBe 2
+        owcPropsDao.findOwcLinksByPropertiesUUID(Some("nupnup")).size mustBe 0
+        owcPropsDao.findOwcLinksByPropertiesUUID(Some("nupnup:blubblub")).size mustBe 0
 
         owcPropsDao.deleteOwcLink(link3) mustBe true
         owcPropsDao.getAllOwcLinks.size mustEqual 2
       }
     }
 
-    "handle OwcProperties with DB" in {
+    "handle OwcContent with DB" in {
       withTestDatabase { database =>
-        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+        val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
-        val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
+        val content1 = TestData.owccontent1
+        val content2 = TestData.owccontent2
 
-        val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
-        val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
+        owcPropsDao.createOwcContent(content1) mustEqual Some(content1)
+        owcPropsDao.createOwcContent(content2) mustEqual Some(content2)
 
-        val author1 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
-        val author2 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
-        val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch 2nd", Some("b.kmoch@gns.cri.nz"), Some("http://gns.cri.nz/1234"))
-        val author4 = OwcAuthor(UUID.randomUUID(), "Alexander Kmoch", Some("c.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+        owcPropsDao.findOwcContentsByUuid(content1.uuid).size mustBe 1
+        owcPropsDao.findOwcContentsByPropertiesUUID(Some(s"${content1.uuid.toString}:${content2.uuid.toString}")).size mustBe 2
+        owcPropsDao.findOwcContentsByPropertiesUUID(Some("nupnup")).size mustBe 0
+        owcPropsDao.findOwcContentsByPropertiesUUID(Some("nupnup:blubblub")).size mustBe 0
 
-        val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+        val owccontent2_1 = TestData.owccontent2_1
 
-        val featureProps1 = OwcProperties(
-          UUID.randomUUID(),
-          "en",
-          "NZ DTM 100x100",
-          Some("Some Bla"),
-          Some(testTime),
-          None,
-          Some("CC BY SA 4.0 NZ"),
-          List(author1),
-          List(author2, author3),
-          None,
-          Some("GNS Science"),
-          List(category1, category2),
-          List(link1, link2)
-        )
+        owcPropsDao.updateOwcContent(owccontent2_1) mustEqual Some(owccontent2_1)
+        owcPropsDao.findOwcContentsByUuid(owccontent2_1.uuid).get.title mustEqual owccontent2_1.title
 
-        val featureProps2 = OwcProperties(
-          UUID.randomUUID(),
-          "en",
-          "NZ SAC Recharge",
-          Some("Some Bla Recharge"),
-          Some(testTime),
-          None,
-          Some("CC BY SA 4.0 NZ"),
-          List(author2),
-          List(author3, author4),
-          None,
-          Some("GNS Science"),
-          List(category2),
-          List(link1, link2)
-        )
-
-        owcPropsDao.createOwcProperties(featureProps1) mustEqual Some(featureProps1)
-        owcPropsDao.createOwcProperties(featureProps2) mustEqual Some(featureProps2)
-
-        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcProperties(featureProps1)
-        thrown.getErrorCode mustEqual 23505
-
-        owcPropsDao.getAllOwcProperties.size mustBe 2
-
-        owcPropsDao.findOwcPropertiesByUuid(featureProps1.uuid) mustEqual Some(featureProps1)
-
-        owcPropsDao.deleteOwcProperties(featureProps1) mustEqual true
-
-        owcPropsDao.getAllOwcProperties.size mustBe 1
-        owcPropsDao.getAllOwcAuthors.size mustBe 3
-        owcPropsDao.getAllOwcCategories.size mustBe 1
-        owcPropsDao.getAllOwcLinks.size mustBe 2
+        owcPropsDao.deleteOwcContent(content2) mustBe true
+        owcPropsDao.getAllOwcContents.size mustEqual 1
       }
     }
 
-    "get OwcProperties with own files" in {
-      pending
+    "handle OwcStyleSet with DB" in {
+      withTestDatabase { database =>
+        val owcPropsDao = new OwcPropertiesDAO(database)
+
+        val style1 = TestData.style1
+        val style2 = TestData.style2
+        val style3 = TestData.style3
+
+        owcPropsDao.createOwcStyleSet(style1) mustEqual Some(style1)
+        owcPropsDao.createOwcStyleSet(style2) mustEqual Some(style2)
+        owcPropsDao.createOwcStyleSet(style3) mustEqual Some(style3)
+
+        owcPropsDao.findOwcStyleSetsByUuid(style1.uuid).size mustBe 1
+        owcPropsDao.findOwcStyleSetsByPropertiesUUID(Some(s"${style1.uuid.toString}:${style2.uuid.toString}")).size mustBe 2
+        owcPropsDao.findOwcStyleSetsByPropertiesUUID(Some("nupnup")).size mustBe 0
+        owcPropsDao.findOwcStyleSetsByPropertiesUUID(Some("nupnup:blubblub")).size mustBe 0
+
+        val style3_1 = TestData.style3_1
+
+        owcPropsDao.updateOwcStyleSet(style3_1) mustEqual Some(style3_1)
+        owcPropsDao.findOwcStyleSetsByUuid(style3_1.uuid).get.title mustEqual style3_1.title
+
+        owcPropsDao.deleteOwcStyleSet(style3_1) mustBe true
+        owcPropsDao.getAllOwcStyleSets.size mustEqual 2
+      }
     }
+
+
+//    "handle OwcProperties with DB" in {
+//      withTestDatabase { database =>
+//        val owcPropsDao = new OwcPropertiesDAO(database, new OwcOfferingDAO(database))
+//
+//        val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
+//        val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), "http://portal.smart-project.info/context/smart-sac.owc.json", None)
+//
+//        val category1 = OwcCategory(UUID.randomUUID(), "view-groups", "sac_add", Some("Informative Layers"))
+//        val category2 = OwcCategory(UUID.randomUUID(), "search-domain", "uncertainty", Some("Uncertainty of Models"))
+//
+//        val author1 = OwcAuthor(UUID.randomUUID(), "Alex K", Some(""), None)
+//        val author2 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch", Some("a.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+//        val author3 = OwcAuthor(UUID.randomUUID(), "Alex Kmoch 2nd", Some("b.kmoch@gns.cri.nz"), Some("http://gns.cri.nz/1234"))
+//        val author4 = OwcAuthor(UUID.randomUUID(), "Alexander Kmoch", Some("c.kmoch@gns.cri.nz"), Some("http://gns.cri.nz"))
+//
+//        val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+//
+//        val featureProps1 = OwcProperties(
+//          UUID.randomUUID(),
+//          "en",
+//          "NZ DTM 100x100",
+//          Some("Some Bla"),
+//          Some(testTime),
+//          None,
+//          Some("CC BY SA 4.0 NZ"),
+//          List(author1),
+//          List(author2, author3),
+//          None,
+//          Some("GNS Science"),
+//          List(category1, category2),
+//          List(link1, link2)
+//        )
+//
+//        val featureProps2 = OwcProperties(
+//          UUID.randomUUID(),
+//          "en",
+//          "NZ SAC Recharge",
+//          Some("Some Bla Recharge"),
+//          Some(testTime),
+//          None,
+//          Some("CC BY SA 4.0 NZ"),
+//          List(author2),
+//          List(author3, author4),
+//          None,
+//          Some("GNS Science"),
+//          List(category2),
+//          List(link1, link2)
+//        )
+//
+//        owcPropsDao.createOwcProperties(featureProps1) mustEqual Some(featureProps1)
+//        owcPropsDao.createOwcProperties(featureProps2) mustEqual Some(featureProps2)
+//
+//        val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcProperties(featureProps1)
+//        thrown.getErrorCode mustEqual 23505
+//
+//        owcPropsDao.getAllOwcProperties.size mustBe 2
+//
+//        owcPropsDao.findOwcPropertiesByUuid(featureProps1.uuid) mustEqual Some(featureProps1)
+//
+//        owcPropsDao.deleteOwcProperties(featureProps1) mustEqual true
+//
+//        owcPropsDao.getAllOwcProperties.size mustBe 1
+//        owcPropsDao.getAllOwcAuthors.size mustBe 3
+//        owcPropsDao.getAllOwcCategories.size mustBe 1
+//        owcPropsDao.getAllOwcLinks.size mustBe 2
+//      }
+//    }
+//
+//    "get OwcProperties with own files" in {
+//      pending
+//    }
   }
 }

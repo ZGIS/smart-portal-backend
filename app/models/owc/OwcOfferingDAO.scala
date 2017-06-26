@@ -28,7 +28,7 @@ import anorm.{RowParser, SQL, SqlParser, ~}
 import play.api.db.Database
 import utils.ClassnameLogger
 
-import info.smart.models.owc._
+import info.smart.models.owc100._
 
 /**
   * OwcOfferingDAO - store and retrieve OWS Context Documents
@@ -39,7 +39,7 @@ import info.smart.models.owc._
   * @param db
   */
 @Singleton
-class OwcOfferingDAO @Inject()(db: Database) extends ClassnameLogger {
+class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO) extends ClassnameLogger {
 
   /** *********
     * OwcOperation

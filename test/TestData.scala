@@ -31,13 +31,13 @@ object TestData {
   val author2 = OwcAuthor(Some("Alex K"), Some(EmailAddress("a.kmoch@gns.cri.nz")), None, UUID.randomUUID())
   val author3 = OwcAuthor(Some("Alex Kmoch"), Some(EmailAddress("a.kmoch@gns.cri.nz")), Some(new URL("http://gns.cri.nz")), UUID.randomUUID())
 
-  val author3_1 = OwcAuthor(uuid = author3.uuid, name = author3.name, email = author3.email, uri = Some(new URL("https://www.gns.cri.nz")))
+  val author3_1 = author3.copy(uri = Some(new URL("https://www.gns.cri.nz")))
 
   val category1 = OwcCategory(uuid = UUID.randomUUID(), scheme = Some("view-groups"), term = "sac_add", label = Some("Informative Layers"))
   val category2 = OwcCategory(uuid = UUID.randomUUID(), scheme = "search-domain".toOption(), term = "uncertainty", label = Some("Uncertainty of Models"))
   val category3 = OwcCategory(uuid = UUID.randomUUID(), scheme = "glossary".toOption(), term = "uncertainty", label = Some("margin of error of a measurement"))
 
-  val category3_1 = OwcCategory(uuid = category3.uuid, scheme = category3.scheme, term = category3.term, label = Some("Margin of Error of Measurements"))
+  val category3_1 = category3.copy(label = Some("Margin of Error of Measurements"))
 
   val link1 = OwcLink(
     href = new URL("http://www.opengis.net/spec/owc-atom/1.0/req/core"),
@@ -96,7 +96,7 @@ object TestData {
     content = Some(xmlContent1)
   )
 
-  val owccontent2_1: OwcContent = owccontent2.copy(title = Some("ID_ROADS1:M30 Updated"))
+  val owccontent2_1: OwcContent = owccontent2.copy(title = Some("ID_ROADS1:M30 Updated"), uuid = UUID.randomUUID())
 
   val abstrakt = "SLD Cook Book: Simple Line extracted from http://docs.geoserver.org/latest/en/user/_downloads/line_simpleline.sld"
 
@@ -141,8 +141,74 @@ object TestData {
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
     uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
-    content = Some(owccontent1.copy(content = Some(sldContent)))
+    content = Some(owccontent1.copy(content = Some(sldContent), uuid = UUID.randomUUID()))
   )
 
   val style3_1: OwcStyleSet = style3.copy(content = Some(owccontent1.copy(content = Some(xmlContent1))))
+
+  val operation1 = OwcOperation(
+    code = "GetCapabilities",
+    method = "GET",
+    mimeType = Some("application/xml"),
+    requestUrl = new URL("https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3.0&REQUEST=GetCapabilities"),
+    request = None,
+    result = None)
+
+  val operation2 = OwcOperation(
+    code = "GetMap",
+    method = "GET",
+    mimeType = Some("image/png"),
+    requestUrl = new URL("https://data.linz.govt.nz/services;key=a8fb9bcd52684b7abe14dd4664ce9df9/wms?VERSION=1.3&REQUEST=GetMap&SRS=EPSG:4326&BBOX=168,-45,182,-33&WIDTH=800&HEIGHT=600&LAYERS=layer-767&FORMAT=image/png&TRANSPARENT=TRUE&EXCEPTIONS=application/vnd.ogc.se_xml"),
+    request = None,
+    result = None)
+
+  val operation3 = OwcOperation(
+    code = "GetFeature",
+    method = "GET",
+    mimeType = Some("application/xml"),
+    requestUrl = new URL("http://portal.smart-project.info/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"),
+    request = None,
+    result = Some(owccontent1))
+
+  val operation3_1 = operation3.copy(mimeType = Some("application/geojson"))
+
+  val operation4 = OwcOperation(
+    "GetRecordById",
+    "POST",
+    Some("application/xml"),
+    new URL("http://portal.smart-project.info/pycsw/csw"),
+    Some(OwcContent(
+      "application/xml",
+      None,
+      None,
+      Some("""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
+             |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
+             |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
+             |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
+             |service="CSW" version="2.0.2">
+             |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
+             |<csw:ElementSetName>full</csw:ElementSetName>
+             |</csw:GetRecordById>""".stripMargin))
+    ),
+    None,
+    UUID.randomUUID())
+
+  val offering1 = OwcOffering(
+    uuid = UUID.randomUUID(),
+    code = OwcOfferingType.WMS.code,
+    operations = List(operation1, operation2),
+    contents = List(owccontent1),
+    styles = List()
+  )
+
+  val offering2 = OwcOffering(
+    uuid = UUID.randomUUID(),
+    code = OwcOfferingType.CSW.code,
+    operations = List(operation3, operation4),
+    contents = List(owccontent2),
+    styles = List(style1, style2)
+  )
+
+  val offering2_1 = offering2.copy(styles = List(style1))
 }

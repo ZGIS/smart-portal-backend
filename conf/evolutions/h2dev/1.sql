@@ -109,7 +109,7 @@ CREATE TABLE owc_links (
 );
 
 CREATE TABLE owc_offerings (
-  uuid varchar(255),
+  uuid varchar(255) NOT NULL,
   code varchar(2047) NOT NULL,
   operations TEXT,
   contents TEXT,
@@ -118,7 +118,7 @@ CREATE TABLE owc_offerings (
 );
 
 CREATE TABLE owc_operations (
-  uuid varchar(255),
+  uuid varchar(255) NOT NULL,
   code varchar(2047) NOT NULL,
   method varchar(255) NOT NULL,
   mime_type varchar(255),
@@ -129,7 +129,7 @@ CREATE TABLE owc_operations (
 );
 
 CREATE TABLE owc_contents (
-  uuid varchar(255),
+  uuid varchar(255) NOT NULL,
   mime_type varchar(255) NOT NULL,
   url varchar(2047),
   title TEXT,
@@ -138,7 +138,7 @@ CREATE TABLE owc_contents (
 );
 
 CREATE TABLE owc_stylesets (
-  uuid varchar(255),
+  uuid varchar(255) NOT NULL,
   name TEXT NOT NULL,
   title TEXT NOT NULL,
   abstrakt TEXT,

@@ -19,7 +19,10 @@
 
 package models
 
+import java.net.URL
+
 import anorm.{Column, MetaDataItem, TypeDoesNotMatch}
+import info.smart.models.owc100._
 
 package object owc {
 
@@ -35,22 +38,31 @@ package object owc {
   //  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
   //  implicit val tableOwcOfferingsHasOwcOperations = "owc_offerings_has_owc_operations"
 
-  implicit val tableOwcContextHasOwcResource = "owc_context_has_owc_resources"
-  implicit val tableUserHasOwcContextRights = "user_has_owc_context_rights"
+  val tableOwcContextHasOwcResource = "owc_context_has_owc_resources"
+  val tableUserHasOwcContextRights = "user_has_owc_context_rights"
 
-  implicit val tableUsers = "users"
+  val tableUsers = "users"
 
-  implicit val tableOwcStyleSets = "owc_stylesets"
-  implicit val tableOwcContents = "owc_contents"
-  implicit val tableOwcOperations = "owc_operations"
-  implicit val tableOwcOfferings = "owc_offerings"
-  implicit val tableOwcLinks = "owc_links"
-  implicit val tableOwcCreatorDisplays = "owc_creator_displays"
-  implicit val tableOwcCreatorApplications = "owc_creator_applications"
-  implicit val tableOwcCategories = "owc_categories"
-  implicit val tableOwcAuthors = "owc_authors"
-  implicit val tableOwcResources = "owc_resources"
-  implicit val tableOwcContexts = "owc_contexts"
+  val tableOwcStyleSets = "owc_stylesets"
+  val tableOwcContents = "owc_contents"
+  val tableOwcOperations = "owc_operations"
+  val tableOwcOfferings = "owc_offerings"
+  val tableOwcLinks = "owc_links"
+  val tableOwcCreatorDisplays = "owc_creator_displays"
+  val tableOwcCreatorApplications = "owc_creator_applications"
+  val tableOwcCategories = "owc_categories"
+  val tableOwcAuthors = "owc_authors"
+  val tableOwcResources = "owc_resources"
+  val tableOwcContexts = "owc_contexts"
+
+  implicit val OwcAuthorEvidence = OwcAuthor(None, None, None)
+  implicit val OwcCategoryEvidence = OwcCategory("term", None, None)
+  implicit val OwcLinkEvidence = OwcLink(new URL(GENERIC_OWC_SPEC_URL), None, None, None, None, "rel")
+  implicit val OwcContentEvidence = OwcContent("text/plain", None, None, None)
+  implicit val OwcStyleSetEvidence = OwcStyleSet("name", "title", None, None, None, None)
+
+  implicit val OwcOperationEvidence = OwcOperation("GetCapabilties", "GET", None, new URL(GENERIC_OWC_SPEC_URL), None, None)
+  implicit val OwcOfferingEvidence = OwcOffering(new URL(GENERIC_OWC_SPEC_URL + "/wms"), List(), List(), List())
 
   // Custom conversion from JDBC column to Boolean
   implicit def columnToBoolean: Column[Boolean] = {

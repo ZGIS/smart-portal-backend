@@ -19,321 +19,410 @@
 
 package services
 
-import java.time.{ZoneId, ZonedDateTime}
+import java.net.{URL, URLEncoder}
+import java.time._
 import java.util.UUID
 import javax.inject._
 
+import info.smart.models.owc100._
+import models.db.SessionHolder
 import models.gmd.MdMetadata
 import models.owc._
 import models.users._
+import play.api.Configuration
+import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.ClassnameLogger
+import utils.StringUtils._
 
-import info.smart.models.owc._
+import scala.util.{Success, Try}
 
 @Singleton
-class OwcCollectionsService @Inject()(userDAO: UserDAO,
+class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
                                       owcPropertiesDAO: OwcPropertiesDAO,
                                       owcOfferingDAO: OwcOfferingDAO,
-                                      owcContextDAO: OwcContextDAO) extends ClassnameLogger {
+                                      owcContextDAO: OwcContextDAO,
+                                      config: Configuration) extends ClassnameLogger {
+
+  val configuration: play.api.Configuration = config
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   /**
     * get user's default collection
-    * @param email
+    *
+    * @param authUser
     * @return
     */
-  def getUserDefaultOwcDocument(email: String) : Option[OwcDocument] = {
-    owcContextDAO.findUserDefaultOwcDocument(email)
+  def getUserDefaultOwcContext(authUser: String): Option[OwcContext] = {
+    sessionHolder.viaConnection(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).map(
+        user =>
+          owcContextDAO.findUserDefaultOwcContext(user))).getOrElse(None)
   }
 
   /**
     * get user's own files
-    * @param email
+    *
+    * @param authUser
     * @return
     */
-  def getOwcPropertiesForOwcAuthorOwnFiles(email: String): Seq[UploadedFileProperties] = {
-    owcContextDAO.findOwcPropertiesForOwcAuthorOwnFiles(email)
+  def getOwcLinksForOwcAuthorOwnFiles(authUser: String): Seq[OwcLink] = {
+
+    val userCollection = sessionHolder.viaConnection(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).map(
+        u => owcContextDAO.findUserDefaultOwcContext(u))).getOrElse(None)
+    userCollection.fold {
+      logger.warn(s"user ${authUser} doesn't have personal collection")
+      Seq[OwcLink]()
+    } {
+      owcDoc =>
+        owcDoc.resource.filter(o => o.contentByRef.nonEmpty).flatMap(o => o.contentByRef)
+    }
+
   }
 
   /**
-    * get Owc Documents For optional email And owc doc Id
+    * get Owc Contexts For optional email And owc doc Id
     *
     * @param authUserOption
-    * @param idOption
+    * @param owcContextIdOption
     * @return
     */
-  def getOwcDocumentsForUserAndId(authUserOption: Option[String], idOption: Option[String]): Seq[OwcDocument] = {
+  def getOwcContextsForUserAndId(authUserOption: Option[String], owcContextIdOption: Option[String]): Seq[OwcContext] = {
 
     authUserOption.fold {
       // no email provided
-      idOption.fold {
+      owcContextIdOption.fold {
         // TODO docs for anonymous, no id provided => all public docs (implies docs must be public)
-        owcContextDAO.getAllPublicOwcDocuments
+        owcContextDAO.getAllPublicOwcContexts
       } {
         // TODO find doc by id for anonymous, only one doc if available (implies doc must be public)
-        id => {
-          owcContextDAO.findPublicOwcDocumentsById(id).toSeq
+        owcContextId => {
+          owcContextDAO.findPublicOwcContextsById(owcContextId).toSeq
         }
       }
     } { authUser => {
       // trying to find a user from provided authuser option
-      userDAO.findUserByEmail(authUser).fold {
-        logger.warn("Provided user not found.")
-        idOption.fold {
-          // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
-          owcContextDAO.getAllPublicOwcDocuments
-        } {
-          // docs for anonymous, but id provided only one doc if available (and only if public)
-          id => {
-            owcContextDAO.findPublicOwcDocumentsById(id).toSeq
+      sessionHolder.viaConnection(implicit connection =>
+        UserDAO.findUserByEmailAsString(authUser).fold {
+          logger.warn("Provided user not found.")
+          owcContextIdOption.fold {
+            // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
+            owcContextDAO.getAllPublicOwcContexts
+          } {
+            // docs for anonymous, but id provided only one doc if available (and only if public)
+            owcContextId => {
+              owcContextDAO.findPublicOwcContextsById(owcContextId).toSeq
+            }
           }
-        }
-      } { user =>
-        // we have a distinct ok user here
-        idOption.fold {
-          // docs for user, no id provided => all user visible docs
-          // TODO technically would be more than "only" publicly visible at some point
-          val publicDocs = owcContextDAO.getAllPublicOwcDocuments
-          val userDocs = owcContextDAO.findOwcDocumentByUser(user.email)
+        } { user =>
+          // we have a distinct ok user here
+          owcContextIdOption.fold {
+            // docs for user, no id provided => all user visible docs
+            // TODO technically would be more than "only" publicly visible at some point
+            val publicDocs = owcContextDAO.getAllPublicOwcContexts
+            val userDocs = owcContextDAO.findOwcContextsByUser(user)
 
-          publicDocs ++ userDocs
-        } {
-          // TODO find doc by id for provided user if visible/available (later maybe check constraint)
-          id => {
-            owcContextDAO.findOwcDocumentByIdAndUser(id, user.email).toSeq
+            publicDocs ++ userDocs
+          } {
+            // TODO find doc by id for provided user if visible/available (later maybe check constraint)
+            owcContextId => {
+              owcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+            }
           }
         }
-      }
+      )
     }
     }
   }
 
   /**
     * creates the first personal default collection for a user, typically at the stage of user registration
+    *
     * @param user
     */
   def createUserDefaultCollection(user: User): Unit = {
 
     val propsUuid = UUID.randomUUID()
-    val link1 = OwcLink(UUID.randomUUID(), "profile", None, "http://www.opengis.net/spec/owc-atom/1.0/req/core", Some("This file is compliant with version 1.0 of OGC Context"))
-    val link2 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/user/${propsUuid.toString}", None)
+    val profileLink = OwcProfile.CORE.value
 
-    val author1 = OwcAuthor(UUID.randomUUID(), s"${user.firstname} ${user.lastname}", Some(user.email), None)
+    val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 
-    val defaultOwcProps = OwcProperties(
-      propsUuid,
-      "en",
-      "User Default Collection",
-      Some("Your personal collection"),
-      Some(ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())),
-      None,
-      Some("CC BY SA 4.0 NZ"),
-      List(author1),
-      List(),
-      None,
-      Some("GNS Science"),
-      List(),
-      List(link1, link2)
-    )
+    val defaultOwcDoc = OwcContext(
+      id = new URL(s"http://portal.smart-project.info/context/user/${propsUuid.toString}"),
+      areaOfInterest = None,
+      specReference = List(profileLink), // aka links.profiles[] & rel=profile
+      contextMetadata = List(), // aka links.via[] & rel=via
+      language = "en",
+      title = "User Default Collection",
+      subtitle = Some("Your personal collection"),
+      updateDate = OffsetDateTime.now(ZoneId.of(appTimeZone)),
+      author = List(author1),
+      publisher = Some("GNS Science"),
+      creatorApplication = None,
+      creatorDisplay = None,
+      rights = Some("CC BY SA 4.0 NZ"),
+      timeIntervalOfInterest = None,
+      keyword = List(),
+      resource = List())
 
-    val defaultOwcDoc = OwcDocument(s"http://portal.smart-project.info/context/user/${propsUuid.toString}",
-      None, defaultOwcProps, List())
-
-    val ok = owcContextDAO.createUsersDefaultOwcDocument(defaultOwcDoc, user.email)
+    val ok = owcContextDAO.createUsersDefaultOwcContext(defaultOwcDoc, user)
     ok match {
-      case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}" )
+      case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}")
       case _ => logger.error("Something failed miserably")
     }
   }
 
   /**
     *
+    * @param catalogUrl
     * @param mdMetadata
-    * @param email
+    * @param authUser
     * @return
     */
-  def addMdEntryToUserDefaultCollection(catalogUrl: String, mdMetadata: MdMetadata, email: String) : Boolean = {
+  def addMdResourceToUserDefaultCollection(catalogUrl: String, mdMetadata: MdMetadata, authUser: String): Boolean = {
 
-    val cswGetCapaOps = OwcOperation(UUID.randomUUID(),
-      "GetCapabilities",
-      "GET",
-      "application/xml",
-      s"$catalogUrl/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities",
-      None, None)
+    lazy val bboxFormat = new BboxArrayFormat
 
-    val cswGetRecordOps = OwcOperation(UUID.randomUUID(),
-      "GetRecordById",
-      "GET",
-      "application/xml",
-      s"$catalogUrl/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}",
-      None, None)
+    val updatedTime = Try(OffsetDateTime.of(mdMetadata.citation.ciDate, LocalTime.of(12, 0), ZoneOffset.UTC))
+      .getOrElse(OffsetDateTime.now(ZoneId.systemDefault()))
+    val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}")
 
-    val propsUuid = UUID.randomUUID()
-    val updatedTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+    val cswGetCapaOps = OwcOperation(
+      code = "GetCapabilities",
+      method = "GET",
+      mimeType = Some("application/xml"),
+      requestUrl = new URL(s"$catalogUrl/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities"),
+      request = None,
+      result = None)
 
-    val cswOffering = CswOffering(
-      UUID.randomUUID(),
-      "http://www.opengis.net/spec/owc-geojson/1.0/req/csw",
-      List(cswGetCapaOps, cswGetRecordOps),
-      List()
+    val cswGetRecordOps = OwcOperation(
+      code = "GetRecordById",
+      method = "GET",
+      mimeType = Some("application/xml"),
+      requestUrl = new URL(s"$catalogUrl/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}"),
+      request = None,
+      result = None)
+
+    val cswOffering = OwcOffering(
+      code = OwcOfferingType.CSW.code,
+      operations = List(cswGetCapaOps, cswGetRecordOps),
+      styles = List(),
+      contents = List()
     )
 
-    // self link should concur with EntryId Thhtp URI
-    val link1 = OwcLink(UUID.randomUUID(), "self", Some("application/json"), s"http://portal.smart-project.info/context/entry/${propsUuid.toString}", None)
-    val defaultCollection = owcContextDAO.findUserDefaultOwcDocument(email)
+    val viaLink = OwcLink(
+      href = baseLink,
+      mimeType = Some("application/json"),
+      lang = None,
+      title = None,
+      length = None,
+      rel = "via")
 
-    val upsertOk = defaultCollection.map{ owcDoc => {
-        val author1 = owcDoc.properties.authors.head
-        val contributor = OwcAuthor(UUID.randomUUID(),
-          mdMetadata.responsibleParty.individualName,
-          Some(mdMetadata.responsibleParty.email),
-          Some(mdMetadata.responsibleParty.orgWebLinkage))
+    val cswLink = OwcLink(
+      href = cswGetRecordOps.requestUrl,
+      mimeType = cswGetRecordOps.mimeType,
+      lang = None,
+      title = None,
+      length = None,
+      rel = "via")
 
-        // TODO fill up very much a lot of stuff
-        val entryProps = OwcProperties(
-          propsUuid,
-          "en",
-          mdMetadata.title,
-          Some(mdMetadata.abstrakt),
-          Some(updatedTime),
-          None,
-          Some(mdMetadata.distribution.useLimitation),
-          List(author1),
-          List(contributor),
-          None,
-          Some("GNS Science"),
-          List(),
-          List(link1)
-        )
-        val owcEntry = OwcEntry("http://portal.smart-project.info/context/entry/" + mdMetadata.fileIdentifier,
-          None, entryProps, List(cswOffering))
-        val entries = owcDoc.features ++ Seq(owcEntry)
-        val newDoc = owcDoc.copy(features = entries)
+    sessionHolder.viaTransaction(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).exists {
+        user =>
+          owcContextDAO.findUserDefaultOwcContext(user).exists {
+            owcDoc => {
 
-        owcContextDAO.addOwcEntryToOwcDocument(newDoc, owcEntry, email).isDefined
+              val owcResource = OwcResource(
+                id = baseLink,
+                geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
+                title = mdMetadata.title,
+                subtitle = mdMetadata.abstrakt.toOption(),
+                updateDate = updatedTime,
+                author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
+                  email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
+                  uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
+                publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
+                rights = mdMetadata.distribution.useLimitation.toOption(),
+                temporalExtent = owcContextDAO.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
+
+                // links.alternates[] and rel=alternate
+                contentDescription = List(),
+
+                // aka links.previews[] and rel=icon (atom)
+                preview = List(),
+
+                // aka links.data[] and rel=enclosure (atom)
+                contentByRef = List(),
+
+                // aka links.via[] & rel=via
+                resourceMetadata = List(viaLink, cswLink),
+                offering = List(cswOffering),
+                minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
+                maxScaleDenominator = None,
+                active = None,
+                keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
+                folder = None)
+
+              val entries = owcDoc.resource ++ Seq(owcResource)
+              val newDoc = owcDoc.copy(resource = entries)
+              owcContextDAO.updateOwcContext(newDoc, user).isDefined
+            }
+          }
+      })
+  }
+
+  /**
+    *
+    * @param owcResource
+    * @param authUser
+    * @return
+    */
+  def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
+
+    sessionHolder.viaTransaction(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).exists {
+        user =>
+          owcContextDAO.findUserDefaultOwcContext(user).exists {
+            owcDoc => {
+              val entries = owcDoc.resource ++ Seq(owcResource)
+              val newDoc = owcDoc.copy(resource = entries)
+              owcContextDAO.updateOwcContext(newDoc, user).isDefined
+            }
+          }
       }
-    }
-    upsertOk.getOrElse(false)
+    )
+  }
+
+  //  /**
+  //    *
+  //    * @param owcResource
+  //    * @param email
+  //    * @return
+  //    */
+  //  def addResourceToCollection(owcContextId: String, owcResource: OwcResource, email: String) : Option[OwcContext] = {
+  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
+  //
+  //    collection.fold {
+  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
+  //      val empty: Option[OwcContext] = None
+  //      empty
+  //    }{
+  //      owcDoc => {
+  //        val entries = owcDoc.features ++ Seq(owcResource)
+  //        val newDoc = owcDoc.copy(features = entries)
+  //        owcContextDAO.addOwcResourceToOwcContext(newDoc, owcResource, email)
+  //      }
+  //    }
+  //  }
+  //
+  //  /**
+  //    *
+  //    * @param owcResource
+  //    * @param email
+  //    * @return
+  //    */
+  //  def replaceResourceInCollection(owcContextId: String, owcResource: OwcResource, email: String) : Option[OwcContext] = {
+  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
+  //
+  //    collection.fold {
+  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
+  //      val empty: Option[OwcContext] = None
+  //      empty
+  //    }{
+  //      owcDoc => {
+  //        // at first filter the resource out of the current collection and then add the updated resource back in
+  //        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(owcResource.id)) ++ Seq(owcResource)
+  //        val newDoc = owcDoc.copy(features = entries)
+  //        owcContextDAO.replaceResourceInCollection(newDoc, owcResource, email)
+  //      }
+  //    }
+  //  }
+  //
+  //  def deleteResourceFromCollection(owcContextId: String, resourceid: String, email: String) : Option[OwcContext] = {
+  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
+  //    collection.fold {
+  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
+  //      val empty: Option[OwcContext] = None
+  //      empty
+  //    } {
+  //      owcDoc => {
+  //        // filter the resource out of the current collection
+  //        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(resourceid))
+  //        val newDoc = owcDoc.copy(features = entries)
+  //        owcContextDAO.deleteOwcResourceFromOwcContext(newDoc, resourceid, email)
+  //      }
+  //    }
+  //  }
+
+  /**
+    *
+    * @param owcContext
+    * @param authUser
+    * @return
+    */
+  def insertCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
+    sessionHolder.viaTransaction(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).map(
+        user =>
+          owcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)
   }
 
   /**
     *
-    * @param owcEntry
-    * @param email
+    * @param owcContext
+    * @param authUser
     * @return
     */
-  def addPlainFileEntryToUserDefaultCollection(owcEntry: OwcEntry, email: String) : Boolean = {
-    val defaultCollection = owcContextDAO.findUserDefaultOwcDocument(email)
-
-    val upsertOk = defaultCollection.map {
-      owcDoc => {
-        val author1 = owcDoc.properties.authors.head
-
-        val newProps = owcEntry.properties.copy(authors = owcEntry.properties.authors ++ Seq(author1))
-        val newEntry = owcEntry.copy(properties = newProps)
-        val entries = owcDoc.features ++ Seq(newEntry)
-        val newDoc = owcDoc.copy(features = entries)
-
-        owcContextDAO.addOwcEntryToOwcDocument(newDoc, newEntry, email).isDefined
-      }
-    }
-    upsertOk.getOrElse(false)
+  def updateCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
+    sessionHolder.viaTransaction(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).map(
+        user =>
+          owcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)
   }
 
   /**
     *
-    * @param owcEntry
-    * @param email
+    * @param owcContext
+    * @param authUser
     * @return
     */
-  def addEntryToCollection(owcDocumentId: String, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
-    val collection = owcContextDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
-
-    collection.fold {
-      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
-      val empty: Option[OwcDocument] = None
-      empty
-    }{
-      owcDoc => {
-        val entries = owcDoc.features ++ Seq(owcEntry)
-        val newDoc = owcDoc.copy(features = entries)
-        owcContextDAO.addOwcEntryToOwcDocument(newDoc, owcEntry, email)
-      }
-    }
+  def deleteCollection(owcContext: OwcContext, authUser: String): Boolean = {
+    sessionHolder.viaConnection(implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser).exists {
+        user =>
+          val hasOwcDoc = owcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
+          hasOwcDoc.fold {
+            false
+          } {
+            theDoc => {
+              owcContextDAO.deleteOwcContext(owcContext, user)
+            }
+          }
+      })
   }
 
   /**
+    * returns an Option[EmailAddress] object if parsing is successful, for those mdMetadata email joint arrays
     *
-    * @param owcEntry
-    * @param email
-    * @return
+    * @param emailString the string that might comprise of or contain an email address
+    * @return Option[EmailAddress]
     */
-  def replaceEntryInCollection(owcDocumentId: String, owcEntry: OwcEntry, email: String) : Option[OwcDocument] = {
-    val collection = owcContextDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
+  def parseEmailStringtoEmailAddress(emailString: String): Option[EmailAddress] = {
 
-    collection.fold {
-      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
-      val empty: Option[OwcDocument] = None
-      empty
-    }{
-      owcDoc => {
-        // at first filter the entry out of the current collection and then add the updated entry back in
-        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(owcEntry.id)) ++ Seq(owcEntry)
-        val newDoc = owcDoc.copy(features = entries)
-        owcContextDAO.replaceEntryInCollection(newDoc, owcEntry, email)
-      }
-    }
-  }
+    if (EmailAddress.isValid(emailString)) {
+      Some(EmailAddress(emailString))
+    } else {
+      if (emailString.contains(",")) {
+        val commaFree = emailString.split(",").head.trim
 
-  def deleteEntryFromCollection(owcDocumentId: String, entryid: String, email: String) : Option[OwcDocument] = {
-    val collection = owcContextDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
-    collection.fold {
-      logger.warn(s"No usable collection owcdoc id $owcDocumentId found for $email")
-      val empty: Option[OwcDocument] = None
-      empty
-    } {
-      owcDoc => {
-        // filter the entry out of the current collection
-        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(entryid))
-        val newDoc = owcDoc.copy(features = entries)
-        owcContextDAO.deleteOwcEntryFromOwcDocument(newDoc, entryid, email)
-      }
-    }
-  }
-
-  /**
-    *
-    * @param owcDocument
-    * @param email
-    * @return
-    */
-  def insertCollection(owcDocument: OwcDocument, email: String) = {
-    val owcOk = owcContextDAO.createCustomOwcDocument(owcDocument, email)
-    owcOk
-  }
-
-  /**
-    *
-    * @param owcDocument
-    * @param email
-    * @return
-    */
-  def updateCollectionMetadata(owcDocument: OwcDocument, email: String) : Option[OwcDocument] = {
-    logger.error(s"${owcDocument.id} should be updated, but is currently not implemented")
-    owcContextDAO.findOwcDocumentByIdAndUser(owcDocument.id, email)
-  }
-  /**
-    *
-    * @param owcDocumentId
-    * @param email
-    * @return
-    */
-  def deleteCollection(owcDocumentId: String, email: String) : Boolean ={
-    val hasOwcDoc = owcContextDAO.findOwcDocumentByIdAndUser(owcDocumentId, email)
-    hasOwcDoc.fold{
-      false
-    } {
-      theDoc => {
-        owcContextDAO.deleteOwcDocument(theDoc)
+        Try {
+          EmailAddress(commaFree)
+        } match {
+          case Success(e) => Some(e)
+          case _ => None
+        }
+      } else {
+        None
       }
     }
   }

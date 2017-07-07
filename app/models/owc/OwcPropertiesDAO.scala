@@ -21,6 +21,7 @@ package models.owc
 
 import java.io.InvalidClassException
 import java.net.URL
+import java.sql.Connection
 import java.util.UUID
 import javax.inject.{Inject, Singleton}
 
@@ -50,7 +51,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   /**
     * Parse a OwcAuthor from a ResultSet
     */
-  val owcAuthorParser = {
+  private val owcAuthorParser = {
     get[Option[String]]("name") ~
       get[Option[String]]("email") ~
       get[Option[String]]("uri") ~
@@ -65,10 +66,8 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     *
     * @return
     */
-  def getAllOwcAuthors: Seq[OwcAuthor] = {
-    db.withConnection { implicit connection =>
+  def getAllOwcAuthors()(implicit connection: Connection): Seq[OwcAuthor] = {
       SQL(s"select * from $tableOwcAuthors").as(owcAuthorParser *)
-    }
   }
 
   /**
@@ -210,7 +209,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   /**
     * Parse a OwcCategory from a ResultSet
     */
-  val owcCategoryParser = {
+  private val owcCategoryParser = {
     str("uuid") ~
       get[Option[String]]("scheme") ~
       str("term") ~
@@ -397,7 +396,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
   /**
     * Parse a OwcLink from a ResultSet
     */
-  val owcLinkParser = {
+  private val owcLinkParser = {
     str("uuid") ~
       str("href") ~
       get[Option[String]]("mime_type") ~
@@ -463,6 +462,14 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
 
   /**
     * Create an OwcLink.
+    *
+  uuid varchar(255) NOT NULL,
+  href varchar(2047) NOT NULL,
+  mime_type varchar(255),
+  lang varchar(255),
+  title TEXT,
+  length BIGINT,
+  rel varchar(255) NOT NULL,
     *
     * @param owcLink
     * @return
@@ -571,7 +578,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     * Parse a OwcContent from a ResultSet
     *
     */
-  val owcContentParser = {
+  private val owcContentParser = {
     str("uuid") ~
       str("mime_type") ~
       get[Option[String]]("url") ~
@@ -641,6 +648,13 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     *
     * @param owcContent
     * @return
+    *
+    *         uuid varchar(255) NOT NULL,
+  mime_type varchar(255) NOT NULL,
+  url varchar(2047),
+  title TEXT,
+  content TEXT,
+
     */
   def updateOwcContent(owcContent: OwcContent): Option[OwcContent] = {
 
@@ -686,7 +700,8 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     * @return
     */
   def deleteOwcContentByUuid(uuid: UUID): Boolean = {
-    val rowCount = db.withTransaction { implicit connection =>
+    val rowCount = db.withConnection {
+      implicit connection =>
 
       SQL(s"delete from $tableOwcContents where uuid = {uuid}").on(
         'uuid -> uuid.toString
@@ -726,7 +741,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     * Parse a OwcStyleSet from a ResultSet
     *
     */
-  val owcStyleSetParser = {
+  private val owcStyleSetParser = {
     str("name") ~
       str("title") ~
       get[Option[String]]("abstrakt") ~
@@ -734,14 +749,14 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
       get[Option[String]]("legend_url") ~
       get[Option[String]]("content_uuid") ~
       str("uuid") map {
-      case name ~ title ~ abstrakt ~ isDefault ~ legendUrl ~ content_uuid ~ uuid =>
+      case name ~ title ~ abstrakt ~ isDefault ~ legendUrl ~ content_uuid ~ uuidstring =>
         OwcStyleSet(name = name,
           legendUrl = legendUrl.map(new URL(_)),
           title = title,
           abstrakt = abstrakt,
           default = isDefault,
           content = content_uuid.map(u => u.toUuidOption.map(findOwcContentsByUuid(_)).getOrElse(None)).getOrElse(None),
-          uuid = UUID.fromString(uuid))
+          uuid = UUID.fromString(uuidstring))
     }
   }
 
@@ -792,50 +807,49 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     */
   def createOwcStyleSet(owcStyleSet: OwcStyleSet): Option[OwcStyleSet] = {
 
-    db.withConnection { implicit connection =>
-
-      val pre: Boolean = if (owcStyleSet.content.isDefined) {
-        val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
-        if (exists) {
-          logger.error(s"OwcContent with UUID: ${owcStyleSet.content.get.uuid} exists already, won't create OwcStyleSet")
-          false
-        } else {
-          val insert = owcStyleSet.content.map(createOwcContent(_))
-          insert.isDefined
-        }
+    val pre: Boolean = if (owcStyleSet.content.isDefined) {
+      val exists = findOwcContentsByUuid(owcStyleSet.content.get.uuid).isDefined
+      if (exists) {
+        logger.error(s"OwcContent with UUID: ${owcStyleSet.content.get.uuid} exists already, won't create OwcStyleSet")
+        false
       } else {
-        true
+        val insert = createOwcContent(owcStyleSet.content.get)
+        insert.isDefined
       }
+    } else {
+      true
+    }
 
-      if (pre) {
+    if (pre) {
+      db.withTransaction {
+        implicit connection =>
 
-        val rowCount = SQL(
-          s"""
-          insert into $tableOwcStyleSets values (
-            {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}
-          )
-        """).on(
-          'uuid -> owcStyleSet.uuid.toString,
-          'name -> owcStyleSet.name,
-          'title -> owcStyleSet.title,
-          'abstrakt -> owcStyleSet.abstrakt,
-          'isDefault -> owcStyleSet.default,
-          'legendUrl -> owcStyleSet.legendUrl.map(_.toString),
-          'content -> owcStyleSet.content.map(_.uuid.toString)
-        ).executeUpdate()
+          val rowCount = SQL(
+            s"""
+            insert into $tableOwcStyleSets values (
+              {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}
+            )
+          """).on(
+            'uuid -> owcStyleSet.uuid.toString,
+            'name -> owcStyleSet.name,
+            'title -> owcStyleSet.title,
+            'abstrakt -> owcStyleSet.abstrakt,
+            'isDefault -> owcStyleSet.default,
+            'legendUrl -> owcStyleSet.legendUrl.map(_.toString),
+            'content -> owcStyleSet.content.map(_.uuid.toString)
+          ).executeUpdate()
 
-        rowCount match {
-          case 1 => Some(owcStyleSet)
-          case _ => {
-            logger.error(s"OwcStyleSet couldn't be created")
-            None
+          rowCount match {
+            case 1 => Some(owcStyleSet)
+            case _ => {
+              logger.error(s"OwcStyleSet couldn't be created")
+              None
+            }
           }
         }
-
-      } else {
-        logger.error(s"Precondition failed, won't create OwcStyleSet")
-        None
-      }
+    } else {
+      logger.error(s"Precondition failed, won't create OwcStyleSet")
+      None
     }
   }
 
@@ -847,21 +861,21 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     */
   def updateOwcStyleSet(owcStyleSet: OwcStyleSet): Option[OwcStyleSet] = {
 
-    db.withConnection { implicit connection =>
+    db.withTransaction { implicit connection =>
 
       val pre: Boolean = if (owcStyleSet.content.isDefined) {
-        val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
+        val exists = findOwcContentsByUuid(owcStyleSet.content.get.uuid).isDefined
         if (exists) {
-          val update = owcStyleSet.content.map(updateOwcContent(_))
+          val update = updateOwcContent(owcStyleSet.content.get)
           update.isDefined
         } else {
-          val insert = owcStyleSet.content.map(createOwcContent(_))
+          val insert = createOwcContent(owcStyleSet.content.get)
           insert.isDefined
         }
       } else {
         val toBeDeleted = findOwcStyleSetsByUuid(owcStyleSet.uuid).map(_.content).getOrElse(None)
         if (toBeDeleted.isDefined) {
-          toBeDeleted.exists(deleteOwcContent(_))
+          deleteOwcContent(toBeDeleted.get)
         } else {
           true
         }
@@ -876,7 +890,7 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
             abstrakt = {abstrakt},
             is_default = {isDefault},
             legend_url = {legendUrl},
-            content = {content} where uuid = {uuid}
+            content_uuid = {content} where uuid = {uuid}
         """).on(
           'name -> owcStyleSet.name,
           'title -> owcStyleSet.title,
@@ -911,9 +925,9 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
     db.withTransaction { implicit connection =>
 
       val pre: Boolean = if (owcStyleSet.content.isDefined) {
-        val exists = owcStyleSet.content.map(c => findOwcContentsByUuid(c.uuid)).isDefined
+        val exists = findOwcContentsByUuid(owcStyleSet.content.get.uuid).isDefined
         if (exists) {
-          val delete = owcStyleSet.content.exists(deleteOwcContent(_))
+          val delete = deleteOwcContent(owcStyleSet.content.get)
           delete
         } else {
           true
@@ -953,13 +967,13 @@ class OwcPropertiesDAO @Inject()(db: Database) extends ClassnameLogger {
       potUuids => {
         val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
         uuids.map { uid =>
-          a.getClass.getName match {
-            case OwcAuthor.getClass.getName => findOwcAuthorByUuid(uid).asInstanceOf[Option[A]]
-            case OwcCategory.getClass.getName => findOwcCategoriesByUuid(uid).asInstanceOf[Option[A]]
-            case OwcLink.getClass.getName => findOwcLinksByUuid(uid).asInstanceOf[Option[A]]
-            case OwcContent.getClass.getName => findOwcContentsByUuid(uid).asInstanceOf[Option[A]]
-            case OwcStyleSet.getClass.getName => findOwcStyleSetsByUuid(uid).asInstanceOf[Option[A]]
-            case _ => throw new InvalidClassException("evidence parameter type not supported, only ")
+          a match {
+            case a: OwcAuthor => findOwcAuthorByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcCategory => findOwcCategoriesByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcLink => findOwcLinksByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcContent => findOwcContentsByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcStyleSet => findOwcStyleSetsByUuid(uid).asInstanceOf[Option[A]]
+            case _ => throw new InvalidClassException("This evidence parameter type is not supported")
           }
 
         }.filter(_.isDefined).map(_.get)

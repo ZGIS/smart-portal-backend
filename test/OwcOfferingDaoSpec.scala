@@ -18,11 +18,10 @@
  */
 
 import java.net.URL
-import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import models.owc._
 import info.smart.models.owc100._
+import models.owc._
 import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -52,17 +51,31 @@ class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         val owcOfferingDAO = new OwcOfferingDAO(database, new OwcPropertiesDAO(database))
 
-        val operation1 = TestData.operation1
-        val operation2 = TestData.operation2
-        val operation3 = TestData.operation3
-        val operation3_1 = TestData.operation3_1
-        val operation4 = TestData.operation4
+        val demodata = new DemoData
+
+        val operation1 = demodata.operation1
+        val operation2 = demodata.operation2
+        val operation3 = demodata.operation3
+        val operation3_1 = demodata.operation3_1
+        val operation4 = demodata.operation4
 
         owcOfferingDAO.getAllOwcOperations.size mustEqual 0
+        logger.info(s"owcOfferingDAO.getAllOwcOperations.size ${owcOfferingDAO.getAllOwcOperations.size}")
+
         owcOfferingDAO.createOwcOperation(operation1) mustEqual Some(operation1)
+        owcOfferingDAO.findOwcOperationByUuid(operation1.uuid).get mustEqual operation1
+
+        logger.info(s"owcOfferingDAO.getAllOwcOperations.size ${owcOfferingDAO.getAllOwcOperations.size}")
+
         owcOfferingDAO.createOwcOperation(operation2) mustEqual Some(operation2)
+        owcOfferingDAO.findOwcOperationByUuid(operation2.uuid).get mustEqual operation2
+
         owcOfferingDAO.createOwcOperation(operation3) mustEqual Some(operation3)
+        owcOfferingDAO.findOwcOperationByUuid(operation3.uuid).get mustEqual operation3
+
         owcOfferingDAO.createOwcOperation(operation4) mustEqual Some(operation4)
+        owcOfferingDAO.findOwcOperationByUuid(operation4.uuid).get mustEqual operation4
+
         owcOfferingDAO.getAllOwcOperations.size mustEqual 4
 
         val thrown = the[java.sql.SQLException] thrownBy owcOfferingDAO.createOwcOperation(operation3)
@@ -77,6 +90,8 @@ class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         owcOfferingDAO.deleteOwcOperation(operation2) mustEqual true
 
         owcOfferingDAO.updateOwcOperation(operation3_1).get mustEqual operation3_1
+        owcOfferingDAO.findOwcOperationByUuid(operation3_1.uuid).get mustEqual operation3_1
+
         owcOfferingDAO.findOwcOperationByUuid(operation3_1.uuid).headOption.get.requestUrl mustEqual
           new URL("https://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities")
 
@@ -86,15 +101,25 @@ class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
     "handle OwcOfferings with DB" in {
       withTestDatabase { database =>
 
+        val demodata = new DemoData
+
         val owcOfferingDAO = new OwcOfferingDAO(database, new OwcPropertiesDAO(database))
 
-        val offering1 = TestData.offering1
-        val offering2 = TestData.offering2
-        val offering2_1 = TestData.offering2_1
+        val offering1 = demodata.offering1
+        val offering2 = demodata.offering2
+        val offering2_1 = demodata.offering2_1
 
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 0
+        logger.info(s"owcOfferingDAO.getAllOwcOfferings.size ${owcOfferingDAO.getAllOwcOfferings.size}")
+
         owcOfferingDAO.createOwcOffering(offering1) mustEqual Some(offering1)
+        owcOfferingDAO.findOwcOfferingByUuid(offering1.uuid).get mustEqual offering1
+
+        logger.info(s"owcOfferingDAO.getAllOwcOfferings.size ${owcOfferingDAO.getAllOwcOfferings.size}")
+
         owcOfferingDAO.createOwcOffering(offering2) mustEqual Some(offering2)
+        owcOfferingDAO.findOwcOfferingByUuid(offering2.uuid).get mustEqual offering2
+
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 2
 
         val thrown = the[java.sql.SQLException] thrownBy owcOfferingDAO.createOwcOffering(offering2)
@@ -106,7 +131,8 @@ class OwcOfferingDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
 
         owcOfferingDAO.findOwcOperationByCode("GetCapabilities").size mustBe 2
 
-        owcOfferingDAO.updateOwcOfferings(offering2_1) mustEqual true
+        owcOfferingDAO.updateOwcOfferings(offering2_1) mustEqual Some(offering2_1)
+        owcOfferingDAO.findOwcOfferingByUuid(offering2_1.uuid).get mustEqual offering2_1
 
         owcOfferingDAO.deleteOwcOffering(offering2_1) mustEqual true
         owcOfferingDAO.getAllOwcOfferings.size mustEqual 1

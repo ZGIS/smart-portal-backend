@@ -22,6 +22,7 @@ package controllers
 import javax.inject._
 
 import models.ErrorResult
+import models.db.SessionHolder
 import models.users._
 import play.api.Configuration
 import play.api.cache._
@@ -40,12 +41,14 @@ import scala.concurrent.duration._
   * @param config
   * @param cacheApi
   * @param passwordHashing
+  * @param sessionHolder
+  * @param ws
   */
 @Singleton
 class HomeController @Inject()(config: Configuration,
                                cacheApi: CacheApi,
                                override val passwordHashing: PasswordHashing,
-                               userDAO: UserDAO,
+                               sessionHolder: SessionHolder,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {
 
   lazy private val reCaptchaSecret: String =
@@ -99,13 +102,13 @@ class HomeController @Inject()(config: Configuration,
   }
 
   /**
-    * Create an Action to render an HTML page with a welcome message.
-    * The configuration in the `routes` file means that this method
-    * will be called when the application receives a `GET` request with
-    * a path of `/`.
+    * just to have something on /
     */
   def index: Action[AnyContent] = Action {
-    Ok(views.html.index("Your new application is ready."))
+    Ok(Json.obj(
+      "status" -> "Ok",
+      "message" -> "application is ready"
+    ))
   }
 
   /**
@@ -125,18 +128,30 @@ class HomeController @Inject()(config: Configuration,
         BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
-        // find user in db and compare password stuff
-        userDAO.authenticate(credentials.email, credentials.password).fold {
-          logger.error("User email or password wrong.")
-          val error = ErrorResult("User email or password wrong.", None)
-          Unauthorized(Json.toJson(error)).as(JSON)
-        } { user =>
-          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-          // logger.debug(s"Logging in email from $uaIdentifier")
-          val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-          cache.set(token, user.email)
-          Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
-            .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+        // find user in db
+        sessionHolder.viaConnection { implicit connection =>
+          UserDAO.findUserByEmailAsString(credentials.email).fold {
+            // should never indicate if user not found or just password wrong?
+            logger.error("User email or password wrong.")
+            val error = ErrorResult("User email or password wrong.", None)
+            Unauthorized(Json.toJson(error)).as(JSON)
+          } { user =>
+            // compare password
+            if (passwordHashing.validatePassword(credentials.password, user.password)) {
+              // here is correct auth branch
+              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+              // logger.debug(s"Logging in email from $uaIdentifier")
+              val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+              cache.set(token, user.email)
+              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs()))
+                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+            } else {
+              // should never indicate if user not found or just password wrong?
+              logger.error("User email or password wrong.")
+              val error = ErrorResult("User email or password wrong.", None)
+              Unauthorized(Json.toJson(error)).as(JSON)
+            }
+          }
         }
       })
   }

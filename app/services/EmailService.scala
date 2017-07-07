@@ -54,7 +54,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
     val emailText =
       """Hello %s,
-        |thank you for registering on the GW HUB.
+        |thank you for registering on the GW HUB. Your account will be fully active once you confirmed your email address.
         |Please click on the following link to confirm your registration:
         |
         |%s/api/v1/users/register/%s
@@ -108,7 +108,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
     val emailText =
       """Hello %s,
-        |thank you for registering on the GW HUB, your account is now active.
+        |thank you for registering on the GW HUB, your account is now fully active.
         |
         |Login with your active account on:
         |
@@ -161,7 +161,7 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
     val emailText =
       """Hello %s,
-        |you requested to reset your password for the GW HUB.
+        |we got your request to reset your password for the GW HUB.
         |Please click on the following link to reset your password:
         |
         |%s/#/resetpass/%s
@@ -213,13 +213,172 @@ class EmailService @Inject()(configuration: Configuration) extends ClassnameLogg
 
     val emailText =
       """Hello %s,
-        |you updated your password on the GW HUB, your account is now active again.
+        |you updated your password on the GW HUB. The new password is now active.
         |
         |Login with your account on:
         |
         |%s/#/login
         |
         |If you have any question please email us to %s.
+        |
+        |Your GW HUB Team
+      """.format(usernameTo, portalWebguiHost, emailFrom).stripMargin
+
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
+    try {
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
+
+      true
+    } catch {
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
+        false
+      }
+      case e: Exception => {
+        logger.error("Other email problem: " + e.getLocalizedMessage)
+        false
+      }
+    }
+  }
+
+  /**
+    * send a Registration Email with a pre-generated unique link to confirm your account
+    *
+    * @param emailTo
+    * @param subject
+    * @param usernameTo
+    * @param linkId
+    * @return
+    */
+  def sendNewEmailValidationEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean = {
+
+    val emailText =
+      """Hello %s,
+        |we got your request to change your email address for the GW HUB.
+        |Please click on the following link to confirm your new email:
+        |
+        |%s/api/v1/users/register/%s
+        |
+        |If you have any question please email us to %s.
+        |
+        |Your GW HUB Team
+      """.format(usernameTo, portalApiHost, linkId, emailFrom).stripMargin
+
+    logger.debug(emailText)
+
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
+    try {
+
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
+
+      true
+    } catch {
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
+        false
+      }
+      case e: Exception => {
+        logger.error("Other email problem: " + e.getLocalizedMessage)
+        false
+      }
+    }
+  }
+
+  /**
+    * sends a Confirmation Email, Your account is now active
+    *
+    * @param emailTo
+    * @param subject
+    * @param usernameTo
+    * @return
+    */
+  def sendNeEmailConfirmationEmail(emailTo: String, subject: String, usernameTo: String): Boolean = {
+
+    val emailText =
+      """Hello %s,
+        |thank you for confirming your new email address, your account is now configured with your new email address.
+        |
+        |Login with your new email address on:
+        |
+        |%s/#/login
+        |
+        |If you have any question please email us to %s.
+        |
+        |Your GW HUB Team
+      """.format(usernameTo, portalWebguiHost, emailFrom).stripMargin
+
+    val from = new Email(emailFrom)
+    val to = new Email(emailTo)
+    val content = new Content("text/plain", emailText)
+    val mail = new Mail(from, subject, to, content)
+
+    try {
+      val request = new Request()
+      request.method = Method.POST
+      request.endpoint = "mail/send"
+      request.body = mail.build()
+      val response = sg.api(request)
+      logger.trace(s"mail api response status: ${response.statusCode}")
+      logger.trace(s"mail api response.body: ${response.body}")
+      logger.trace(s"response.headers: ${response.headers}")
+      logger.trace(s"mail api response status: ${response.statusCode}")
+
+      true
+    } catch {
+      case ioex: IOException => {
+        logger.error("IO Messaging exception: " + ioex.getLocalizedMessage)
+        false
+      }
+      case e: Exception => {
+        logger.error("Other email problem: " + e.getLocalizedMessage)
+        false
+      }
+    }
+  }
+
+  /**
+    * sends a Confirmation Email, Your account is now active
+    *
+    * @param emailTo
+    * @param subject
+    * @param usernameTo
+    * @return
+    */
+  def sendProfileUpdateInfoEmail(emailTo: String, subject: String, usernameTo: String): Boolean = {
+
+    val emailText =
+      """Hello %s,
+        |Your account profile has been updated. This email is for your information.
+        |
+        |To login to your account go to:
+        |
+        |%s/#/login
+        |
+        |If you have any questions please email us to %s.
         |
         |Your GW HUB Team
       """.format(usernameTo, portalWebguiHost, emailFrom).stripMargin

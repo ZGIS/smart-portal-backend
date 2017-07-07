@@ -19,57 +19,66 @@
 
 import java.time.ZonedDateTime
 
-import models.users._
+import models.users.{PasswordUpdateCredentials, _}
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json.Writes._
 import play.api.libs.json._
+import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}
 
 package object controllers {
 
-  implicit val LoginCredentialsFromJson = (
-    (JsPath \ "email").read[String](email) and
-      (JsPath \ "password").read[String](minLength[String](8)))((email, password) => LoginCredentials(email, password))
+  implicit val LoginCredentialsFromJsonReads: Reads[LoginCredentials] = (
+    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+      (JsPath \ "password").read[String](minLength[String](8))) (LoginCredentials.apply _)
 
-  implicit val GAuthCredentialsFromJson = (
+  implicit val passwordUpdateCredentialsJsReads: Reads[PasswordUpdateCredentials] = (
+    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+      (JsPath \ "oldpassword").read[String](minLength[String](8)) and
+      (JsPath \ "newpassword").read[String](minLength[String](8))
+    ) (PasswordUpdateCredentials.apply _).filterNot(p => p.oldPassword.equalsIgnoreCase(p.newPassword))
+
+  implicit val GAuthCredentialsFromJsonReads: Reads[GAuthCredentials] = (
     (JsPath \ "authcode").read[String] and
-      (JsPath \ "accesstype").read[String])((authcode, accesstype) => GAuthCredentials(authcode, accesstype))
+      (JsPath \ "accesstype").read[String]
+    ) (GAuthCredentials.apply _).filter(p =>
+      p.accesstype.equalsIgnoreCase("LOGIN") || p.accesstype.equalsIgnoreCase("REGISTER"))
 
   implicit val registerJsReads: Reads[RegisterJs] = (
-    (JsPath \ "email").read[String](email) and
+    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
-      (JsPath \ "password").read[String](minLength[String](8)))(RegisterJs.apply _)
+      (JsPath \ "password").read[String](minLength[String](8))) (RegisterJs.apply _)
 
   implicit val userReads: Reads[User] = (
-    (JsPath \ "email").read[String](email) and
+    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
       (JsPath \ "password").read[String](minLength[String](8)) and
       (JsPath \ "laststatustoken").read[String] and
-      (JsPath \ "laststatuschange").read[ZonedDateTime])(User.apply _)
+      (JsPath \ "laststatuschange").read[ZonedDateTime]) (User.apply _)
 
   implicit val userWrites: Writes[User] = (
-    (JsPath \ "email").write[String] and
+    (JsPath \ "email").write[EmailAddress](PlayJsonFormats.emailAddressWrites) and
       (JsPath \ "accountSubject").write[String] and
       (JsPath \ "firstname").write[String] and
       (JsPath \ "lastname").write[String] and
       (JsPath \ "password").write[String] and
       (JsPath \ "laststatustoken").write[String] and
-      (JsPath \ "laststatuschange").write[ZonedDateTime])(unlift(User.unapply))
+      (JsPath \ "laststatuschange").write[ZonedDateTime]) (unlift(User.unapply))
 
   implicit val profileJsReads: Reads[ProfileJs] = (
-    (JsPath \ "email").read[String](email) and
+    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
-      (JsPath \ "lastname").read[String])(ProfileJs.apply _)
+      (JsPath \ "lastname").read[String]) (ProfileJs.apply _)
 
   implicit val profileJsWrites: Writes[ProfileJs] = (
-    (JsPath \ "email").write[String] and
+    (JsPath \ "email").write[EmailAddress](PlayJsonFormats.emailAddressWrites) and
       (JsPath \ "accountSubject").write[String] and
       (JsPath \ "firstname").write[String] and
-      (JsPath \ "lastname").write[String])(unlift(ProfileJs.unapply))
+      (JsPath \ "lastname").write[String]) (unlift(ProfileJs.unapply))
 
 }

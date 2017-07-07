@@ -18,6 +18,7 @@
  */
 
 import com.google.inject.AbstractModule
+import models.db.SessionHolder
 import models.gmd._
 import models.owc.{OwcContextDAO, OwcOfferingDAO, OwcPropertiesDAO}
 import models.users.UserDAO
@@ -45,7 +46,7 @@ class Module extends AbstractModule {
     bind(classOf[GoogleServicesDAO]).asEagerSingleton()
 
     // DAOs
-    bind(classOf[UserDAO]).asEagerSingleton()
+    bind(classOf[SessionHolder]).asEagerSingleton()
     bind(classOf[OwcPropertiesDAO]).asEagerSingleton()
     bind(classOf[OwcOfferingDAO]).asEagerSingleton()
     bind(classOf[OwcContextDAO]).asEagerSingleton()

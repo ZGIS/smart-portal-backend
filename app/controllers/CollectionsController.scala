@@ -21,16 +21,15 @@ package controllers
 
 import javax.inject._
 
-import info.smart.models.owc.{OwcDocument, OwcDocumentJs, OwcEntry}
-
+import info.smart.models.owc100._
 import models.ErrorResult
+import org.apache.commons.lang3.StringEscapeUtils
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc.{Action, Controller}
 import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
-import org.apache.commons.lang3.StringEscapeUtils
 
 @Singleton
 class CollectionsController @Inject()(config: Configuration,
@@ -47,13 +46,13 @@ class CollectionsController @Inject()(config: Configuration,
   /**
     * Gets all public collections + collections of a user (if logged in) + collection for ID if provided
     *
-    * @param id
+    * @param owcContextIdOption
     * @return
     */
-  def getCollections(id: Option[String]): Action[Unit] = HasOptionalToken(parse.empty) {
+  def getCollections(owcContextIdOption: Option[String]): Action[Unit] = HasOptionalToken(parse.empty) {
     authUserOption =>
       implicit request =>
-        val owcJsDocs = collectionsService.getOwcDocumentsForUserAndId(authUserOption, id).map(doc => doc.toJson)
+        val owcJsDocs = collectionsService.getOwcContextsForUserAndId(authUserOption, owcContextIdOption).map(doc => doc.toJson)
         Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
   }
 
@@ -65,8 +64,8 @@ class CollectionsController @Inject()(config: Configuration,
     token =>
       authUser =>
         implicit request => {
-          val owcJsDocs = collectionsService.getUserDefaultOwcDocument(authUser).map(doc => doc.toJson)
-          owcJsDocs.fold{
+          val owcJsDocs = collectionsService.getUserDefaultOwcContext(authUser).map(doc => doc.toJson)
+          owcJsDocs.fold {
             val error: ErrorResult = ErrorResult(s"Could not find user collection for '${authUser}' ", None)
             BadRequest(Json.toJson(error)).as(JSON)
           } {
@@ -77,17 +76,16 @@ class CollectionsController @Inject()(config: Configuration,
   }
 
   /**
-    * Returns a JSON array containing OwcProperties with all files uploaded by the current user
+    * Returns a JSON array containing OwcLinks with all files uploaded by the current user
     *
     * @return
     */
   def getPersonalFilesFromDefaultCollection: Action[Unit] = HasToken(parse.empty) {
     token =>
-      authUser =>
+      authUserEmail =>
         implicit request => {
-          val uploadedFilesProperties =
-            collectionsService.getOwcPropertiesForOwcAuthorOwnFiles(authUser).map(doc => doc.toJson)
-          Ok(JsArray(uploadedFilesProperties))
+          val owcDataLinks = collectionsService.getOwcLinksForOwcAuthorOwnFiles(authUserEmail).map(owcLink => owcLink.toJson)
+          Ok(JsArray(owcDataLinks))
         }
   }
 
@@ -99,20 +97,22 @@ class CollectionsController @Inject()(config: Configuration,
     token =>
       authUser =>
         implicit request =>
-          request.body.validate[OwcDocument] fold(
+          request.body.validate[OwcContext] fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              val error: ErrorResult = ErrorResult("Collection could not be inserted", Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+              val error: ErrorResult = ErrorResult("Collection could not be inserted",
+                Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
               BadRequest(Json.toJson(error)).as(JSON)
             },
-            owcDocument => {
-              val inserted = collectionsService.insertCollection(owcDocument, authUser)
+            owcContext => {
+              val inserted = collectionsService.insertCollection(owcContext, authUser)
               inserted.fold {
-                val error: ErrorResult = ErrorResult("Collection could not be inserted", Some("Database insert failed."))
+                val error: ErrorResult = ErrorResult("Collection could not be inserted",
+                  Some("Database insert failed."))
                 BadRequest(Json.toJson(error)).as(JSON)
               } {
                 theDoc => {
-                  Ok(Json.obj("message" -> "owcDocument inserted", "document" -> theDoc.toJson))
+                  Ok(Json.obj("message" -> "owcContext inserted", "document" -> theDoc.toJson))
                 }
               }
 
@@ -124,26 +124,26 @@ class CollectionsController @Inject()(config: Configuration,
     *
     * @return
     */
-  def updateCollectionMetadata: Action[JsValue] = HasToken(parse.json) {
+  def updateCollection: Action[JsValue] = HasToken(parse.json) {
     token =>
       authUser =>
         implicit request =>
-          request.body.validate[OwcDocument] fold(
+          request.body.validate[OwcContext] fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              val error: ErrorResult = ErrorResult("Collection could not be updated", Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
-              NotImplemented(Json.toJson(error)).as(JSON)
+              val error: ErrorResult = ErrorResult("Collection could not be updated",
+                Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+              BadRequest(Json.toJson(error)).as(JSON)
             },
-            owcDocument => {
-              val updated = collectionsService.updateCollectionMetadata(owcDocument, authUser)
+            owcContext => {
+              val updated = collectionsService.updateCollection(owcContext, authUser)
               updated.fold {
-                val error: ErrorResult = ErrorResult("Collection could not be updated", Some("Database insert failed."))
-                NotImplemented(Json.toJson(error)).as(JSON)
+                val error: ErrorResult = ErrorResult("Collection could not be updated",
+                  Some("Database insert failed."))
+                BadRequest(Json.toJson(error)).as(JSON)
               } {
                 theDoc => {
-                  val error: ErrorResult = ErrorResult("owcDocument metadata would have been updated, " +
-                    "but method is not yet implemented", Some(theDoc.toJson.toString()))
-                  NotImplemented(Json.toJson(error)).as(JSON)
+                  Ok(Json.obj("message" -> "owcContext updated", "document" -> theDoc.toJson))
                 }
               }
 
@@ -153,28 +153,35 @@ class CollectionsController @Inject()(config: Configuration,
 
   /**
     *
-    * @param collectionid
+    * @param owcContextId
     * @return
     */
-  def addEntryToCollection(collectionid: String): Action[JsValue] = HasToken(parse.json) {
+  def addResourceToCollection(owcContextId: String): Action[JsValue] = HasToken(parse.json) {
     token =>
       authUser =>
         implicit request =>
-          request.body.validate[OwcEntry] fold(
+          request.body.validate[OwcResource] fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              val error: ErrorResult = ErrorResult("Provided OwcEntry not valid", Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+              val error: ErrorResult = ErrorResult("Provided OwcResource not valid",
+                Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
               BadRequest(Json.toJson(error)).as(JSON)
             },
-            owcEntry => {
-              val updatedCollection = collectionsService.addEntryToCollection(collectionid, owcEntry, authUser)
+            owcResource => {
+              val collectionDoc = collectionsService.getOwcContextsForUserAndId(
+                authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
+              val updatedCollection = collectionDoc.map {
+                o =>
+                  val updated = o.copy(resource = o.resource ++ Seq(owcResource))
+                  collectionsService.updateCollection(updated, authUser)
+              }.getOrElse(None)
               updatedCollection.fold {
-                val error: ErrorResult = ErrorResult("database update for entry failed", None)
+                val error: ErrorResult = ErrorResult("database update for resource failed", None)
                 BadRequest(Json.toJson(error)).as(JSON)
               } {
                 theDoc => {
-                  Ok(Json.obj("message" -> "owcEntry added to owcDocument",
-                    "document" -> theDoc.toJson, "entry" -> owcEntry.toJson))
+                  Ok(Json.obj("message" -> "owcResource added to owcContext",
+                    "document" -> theDoc.toJson, "entry" -> owcResource.toJson))
                 }
               }
             }
@@ -183,67 +190,82 @@ class CollectionsController @Inject()(config: Configuration,
 
   /**
     *
-    * @param collectionid
+    * @param owcContextId
     * @return
     */
-  def replaceEntryInCollection(collectionid: String): Action[JsValue] = HasToken(parse.json) {
+  def replaceResourceInCollection(owcContextId: String): Action[JsValue] = HasToken(parse.json) {
     token =>
       authUser =>
         implicit request =>
-          request.body.validate[OwcEntry] fold(
+          request.body.validate[OwcResource] fold(
             errors => {
               logger.error(JsError.toJson(errors).toString())
-              val error: ErrorResult = ErrorResult("replace entry failed", Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+              val error: ErrorResult = ErrorResult("replace resource failed",
+                Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
               BadRequest(Json.toJson(error)).as(JSON)
             },
-            owcEntry => {
-              val updatedCollection = collectionsService.replaceEntryInCollection(collectionid, owcEntry, authUser)
+            owcResource => {
+              val collectionDoc = collectionsService.getOwcContextsForUserAndId(
+                authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
+              val updatedCollection = collectionDoc.map {
+                o =>
+                  val newResources = o.resource.filterNot(r => r.id.equals(owcResource.id))
+                  val updated = o.copy(resource = newResources ++ Seq(owcResource))
+                  collectionsService.updateCollection(updated, authUser)
+              }.getOrElse(None)
               updatedCollection.fold {
-                val error: ErrorResult = ErrorResult("replace database update for entry failed", None)
+                val error: ErrorResult = ErrorResult("database update for resource failed", None)
                 BadRequest(Json.toJson(error)).as(JSON)
               } {
                 theDoc => {
-                  val entryTest = theDoc.features.find(_.id.equalsIgnoreCase(owcEntry.id)).exists(
-                    tEntry => tEntry.equals(owcEntry))
-                  if (entryTest) {
-                    Ok(Json.obj("message" -> "owcEntry replaced in owcDocument",
-                      "document" -> theDoc.toJson, "entry" -> owcEntry.toJson))
+                  val resourceTest = theDoc.resource.find(r => r.id.equals(owcResource.id)).exists(
+                    tResource => tResource.equals(owcResource))
+                  if (resourceTest) {
+                    Ok(Json.obj("message" -> "owcResource replaced in owcContext",
+                      "document" -> theDoc.toJson, "entry" -> owcResource.toJson))
                   }
                   else {
-                    val error: ErrorResult = ErrorResult("owcEntry could not be replaced in owcDocument", None)
+                    val error: ErrorResult = ErrorResult("owcResource could not be replaced in owcContext", None)
                     BadRequest(Json.toJson(error)).as(JSON)
                   }
                 }
               }
+
             }
           )
   }
 
   /**
     *
-    * @param collectionid
-    * @param entryid
+    * @param owcContextId
+    * @param owcResourceId
     * @return
     */
-  def deleteEntryFromCollection(collectionid: String, entryid: String): Action[Unit] = HasToken(parse.empty) {
+  def deleteResourceFromCollection(owcContextId: String, owcResourceId: String): Action[Unit] = HasToken(parse.empty) {
     token =>
       authUser =>
         implicit request =>
-          val updatedCollection = collectionsService.deleteEntryFromCollection(collectionid, entryid, authUser)
+          val collectionDoc = collectionsService.getOwcContextsForUserAndId(
+            authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
+          val updatedCollection = collectionDoc.map {
+            o =>
+              val newResources = o.resource.filterNot(r => r.id.toString.equals(owcResourceId))
+              val updated = o.copy(resource = newResources)
+              collectionsService.updateCollection(updated, authUser)
+          }.getOrElse(None)
           updatedCollection.fold {
-            val error: ErrorResult = ErrorResult("delete owcEntry database update failed", None)
+            val error: ErrorResult = ErrorResult("delete owcResource database update failed", None)
             BadRequest(Json.toJson(error)).as(JSON)
           } {
             theDoc => {
-              val entryTest = theDoc.features.find(_.id.equalsIgnoreCase(entryid))
-              if (entryTest.isDefined) {
-                //TODO SR general "response" JSON?
-                Ok(Json.obj("message" -> "owcEntry removed from owcDocument",
-                  "document" -> theDoc.toJson))
+              val resourceTest = theDoc.resource.find(r => r.id.toString.equals(owcResourceId))
+              if (resourceTest.isDefined) {
+                val error: ErrorResult = ErrorResult("owcResource could not be removed from owcContext", None)
+                BadRequest(Json.toJson(error)).as(JSON)
               }
               else {
-                val error: ErrorResult = ErrorResult("owcEntry could not be removed from owcDocument", None)
-                BadRequest(Json.toJson(error)).as(JSON)
+                Ok(Json.obj("message" -> "owcResource removed from owcContext",
+                  "document" -> theDoc.toJson))
               }
             }
           }
@@ -251,20 +273,22 @@ class CollectionsController @Inject()(config: Configuration,
 
   /**
     *
-    * @param id id of the OwcDoc
+    * @param owcContextId id of the OwcDoc
     * @return
     */
-  def deleteCollection(id: String): Action[Unit] = HasToken(parse.empty) {
+  def deleteCollection(owcContextId: String): Action[Unit] = HasToken(parse.empty) {
     token =>
       authUser =>
         implicit request =>
-          val deleted = collectionsService.deleteCollection(id, authUser)
+          val collectionDoc = collectionsService.getOwcContextsForUserAndId(
+            authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
+          val deleted = collectionDoc.exists(o => collectionsService.deleteCollection(o, authUser))
           if (deleted) {
             //TODO SR general "response" JSON?
-            Ok(Json.obj("message" -> "owcDocument deleted", "document" -> id))
+            Ok(Json.obj("message" -> "owcContext deleted", "document" -> owcContextId))
           }
           else {
-            val error = ErrorResult("Deletion of OwcDocument failed.", Some(s"DocumentId: ${id}"))
+            val error = ErrorResult("Deletion of OwcContext failed.", Some(s"DocumentId: ${owcContextId}"))
             BadRequest(Json.toJson(error)).as(JSON)
           }
   }

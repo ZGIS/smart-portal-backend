@@ -22,6 +22,7 @@ package models.users
 import java.time.ZonedDateTime
 
 import controllers.ProfileJs
+import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.ClassnameLogger
 
 /**
@@ -37,7 +38,7 @@ import utils.ClassnameLogger
   * @param laststatustoken
   * @param laststatuschange
   */
-case class User(email: String,
+case class User(email: EmailAddress,
                 accountSubject: String,
                 firstname: String,
                 lastname: String,
@@ -52,7 +53,7 @@ case class User(email: String,
     */
   override def toString: String = {
     f"""User(
-        |$email,
+        |${email.value},
         |${accountSubject},
         |${firstname},
         |${lastname},
@@ -77,7 +78,9 @@ case class User(email: String,
   *  Used for obtaining the email and password from the HTTP login request
   *  from github.com/mariussoutier/play-angular-require-seed
   */
-case class LoginCredentials(email: String, password: String)
+case class LoginCredentials(email: EmailAddress, password: String)
+
+case class PasswordUpdateCredentials(email: EmailAddress, oldPassword: String, newPassword: String)
 
 /**
   *  Used for obtaining the gauth flow code and login/register action from the HTTP google login request

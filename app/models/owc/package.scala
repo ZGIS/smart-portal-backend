@@ -20,6 +20,7 @@
 package models
 
 import java.net.URL
+import java.time.{OffsetDateTime, ZonedDateTime}
 
 import anorm.{Column, MetaDataItem, TypeDoesNotMatch}
 import info.smart.models.owc100._
@@ -38,7 +39,7 @@ package object owc {
   //  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
   //  implicit val tableOwcOfferingsHasOwcOperations = "owc_offerings_has_owc_operations"
 
-  val tableOwcContextHasOwcResource = "owc_context_has_owc_resources"
+  val tableOwcContextHasOwcResources = "owc_context_has_owc_resources"
   val tableUserHasOwcContextRights = "user_has_owc_context_rights"
 
   val tableUsers = "users"
@@ -64,15 +65,37 @@ package object owc {
   implicit val OwcOperationEvidence = OwcOperation("GetCapabilties", "GET", None, new URL(GENERIC_OWC_SPEC_URL), None, None)
   implicit val OwcOfferingEvidence = OwcOffering(new URL(GENERIC_OWC_SPEC_URL + "/wms"), List(), List(), List())
 
-  // Custom conversion from JDBC column to Boolean
+  /**
+    * Custom conversion from JDBC column to Boolean, might not be needed
+    * Anorm should support Booleans for our databases
+    *
+    * @return
+    */
   implicit def columnToBoolean: Column[Boolean] = {
-    Column.nonNull1 { (value, meta) =>
+    Column.nonNull { (value, meta) =>
       val MetaDataItem(qualified, nullable, clazz) = meta
       value match {
         case bool: Boolean => Right(bool) // Provided-default case
         case bit: Int => Right(bit == 1) // Custom conversion
         case _ => {
           Left(TypeDoesNotMatch(s"Cannot convert $value: ${value.asInstanceOf[AnyRef].getClass} to Boolean for column $qualified"))
+        }
+      }
+    }
+  }
+
+  /**
+    *
+    * @return
+    */
+  implicit def columnToOffset: Column[OffsetDateTime] = {
+    Column.nonNull { (value, meta) =>
+      val MetaDataItem(qualified, nullable, clazz) = meta
+      value match {
+        case offsetDateTime: OffsetDateTime => Right(offsetDateTime) // default case
+        case zonedDateTime: ZonedDateTime => Right(OffsetDateTime.of(zonedDateTime.toLocalDateTime, zonedDateTime.getOffset)) // Custom conversion
+        case _ => {
+          Left(TypeDoesNotMatch(s"Cannot convert $value: ${value.asInstanceOf[AnyRef].getClass} to OffsetDateTime for column $qualified"))
         }
       }
     }

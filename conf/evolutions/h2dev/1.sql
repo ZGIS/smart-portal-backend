@@ -7,7 +7,7 @@ CREATE TABLE users (
   lastname varchar(255) NOT NULL,
   password varchar(255) NOT NULL,
   laststatustoken varchar(255) NOT NULL,
-  laststatuschange TIMESTAMP WITH TIME ZONE NOT NULL,
+  laststatuschange TIMESTAMP WITH TIMEZONE NOT NULL,
   PRIMARY KEY (accountsubject)
 );
 
@@ -19,7 +19,7 @@ CREATE TABLE owc_contexts (
   language varchar(255) NOT NULL,
   title TEXT NOT NULL,
   subtitle TEXT,
-  update_date TIMESTAMP WITH TIME ZONE,
+  update_date TIMESTAMP WITH TIMEZONE,
   authors TEXT,
   publisher TEXT,
   creator_application TEXT,
@@ -34,7 +34,7 @@ CREATE TABLE owc_resources (
   id varchar(2047) NOT NULL,
   title TEXT NOT NULL,
   subtitle TEXT,
-  update_date TIMESTAMP WITH TIME ZONE,
+  update_date TIMESTAMP WITH TIMEZONE,
   authors TEXT,
   publisher TEXT,
   rights TEXT,

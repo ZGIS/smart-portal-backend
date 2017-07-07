@@ -56,7 +56,7 @@ trait WithTestDatabase extends ClassnameLogger {
       driver = driver,
       url = url,
       config = Map(
-        "user" -> username,
+        "username" -> username,
         "password" -> password,
         "logStatements" -> logSql
       )

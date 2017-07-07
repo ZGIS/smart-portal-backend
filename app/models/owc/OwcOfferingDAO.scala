@@ -49,7 +49,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * Parse a OwcOperation from a ResultSet
     *
     */
-  val owcOperationParser = {
+  private val owcOperationParser = {
     str("uuid") ~
       str("code") ~
       str("method") ~
@@ -113,47 +113,46 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
   def createOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
 
     val preRequest: Boolean = if (owcOperation.request.isDefined) {
-      val exists = owcOperation.request.map(c => owcPropertiesDAO.findOwcContentsByUuid(c.uuid)).isDefined
+      val exists = owcPropertiesDAO.findOwcContentsByUuid(owcOperation.request.get.uuid).isDefined
       if (exists) {
         logger.error(s"OwcContent with UUID: ${owcOperation.request.get.uuid} exists already, won't create OwcOperation")
         false
       } else {
-        val insert = owcOperation.request.map(owcPropertiesDAO.createOwcContent(_))
-        insert.isDefined
+        owcPropertiesDAO.createOwcContent(owcOperation.request.get).isDefined
       }
     } else {
       true
     }
 
     val preResult: Boolean = if (owcOperation.result.isDefined) {
-      val exists = owcOperation.result.map(c => owcPropertiesDAO.findOwcContentsByUuid(c.uuid)).isDefined
+      val exists = owcPropertiesDAO.findOwcContentsByUuid(owcOperation.result.get.uuid).isDefined
       if (exists) {
         logger.error(s"OwcContent with UUID: ${owcOperation.result.get.uuid} exists already, won't create OwcOperation")
         false
       } else {
-        val insert = owcOperation.result.map(owcPropertiesDAO.createOwcContent(_))
-        insert.isDefined
+        owcPropertiesDAO.createOwcContent(owcOperation.result.get).isDefined
       }
     } else {
       true
     }
 
     if (preRequest && preResult) {
-      db.withConnection { implicit connection =>
-        val rowCount = SQL(
-          s"""
-          insert into $tableOwcOperations values (
-            {uuid}, {code}, {method}, {mime_type}, {result_url}, {request_uuid}, {result_uuid}
+
+      db.withTransaction {
+        implicit connection =>
+
+          val prepStatement = SQL(
+            s"""insert into $tableOwcOperations values ( {uuid}, {code}, {method}, {mime_type}, {request_url}, {request_uuid}, {result_uuid})""").on(
+            'uuid -> owcOperation.uuid.toString,
+            'code -> owcOperation.code,
+            'method -> owcOperation.method,
+            'mime_type -> owcOperation.mimeType,
+            'request_url -> owcOperation.requestUrl.toString,
+            'request_uuid -> owcOperation.request.map(_.uuid.toString),
+            'result_uuid -> owcOperation.request.map(_.uuid.toString)
           )
-        """).on(
-          'uuid -> owcOperation.uuid.toString,
-          'code -> owcOperation.code,
-          'method -> owcOperation.method,
-          'mime_type -> owcOperation.mimeType,
-          'request_url -> owcOperation.requestUrl.toString,
-          'request_uuid -> owcOperation.request.map(_.uuid.toString),
-          'result_uuid -> owcOperation.request.map(_.uuid.toString)
-        ).executeUpdate()
+
+          val rowCount = prepStatement.executeUpdate()
 
         rowCount match {
           case 1 => Some(owcOperation)
@@ -213,7 +212,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
 
     if (preRequest && preResult) {
 
-      db.withConnection { implicit connection =>
+      db.withTransaction { implicit connection =>
         val rowCount = SQL(
           s"""
              |update $tableOwcOperations set
@@ -268,7 +267,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     }
 
     if (preDeleteCheckRequest && preDeleteCheckResult) {
-      db.withConnection { implicit connection =>
+      db.withTransaction { implicit connection =>
         val rowCount = SQL(s"delete from $tableOwcOperations where uuid = {uuid}").on(
           'uuid -> owcOperation.uuid.toString
         ).executeUpdate()
@@ -293,7 +292,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
   /**
     * Parse a OwcOperation from a ResultSet
     */
-  val owcOfferingParser: RowParser[OwcOffering] = {
+  private val owcOfferingParser: RowParser[OwcOffering] = {
     str("uuid") ~
       str("code") ~
       get[Option[String]]("operations") ~
@@ -340,7 +339,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param operations
     * @return
     */
-  def preCreateCheckOperations(operations: List[OwcOperation]): Boolean = {
+  private def preCreateCheckOperations(operations: List[OwcOperation]): Boolean = {
     if (operations.nonEmpty) {
       val uuidString = operations.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcOperation](Some(uuidString))(OwcOperationEvidence).toList.nonEmpty
@@ -363,7 +362,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param contents
     * @return
     */
-  def preCreateCheckContents(contents: List[OwcContent]): Boolean = {
+  private def preCreateCheckContents(contents: List[OwcContent]): Boolean = {
     if (contents.nonEmpty) {
       val uuidString = contents.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcContent](Some(uuidString))(OwcContentEvidence).toList.isEmpty
@@ -386,7 +385,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param styles
     * @return
     */
-  def preCreateCheckStyleSets(styles: List[OwcStyleSet]): Boolean = {
+  private def preCreateCheckStyleSets(styles: List[OwcStyleSet]): Boolean = {
     if (styles.nonEmpty) {
       val uuidString = styles.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcStyleSet](Some(uuidString))(OwcStyleSetEvidence).toList.isEmpty
@@ -451,7 +450,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def preUpdateCheckOperationsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckOperationsForOffering(owcOffering: OwcOffering): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.operations.map(_.uuid)
@@ -487,7 +486,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def preUpdateCheckContentsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckContentsForOffering(owcOffering: OwcOffering): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.contents.map(_.uuid)
@@ -523,7 +522,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def preUpdateCheckStyleSetsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckStyleSetsForOffering(owcOffering: OwcOffering): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.styles.map(_.uuid)
@@ -720,4 +719,60 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
   //    }
   //  }
 
+  /*
+    Custom stuff
+   */
+//  case class UploadedFileProperties(
+//                                     owcProperties: OwcResource,
+//                                     owcOperation: OwcOperation
+//                                   )
+//  /**
+//    * Represents an uploaded file in OwnCollection
+//    * @param owcProperties this contains the file name
+//    * @param owcOperation  this contains the URL where it was uploaded to
+//    */
+//  case class UploadedFileProperties(
+//                                     val owcProperties: OwcProperties,
+//                                     val owcOperation: OwcOperation
+//                                   ) {
+//    implicit val reads: Reads[UploadedFileProperties] = (
+//      (JsPath \ "properties").read[OwcProperties] and
+//        (JsPath \ "operation").read[OwcOperation]
+//      )(UploadedFilePropertiesJs.apply _)
+//
+//    implicit val writes: Writes[UploadedFileProperties] = (
+//      (JsPath \ "properties").write[OwcProperties] and
+//        (JsPath \ "operation").write[OwcOperation]
+//      )(unlift(UploadedFilePropertiesJs.unapply))
+//
+//    def toJson: JsValue = Json.toJson(this);
+//  }
+//
+//  /**
+//    * UploadedFileProperties Json stuff
+//    */
+//  object UploadedFilePropertiesJs extends ClassnameLogger {
+//
+//    def apply(
+//               owcProperties: OwcProperties,
+//               owcOperation: OwcOperation
+//             ): UploadedFileProperties = {
+//      UploadedFileProperties(owcProperties, owcOperation)
+//    }
+//
+//    def unapply(arg: UploadedFileProperties): Option[(OwcProperties, OwcOperation)] = {
+//      Some(arg.owcProperties, arg.owcOperation)
+//    }
+//  }
+//
+//  /**
+//    * parseOm2Measurements an uploaded file property + the getfile operation
+//    */
+//  val uploadedFilePropertiesParser: RowParser[UploadedFileProperties] = {
+//    owcPropertiesParser ~
+//      owcOfferingDAO.owcOperationParser map {
+//      case properties ~ operation =>
+//        UploadedFileProperties(properties, operation)
+//    }
+//  }
 }

@@ -1,7 +1,11 @@
 import java.net.URL
+import java.time.{OffsetDateTime, ZoneId, ZonedDateTime}
 import java.util.UUID
 
 import info.smart.models.owc100._
+import models.users.{StatusToken, User}
+import org.locationtech.spatial4j.context.SpatialContext
+import org.locationtech.spatial4j.shape.Rectangle
 import uk.gov.hmrc.emailaddress.EmailAddress
 
 /*
@@ -25,19 +29,22 @@ import uk.gov.hmrc.emailaddress.EmailAddress
 
 import utils.StringUtils._
 
-object TestData {
+class DemoData {
+
+  lazy val ctx = SpatialContext.GEO
+  lazy val testTime: OffsetDateTime = OffsetDateTime.now(ZoneId.systemDefault())
+  lazy val world: Rectangle = ctx.getShapeFactory().rect(-180.0, 180.0, -90.0, 90.0)
 
   val author1 = OwcAuthor(Some("Alex"), None, None, UUID.randomUUID())
   val author2 = OwcAuthor(Some("Alex K"), Some(EmailAddress("a.kmoch@gns.cri.nz")), None, UUID.randomUUID())
   val author3 = OwcAuthor(Some("Alex Kmoch"), Some(EmailAddress("a.kmoch@gns.cri.nz")), Some(new URL("http://gns.cri.nz")), UUID.randomUUID())
-
-  val author3_1 = author3.copy(uri = Some(new URL("https://www.gns.cri.nz")))
+  val author3_1: OwcAuthor = author3.copy(uri = Some(new URL("https://www.gns.cri.nz")))
 
   val category1 = OwcCategory(uuid = UUID.randomUUID(), scheme = Some("view-groups"), term = "sac_add", label = Some("Informative Layers"))
   val category2 = OwcCategory(uuid = UUID.randomUUID(), scheme = "search-domain".toOption(), term = "uncertainty", label = Some("Uncertainty of Models"))
   val category3 = OwcCategory(uuid = UUID.randomUUID(), scheme = "glossary".toOption(), term = "uncertainty", label = Some("margin of error of a measurement"))
 
-  val category3_1 = category3.copy(label = Some("Margin of Error of Measurements"))
+  val category3_1: OwcCategory = category3.copy(label = Some("Margin of Error of Measurements"))
 
   val link1 = OwcLink(
     href = new URL("http://www.opengis.net/spec/owc-atom/1.0/req/core"),
@@ -55,7 +62,7 @@ object TestData {
     lang = None,
     title = None,
     length = None,
-    rel = "self",
+    rel = "via",
     uuid = UUID.randomUUID())
 
   val link3 = OwcLink(
@@ -84,7 +91,6 @@ object TestData {
     mimeType = "application/gml+xml",
     url = Some(new URL("http://data.roads.wherever.com/wfs?service=WFS&request=GetFeature&typename=my_srf:RoadCollection")),
     title = Some("ID_ROADS1:M30"),
-    uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
     content = None
   )
 
@@ -92,15 +98,14 @@ object TestData {
     mimeType = "application/gml+xml",
     url = Some(new URL("http://data.roads.wherever.com/wfs?service=WFS&request=GetFeature&typename=my_srf:RoadCollection")),
     title = Some("ID_ROADS1:M30"),
-    uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
     content = Some(xmlContent1)
   )
 
-  val owccontent2_1: OwcContent = owccontent2.copy(title = Some("ID_ROADS1:M30 Updated"), uuid = UUID.randomUUID())
+  val owccontent2_1: OwcContent = owccontent2.copy(title = Some("ID_ROADS1:M30 Updated"))
 
   val abstrakt = "SLD Cook Book: Simple Line extracted from http://docs.geoserver.org/latest/en/user/_downloads/line_simpleline.sld"
 
-  val sldContent: String  =
+  val sldContent: String =
     """<StyledLayerDescriptor version="1.0.0"
       | xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc"
       | xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -120,7 +125,6 @@ object TestData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
     content = None
   )
 
@@ -130,8 +134,7 @@ object TestData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
-    content = Some(owccontent1)
+    content = Some(owccontent1.copy(uuid = UUID.randomUUID()))
   )
 
   val style3 = OwcStyleSet(
@@ -140,7 +143,6 @@ object TestData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    uuid = UUID.fromString("b9ea2498-fb32-40ef-91ef-0ba00060fe64"),
     content = Some(owccontent1.copy(content = Some(sldContent), uuid = UUID.randomUUID()))
   )
 
@@ -168,9 +170,9 @@ object TestData {
     mimeType = Some("application/xml"),
     requestUrl = new URL("http://portal.smart-project.info/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"),
     request = None,
-    result = Some(owccontent1))
+    result = Some(owccontent1.copy(uuid = UUID.randomUUID())))
 
-  val operation3_1 = operation3.copy(mimeType = Some("application/geojson"))
+  val operation3_1: OwcOperation = operation3.copy(mimeType = Some("application/geojson"))
 
   val operation4 = OwcOperation(
     "GetRecordById",
@@ -181,34 +183,153 @@ object TestData {
       "application/xml",
       None,
       None,
-      Some("""<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
-             |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
-             |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
-             |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
-             |service="CSW" version="2.0.2">
-             |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
-             |<csw:ElementSetName>full</csw:ElementSetName>
-             |</csw:GetRecordById>""".stripMargin))
+      Some(
+        """<csw:GetRecordById xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
+          |xmlns:gmd="http://www.isotc211.org/2005/gmd/" xmlns:gml="http://www.opengis.net/gml"
+          |xmlns:ogc="http://www.opengis.net/ogc" xmlns:gco="http://www.isotc211.org/2005/gco"
+          |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          |outputFormat="application/xml" outputSchema="http://www.isotc211.org/2005/gmd"
+          |service="CSW" version="2.0.2">
+          |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
+          |<csw:ElementSetName>full</csw:ElementSetName>
+          |</csw:GetRecordById>""".stripMargin))
     ),
     None,
     UUID.randomUUID())
 
+  val operation5 = OwcOperation(
+    code = "GetCapabilities",
+    method = "GET",
+    mimeType = Some("application/xml"),
+    requestUrl = new URL("http://portal.smart-project.info/gs-smart/wfs?service=wfs&AcceptVersions=2.0.0&REQUEST=GetCapabilities"),
+    request = None,
+    result = None)
+
+  val operation6 = OwcOperation(
+    code = "GetFeature",
+    method = "GET",
+    mimeType = Some("application/xml"),
+    requestUrl = new URL("http://portal.smart-project.info/gs-smart/wfs?service=wfs&version=2.0.0&request=GetFeature&typename=gwml2:GW_ManagementArea&count=1"),
+    request = None,
+    result = None)
+
   val offering1 = OwcOffering(
     uuid = UUID.randomUUID(),
     code = OwcOfferingType.WMS.code,
-    operations = List(operation1, operation2),
-    contents = List(owccontent1),
-    styles = List()
+    operations = List(operation1.copy(uuid = UUID.randomUUID()), operation2.copy(uuid = UUID.randomUUID())),
+    contents = List(owccontent1.copy(uuid = UUID.randomUUID())),
+    styles = List(style1.copy(uuid = UUID.randomUUID()), style2.copy(uuid = UUID.randomUUID()))
   )
 
   val offering2 = OwcOffering(
     uuid = UUID.randomUUID(),
     code = OwcOfferingType.CSW.code,
-    operations = List(operation3, operation4),
-    contents = List(owccontent2),
-    styles = List(style1, style2)
+    operations = List(operation3.copy(uuid = UUID.randomUUID()), operation4.copy(uuid = UUID.randomUUID())),
+    contents = List(owccontent2.copy(uuid = UUID.randomUUID())),
+    styles = List()
   )
 
-  val offering2_1 = offering2.copy(styles = List(style1))
+  val offering2_1: OwcOffering = offering2.copy(styles = List(style1.copy(uuid = UUID.randomUUID())))
+
+  val offering3 = OwcOffering(
+    uuid = UUID.randomUUID(),
+    code = OwcOfferingType.WFS.code,
+    operations = List(operation5.copy(uuid = UUID.randomUUID()), operation6.copy(uuid = UUID.randomUUID())),
+    contents = List(),
+    styles = List()
+  )
+
+  val offering4 = OwcOffering(
+    uuid = UUID.randomUUID(),
+    code = OwcOfferingType.CSW.code,
+    operations = List(operation1.copy(uuid = UUID.randomUUID()), operation4.copy(uuid = UUID.randomUUID())),
+    contents = List(),
+    styles = List()
+  )
+
+  val owcResource1 = OwcResource(
+    id = new URL("http://portal.smart-project.info/context/resource/smart-sac"),
+    title = "NZ DTM 100x100",
+    subtitle = Some("Some Bla"),
+    updateDate = testTime,
+    author = List(author2.copy(uuid = UUID.randomUUID())),
+    publisher = Some("GNS Science"),
+    rights = Some("CC BY SA 4.0 NZ"),
+    geospatialExtent = Some(world),
+    temporalExtent = None,
+    contentDescription = List(), // links.alternates[] and rel=alternate
+    preview = List(link3.copy(uuid = UUID.randomUUID())), // aka links.previews[] and rel=icon (atom)
+    contentByRef = List(), // aka links.data[] and rel=enclosure (atom)
+    offering = List(offering1.copy(uuid = UUID.randomUUID()), offering2.copy(uuid = UUID.randomUUID())),
+    active = Some(true),
+    resourceMetadata = List(), // aka links.via[] & rel=via
+    keyword = List(category1.copy(uuid = UUID.randomUUID())),
+    minScaleDenominator = None,
+    maxScaleDenominator = None,
+    folder = category1.label)
+
+  val owcResource2 = OwcResource(
+    id = new URL("http://portal.smart-project.info/context/resource/smart-sac-demo"),
+    title = "NZ SAC Recharge",
+    subtitle = Some("Some Bla Recharge"),
+    updateDate = testTime,
+    author = List(author3.copy(uuid = UUID.randomUUID())),
+    publisher = Some("GNS Science"),
+    rights = Some("CC BY SA 4.0 NZ"),
+    geospatialExtent = Some(world),
+    temporalExtent = None,
+    contentDescription = List(), // links.alternates[] and rel=alternate
+    preview = List(link3.copy(uuid = UUID.randomUUID())), // aka links.previews[] and rel=icon (atom)
+    contentByRef = List(), // aka links.data[] and rel=enclosure (atom)
+    offering = List(offering3.copy(uuid = UUID.randomUUID()), offering4.copy(uuid = UUID.randomUUID())),
+    active = Some(true),
+    resourceMetadata = List(), // aka links.via[] & rel=via
+    keyword = List(category2.copy(uuid = UUID.randomUUID())),
+    minScaleDenominator = None,
+    maxScaleDenominator = None,
+    folder = Some("/sac/data/upload"))
+
+  val owcContext1 = OwcContext(
+    id = new URL("http://portal.smart-project.info/context/smart-sac"),
+    areaOfInterest = Some(world),
+    specReference = List(OwcProfile.CORE.value), // aka links.profiles[] & rel=profile
+    contextMetadata = List(link2.copy(uuid = UUID.randomUUID())), // aka links.via[] & rel=via
+    language = "en",
+    title = "NZ SAC Recharge Case Study",
+    subtitle = Some("Some Bla Recharge and more"),
+    updateDate = testTime,
+    author = List(author3.copy(uuid = UUID.randomUUID())),
+    publisher = Some("GNS Science"),
+    creatorApplication = None,
+    creatorDisplay = None,
+    rights = Some("CC BY SA 4.0 NZ"),
+    timeIntervalOfInterest = None,
+    keyword = List(category1.copy(uuid = UUID.randomUUID()), category2.copy(uuid = UUID.randomUUID()), category3.copy(uuid = UUID.randomUUID())),
+    resource = List(owcResource1.copy(id = new URL("http://portal.smart-project.info/context/resource/smart-sac_copy")),
+      owcResource2.copy(id = new URL("http://portal.smart-project.info/context/resource/smart-sac-demo_copy"))))
+
+
+  def testUser1(cryptPass: String) = User(EmailAddress("test@blubb.com"),
+    "local:test@blubb.com",
+    "Hans",
+    "Wurst",
+    cryptPass,
+    s"${StatusToken.ACTIVE}:REGCONFIRMED",
+    testTime.toZonedDateTime)
+
+  def testUser2(cryptPass: String) = User(EmailAddress("test2@blubb.com"),
+    "local:test2@blubb.com",
+    "Hans",
+    "Wurst",
+    cryptPass,
+    s"${StatusToken.REGISTERED}:XYZ123",
+    testTime.toZonedDateTime)
+
+  def testUser3(cryptPass: String) = User(EmailAddress("testuser@test.com"),
+    "local:testuser@test.com",
+    "Test",
+    "User",
+    cryptPass,
+    s"${StatusToken.ACTIVE}:REGCONFIRMED",
+    ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault()))
 }

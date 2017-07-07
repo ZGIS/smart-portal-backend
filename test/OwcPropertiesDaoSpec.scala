@@ -18,6 +18,7 @@
  */
 
 import java.net.URL
+import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import info.smart.models.owc100._
@@ -49,17 +50,27 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
     "handle OwcAuthor with DB" in {
       withTestDatabase { database =>
 
-        val author1 = TestData.author1
-        val author2 = TestData.author2
-        val author3 = TestData.author3
+        val demodata = new DemoData
+        
+        val author1 = demodata.author1
+        val author2 = demodata.author2
+        val author3 = demodata.author3
 
         // TODO SR these DAO objects are created by DepInj framework normally and we should think about using it in tests also
         val owcPropsDao = new OwcPropertiesDAO(database)
 
-        owcPropsDao.getAllOwcAuthors.size mustEqual 0
+        database.withConnection{ implicit connection =>
+          owcPropsDao.getAllOwcAuthors.size mustEqual 0
+        }
+
         owcPropsDao.createOwcAuthor(author1) mustEqual Some(author1)
+        owcPropsDao.findOwcAuthorByUuid(author1.uuid) mustEqual Some(author1)
+
         owcPropsDao.createOwcAuthor(author2) mustEqual Some(author2)
+        owcPropsDao.findOwcAuthorByUuid(author2.uuid) mustEqual Some(author2)
+
         owcPropsDao.createOwcAuthor(author3) mustEqual Some(author3)
+        owcPropsDao.findOwcAuthorByUuid(author3.uuid) mustEqual Some(author3)
 
         val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcAuthor(author3)
         thrown.getErrorCode mustEqual 23505
@@ -72,7 +83,7 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 
         owcPropsDao.deleteOwcAuthor(author2) mustEqual true
 
-        val author3_1 = TestData.author3_1
+        val author3_1 = demodata.author3_1
         owcPropsDao.updateOwcAuthor(author3_1).get mustEqual author3_1
         owcPropsDao.findOwcAuthorByUuid(author3_1.uuid).headOption.get.uri.get.toString mustEqual "https://www.gns.cri.nz"
       }
@@ -82,14 +93,21 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
       withTestDatabase { database =>
         val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val category1 = TestData.category1
-        val category2 = TestData.category2
-        val category3 = TestData.category3
+        val demodata = new DemoData
+        
+        val category1 = demodata.category1
+        val category2 = demodata.category2
+        val category3 = demodata.category3
 
         owcPropsDao.getAllOwcCategories.size mustEqual 0
         owcPropsDao.createOwcCategory(category1) mustEqual Some(category1)
+        owcPropsDao.findOwcCategoriesByUuid(category1.uuid) mustEqual Some(category1)
+
         owcPropsDao.createOwcCategory(category2) mustEqual Some(category2)
+        owcPropsDao.findOwcCategoriesByUuid(category2.uuid) mustEqual Some(category2)
+
         owcPropsDao.createOwcCategory(category3) mustEqual Some(category3)
+        owcPropsDao.findOwcCategoriesByUuid(category3.uuid) mustEqual Some(category3)
 
         val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcCategory(category3)
         thrown.getErrorCode mustEqual 23505
@@ -98,8 +116,10 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
 //        owcPropsDao.findOwcCategoriesBySchemeAndTerm("search-domain", "uncertainty").head mustEqual category2
 //        owcPropsDao.findOwcCategoriesByTerm("uncertainty").size mustBe 2
 
-        val category3_1 = TestData.category3_1
+        val category3_1 = demodata.category3_1
         owcPropsDao.updateOwcCategory(category3_1) mustEqual Some(category3_1)
+        owcPropsDao.findOwcCategoriesByUuid(category3_1.uuid) mustEqual Some(category3_1)
+
 //        owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").size mustBe 1
 //        owcPropsDao.findOwcCategoriesBySchemeAndTerm("glossary", "uncertainty").head.label mustEqual category3_1.label
 
@@ -112,13 +132,20 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
       withTestDatabase { database =>
         val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val link1 = TestData.link1
-        val link2 = TestData.link2
-        val link3 = TestData.link3
+        val demodata = new DemoData
+        
+        val link1 = demodata.link1
+        val link2 = demodata.link2
+        val link3 = demodata.link3
 
         owcPropsDao.createOwcLink(link1) mustEqual Some(link1)
+        owcPropsDao.findOwcLinksByUuid(link1.uuid) mustEqual Some(link1)
+
         owcPropsDao.createOwcLink(link2) mustEqual Some(link2)
+        owcPropsDao.findOwcLinksByUuid(link2.uuid) mustEqual Some(link2)
+
         owcPropsDao.createOwcLink(link3) mustEqual Some(link3)
+        owcPropsDao.findOwcLinksByUuid(link3.uuid) mustEqual Some(link3)
 
         val thrown = the[java.sql.SQLException] thrownBy owcPropsDao.createOwcLink(link3)
         thrown.getErrorCode mustEqual 23505
@@ -126,11 +153,10 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         //owcPropsDao.findOwcLinksByHref(new URL("http://www.opengis.net/spec/owc-atom/1.0/req/core")).size mustBe 1
         owcPropsDao.findOwcLinksByUuid(link1.uuid).size mustBe 1
 
-        val link3_1 = TestData.link3_1
+        val link3_1 = demodata.link3_1
 
         owcPropsDao.updateOwcLink(link3_1) mustEqual Some(link3_1)
-        owcPropsDao.findOwcLinksByUuid(link3_1.uuid).size mustBe 1
-        owcPropsDao.findOwcLinksByUuid(link3_1.uuid).get.title mustEqual Some("New Zealand Flag")
+        owcPropsDao.findOwcLinksByUuid(link3_1.uuid).get mustEqual link3_1
 
         //owcPropsDao.findOwcLinksByPropertiesUUID(Some(s"${link1.uuid.toString}:${link2.uuid.toString}")).size mustBe 2
         //owcPropsDao.findOwcLinksByPropertiesUUID(Some("nupnup")).size mustBe 0
@@ -145,11 +171,16 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
       withTestDatabase { database =>
         val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val content1 = TestData.owccontent1
-        val content2 = TestData.owccontent2
+        val demodata = new DemoData
+        
+        val content1 = demodata.owccontent1
+        val content2 = demodata.owccontent2
 
         owcPropsDao.createOwcContent(content1) mustEqual Some(content1)
+        owcPropsDao.findOwcContentsByUuid(content1.uuid).get mustEqual content1
+
         owcPropsDao.createOwcContent(content2) mustEqual Some(content2)
+        owcPropsDao.findOwcContentsByUuid(content2.uuid).get mustEqual content2
 
         owcPropsDao.findOwcContentsByUuid(content1.uuid).size mustBe 1
 
@@ -160,13 +191,14 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         //owcPropsDao.findOwcContentsByPropertiesUUID(Some("nupnup")).size mustBe 0
         //owcPropsDao.findOwcContentsByPropertiesUUID(Some("nupnup:blubblub")).size mustBe 0
 
-        val owccontent2_1 = TestData.owccontent2_1
+        val owccontent2_1 = demodata.owccontent2_1
 
         owcPropsDao.updateOwcContent(owccontent2_1) mustEqual Some(owccontent2_1)
-        owcPropsDao.findOwcContentsByUuid(owccontent2_1.uuid).get.title mustEqual owccontent2_1.title
+        owcPropsDao.findOwcContentsByUuid(owccontent2_1.uuid).get mustEqual owccontent2_1
 
-        owcPropsDao.deleteOwcContent(content2) mustBe true
-        owcPropsDao.getAllOwcContents.size mustEqual 1
+        owcPropsDao.deleteOwcContent(content1) mustBe true
+        owcPropsDao.deleteOwcContent(owccontent2_1) mustBe true
+        owcPropsDao.getAllOwcContents.size mustEqual 0
       }
     }
 
@@ -174,13 +206,20 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
       withTestDatabase { database =>
         val owcPropsDao = new OwcPropertiesDAO(database)
 
-        val style1 = TestData.style1
-        val style2 = TestData.style2
-        val style3 = TestData.style3
+        val demodata = new DemoData
+        
+        val style1 = demodata.style1
+        val style2 = demodata.style2
+        val style3 = demodata.style3
 
         owcPropsDao.createOwcStyleSet(style1) mustEqual Some(style1)
+        owcPropsDao.findOwcStyleSetsByUuid(style1.uuid).get mustEqual style1
+
         owcPropsDao.createOwcStyleSet(style2) mustEqual Some(style2)
+        owcPropsDao.findOwcStyleSetsByUuid(style2.uuid).get mustEqual style2
+
         owcPropsDao.createOwcStyleSet(style3) mustEqual Some(style3)
+        owcPropsDao.findOwcStyleSetsByUuid(style3.uuid).get mustEqual style3
 
         owcPropsDao.findOwcStyleSetsByUuid(style1.uuid).size mustBe 1
 
@@ -190,10 +229,10 @@ class OwcPropertiesDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAft
         //owcPropsDao.findOwcStyleSetsByPropertiesUUID(Some("nupnup")).size mustBe 0
         //owcPropsDao.findOwcStyleSetsByPropertiesUUID(Some("nupnup:blubblub")).size mustBe 0
 
-        val style3_1 = TestData.style3_1
+        val style3_1 = demodata.style3_1
 
         owcPropsDao.updateOwcStyleSet(style3_1) mustEqual Some(style3_1)
-        owcPropsDao.findOwcStyleSetsByUuid(style3_1.uuid).get.title mustEqual style3_1.title
+        owcPropsDao.findOwcStyleSetsByUuid(style3_1.uuid).get mustEqual style3_1
 
         owcPropsDao.deleteOwcStyleSet(style3_1) mustBe true
         owcPropsDao.getAllOwcStyleSets.size mustEqual 2

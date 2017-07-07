@@ -19,22 +19,18 @@
 
 package models.users
 
+import java.sql.Connection
 import java.time.ZonedDateTime
-import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser._
 import anorm._
-import play.api.db._
-import utils.{ClassnameLogger, PasswordHashing}
+import uk.gov.hmrc.emailaddress.EmailAddress
+import utils.ClassnameLogger
 
 /**
-  * UserDAO
-  *
-  * @param db
-  * @param passwordHashing
+  * UserDAO requires implicit connections from calling entity
   */
-@Singleton
-class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends ClassnameLogger {
+object UserDAO extends ClassnameLogger {
 
   /**
     * Parse a User from a ResultSet
@@ -42,60 +38,15 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     */
   val userParser = {
     get[String]("email") ~
-      get[String]("accountSubject") ~
+      get[String]("accountsubject") ~
       get[String]("firstname") ~
       get[String]("lastname") ~
       get[String]("password") ~
       get[String]("laststatustoken") ~
       get[ZonedDateTime]("laststatuschange") map {
-      case email~accountsubject~firstname~lastname~password~laststatustoken~laststatuschange =>
-        User(email, accountsubject, firstname, lastname, password, laststatustoken, laststatuschange)
+      case email ~ accountsubject ~ firstname ~ lastname ~ password ~ laststatustoken ~ laststatuschange =>
+        User(EmailAddress(email), accountsubject, firstname, lastname, password, laststatustoken, laststatuschange)
     }
-  }
-
-  /**
-    * Retrieve a User from email.
-    *
-    * @param accountSubject
-    */
-  def findByAccountSubject(accountSubject: String): Option[User] = {
-    db.withConnection { implicit connection =>
-      SQL("select * from users where accountsubject = {accountsubject}").on(
-        'accountsubject -> accountSubject
-      ).as(userParser.singleOpt)
-    }
-  }
-
-  /**
-    * Retrieve all users.
-    */
-  def findAll: Seq[User] = {
-    db.withConnection { implicit connection =>
-      SQL("select * from users").as(userParser *)
-    }
-  }
-
-  /**
-    * Authenticate a User.
-    *
-    * @param email
-    * @param password
-    */
-  def authenticate(email: String, password: String): Option[User] = {
-
-    db.withConnection { implicit connection =>
-      SQL(
-        """
-         select * from users where
-         email = {email}
-        """
-      ).on(
-        'email -> email
-      ).as(userParser.singleOpt)
-    }.filter { user =>
-      passwordHashing.validatePassword(password, user.password)
-    }
-
   }
 
   /**
@@ -105,63 +56,26 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     *
     * @param user
     */
-  // FIXME SR which one should be used? WithNps, or without?
-  def createWithNps(user: User): Option[User] = {
+  def createUser(user: User)(implicit connection: Connection): Option[User] = {
+    val nps = Seq[NamedParameter](// Tuples as NamedParameter
+      "email" -> user.email.value,
+      "accountsubject" -> user.accountSubject,
+      "firstname" -> user.firstname,
+      "lastname" -> user.lastname,
+      "laststatustoken" -> user.laststatustoken,
+      "password" -> user.password,
+      "laststatuschange" -> user.laststatuschange)
 
-    db.withConnection { implicit connection =>
-      val nps = Seq[NamedParameter](// Tuples as NamedParameter before Any
-        "email" -> user.email,
-        "accountsubject" -> user.accountSubject,
-        "firstname" -> user.firstname,
-        "lastname" -> user.lastname,
-        "laststatustoken" -> user.laststatustoken,
-        "password" -> user.password,
-        "laststatuschange" -> user.laststatuschange)
-
-      val rowCount = SQL(
-        """
+    val rowCount = SQL(
+      """
           insert into users values (
             {email}, {accountsubject}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
           )
         """).on(nps: _*).executeUpdate()
 
-      rowCount match {
-        case 1 => Some(user)
-        case _ => None
-      }
-
-
-    }
-  }
-
-  /**
-    * Create a User.
-    *
-    * @param user
-    * @return
-    */
-  def create(user: User): Option[User] = {
-
-    db.withConnection { implicit connection =>
-      val rowCount = SQL(
-        """
-          insert into users values (
-            {email}, {accountsubject}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
-          )
-        """).on(
-        'email -> user.email,
-        'accountsubject -> user.accountSubject,
-        'firstname -> user.firstname,
-        'lastname -> user.lastname,
-        'password -> user.password,
-        'laststatustoken -> user.laststatustoken,
-        'laststatuschange -> user.laststatuschange
-      ).executeUpdate()
-
-      rowCount match {
-        case 1 => Some(user)
-        case _ => None
-      }
+    rowCount match {
+      case 1 => Some(user)
+      case _ => None
     }
   }
 
@@ -171,11 +85,9 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     * @param user
     * @return
     */
-  def updateNoPass(user: User) : Option[User] = {
-
-    db.withConnection { implicit connection =>
-      val rowCount = SQL(
-        """
+  def updateNoPass(user: User)(implicit connection: Connection): Option[User] = {
+    val rowCount = SQL(
+      """
           update users set
             accountsubject = {accountsubject},
             firstname = {firstname},
@@ -183,64 +95,43 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
             laststatustoken = {laststatustoken},
             laststatuschange = {laststatuschange} where email = {email}
         """).on(
-        'accountsubject -> user.accountSubject,
-        'firstname -> user.firstname,
-        'lastname -> user.lastname,
-        'laststatustoken -> user.laststatustoken,
-        'laststatuschange -> user.laststatuschange,
-        'email -> user.email
-      ).executeUpdate()
+      'accountsubject -> user.accountSubject,
+      'firstname -> user.firstname,
+      'lastname -> user.lastname,
+      'laststatustoken -> user.laststatustoken,
+      'laststatuschange -> user.laststatuschange,
+      'email -> user.email.value
+    ).executeUpdate()
 
-      rowCount match {
-        case 1 => Some(user)
-        case _ => None
-      }
+    rowCount match {
+      case 1 => Some(user)
+      case _ => None
     }
-
   }
 
   /**
     * Update password parts of user without other parts
+    *
     * @param user
     * @return
     */
-  def updatePassword(user: User) : Option[User] = {
-
-    db.withConnection { implicit connection =>
-      val rowCount = SQL(
-        """
+  def updatePassword(user: User)(implicit connection: Connection): Option[User] = {
+    val rowCount = SQL(
+      """
           update users set
             password = {password},
             laststatustoken = {laststatustoken},
             laststatuschange = {laststatuschange} where email = {email}
         """).on(
-        'password -> user.password,
-        'laststatustoken -> user.laststatustoken,
-        'laststatuschange -> user.laststatuschange,
-        'email -> user.email
-      ).executeUpdate()
+      'password -> user.password,
+      'laststatustoken -> user.laststatustoken,
+      'laststatuschange -> user.laststatuschange,
+      'email -> user.email.value
+    ).executeUpdate()
 
-      rowCount match {
-        case 1 => Some(user)
-        case _ => None
-      }
-    }
-
-  }
-
-  // more utility functions
-
-  /**
-    * find User By Email
-    *
-    * @param email
-    * @return
-    */
-  def findUserByEmail(email: String) : Option[User] = {
-    db.withConnection { implicit connection =>
-      SQL("select * from users where email = {email}").on(
-        'email -> email
-      ).as(userParser.singleOpt)
+    rowCount match {
+      case 1 => Some(user)
+      case _ => None
     }
   }
 
@@ -250,12 +141,26 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     * @param email
     * @return
     */
-  def deleteUser(email: String) : Boolean = {
-    val rowCount = db.withConnection { implicit connection =>
-      SQL("delete from users where email = {email}").on(
-        'email -> email
-      ).executeUpdate()
+  def deleteUser(email: String)(implicit connection: Connection): Boolean = {
+    val u = findUserByEmailAsString(email)
+    if (u.isDefined) {
+      deleteUser(u.get)
+    } else {
+      logger.error(s"user with email: $email wasn't found")
+      false
     }
+  }
+
+  /**
+    * delete a User
+    *
+    * @param user
+    * @return
+    */
+  def deleteUser(user: User)(implicit connection: Connection): Boolean = {
+    val rowCount = SQL("delete from users where accountsubject = {accountsubject}").on(
+        'accountsubject -> user.accountSubject
+      ).executeUpdate()
 
     rowCount match {
       case 1 => true
@@ -264,25 +169,80 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
   }
 
   /**
+    * find User By Email
+    *
+    * @param emailString
+    * @return
+    */
+  def findUserByEmailAsString(emailString: String)(implicit connection: Connection): Option[User] = {
+    if (EmailAddress.isValid(emailString)) {
+      findUserByEmailAddress(EmailAddress(emailString))
+    } else {
+      logger.error("not a valid email address")
+      None
+    }
+  }
+
+  /**
+    * find User By Email
+    *
+    * @param emailAddress
+    * @return
+    */
+  def findUserByEmailAddress(emailAddress: EmailAddress)(implicit connection: Connection): Option[User] = {
+      SQL("select * from users where email = {email}").on(
+        'email -> emailAddress.value
+      ).as(userParser.singleOpt)
+  }
+
+  /**
+    * Retrieve a User via accountSubject
+    *
+    * @param accountSubject
+    */
+  def findByAccountSubject(accountSubject: String)(implicit connection: Connection): Option[User] = {
+      SQL("select * from users where accountsubject = {accountsubject}").on(
+        'accountsubject -> accountSubject
+      ).as(userParser.singleOpt)
+  }
+
+  /**
+    * Retrieve all users.
+    */
+  def getAllUsers(implicit connection: Connection): Seq[User] = {
+      SQL("select * from users").as(userParser *)
+  }
+
+  // more utility functions
+
+  /**
     * find Users By their status token
     *
     * @param token
     * @return
     */
-  def findUsersByToken(token: String) : Seq[User] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from users where laststatustoken like '${token}'""").as(userParser *)
-    }
+  def findUsersByToken(token: StatusToken, statusInfo: String)(implicit connection: Connection): Seq[User] = {
+      SQL(s"""select * from users where laststatustoken like '$token$statusInfo'""").as(userParser *)
   }
 
   /**
-    * find Users By their status token "REGISTERED" and their uniqu registration link id
+    * find Users By their status token "REGISTERED" and their unique registration confirmation link id
     *
     * @param regLink
     * @return
     */
-  def findRegisteredUsersByRegLink(regLink: String) : Seq[User] = {
-    findUsersByToken(s"REGISTERED:$regLink")
+  def findRegisteredUsersWithRegLink(regLink: String)(implicit connection: Connection): Seq[User] = {
+    findUsersByToken(StatusToken.REGISTERED, s":$regLink")
+  }
+
+  /**
+    * find Users By their status token "EMAILVALIDATION" and their unique registration confirmation link id
+    *
+    * @param regLink
+    * @return
+    */
+  def findEmailValidationRequiredUsersWithRegLink(regLink: String)(implicit connection: Connection): Seq[User] = {
+    findUsersByToken(StatusToken.EMAILVALIDATION, s":$regLink")
   }
 
   /**
@@ -291,26 +251,25 @@ class UserDAO  @Inject()(db: Database, passwordHashing: PasswordHashing) extends
     * @param resetLink
     * @return
     */
-  def findRegisteredUsersByPassResetLink(resetLink: String) : Seq[User] = {
-    findUsersByToken(s"PASSWORDRESET:$resetLink")
+  def findUsersByPassResetLink(resetLink: String)(implicit connection: Connection): Seq[User] = {
+    findUsersByToken(StatusToken.PASSWORDRESET, s":$resetLink")
   }
 
   /**
-    * find Users By their status token "REGISTERED"
+    * find Users By their status token that are only registered but have not yet activated their accounts
     *
     * @return
     */
-  def findRegisteredOnlyUsers : Seq[User] = {
-    findUsersByToken("REGISTERED%")
+  def findRegisteredOnlyUsers(implicit connection: Connection): Seq[User] = {
+    findUsersByToken(StatusToken.REGISTERED, s"%")
   }
 
   /**
-    * find Users By their status token "ACTIVE"
+    * find active Users By their status token
     *
     * @return
     */
-  def findActiveUsers : Seq[User] = {
-    findUsersByToken("ACTIVE%")
+  def findActiveUsers(implicit connection: Connection): Seq[User] = {
+    StatusToken.activatedTokens.flatMap(t => findUsersByToken(t, s"%"))
   }
-
 }

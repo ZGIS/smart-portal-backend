@@ -32,13 +32,23 @@ import utils.StringUtils._
 class DemoData {
 
   lazy val ctx = SpatialContext.GEO
-  lazy val testTime: OffsetDateTime = OffsetDateTime.now(ZoneId.systemDefault())
+  lazy val testTime: OffsetDateTime = OffsetDateTime.now(ZoneId.of("UTC"))
   lazy val world: Rectangle = ctx.getShapeFactory().rect(-180.0, 180.0, -90.0, 90.0)
 
   val author1 = OwcAuthor(Some("Alex"), None, None, UUID.randomUUID())
   val author2 = OwcAuthor(Some("Alex K"), Some(EmailAddress("a.kmoch@gns.cri.nz")), None, UUID.randomUUID())
   val author3 = OwcAuthor(Some("Alex Kmoch"), Some(EmailAddress("a.kmoch@gns.cri.nz")), Some(new URL("http://gns.cri.nz")), UUID.randomUUID())
   val author3_1: OwcAuthor = author3.copy(uri = Some(new URL("https://www.gns.cri.nz")))
+
+  val creatorApp1 = OwcCreatorApplication(Some("GW HUB"), None, None, UUID.randomUUID())
+  val creatorApp2 = OwcCreatorApplication(Some("GW HUB"), Some(new URL("http://gns.cri.nz")), None, UUID.randomUUID())
+  val creatorApp3 = OwcCreatorApplication(Some("SAC GW HUB"), Some(new URL("http://gns.cri.nz")), Some("v0.9.0"), UUID.randomUUID())
+  val creatorApp3_1: OwcCreatorApplication = creatorApp3.copy(uri = Some(new URL("https://portal.smart-project.info")))
+
+  val displayApp1 = OwcCreatorDisplay(pixelWidth = Some(600), pixelHeight = Some(400), mmPerPixel = Some(0.28))
+  val displayApp2 = OwcCreatorDisplay(pixelWidth = Some(600), pixelHeight = Some(400), mmPerPixel = Some(28))
+  val displayApp3 = OwcCreatorDisplay(pixelWidth = Some(600), pixelHeight = Some(400), mmPerPixel = Some(2.235E+02))
+  val displayApp3_1: OwcCreatorDisplay = displayApp3.copy(pixelWidth = Some(700))
 
   val category1 = OwcCategory(uuid = UUID.randomUUID(), scheme = Some("view-groups"), term = "sac_add", label = Some("Informative Layers"))
   val category2 = OwcCategory(uuid = UUID.randomUUID(), scheme = "search-domain".toOption(), term = "uncertainty", label = Some("Uncertainty of Models"))
@@ -91,14 +101,16 @@ class DemoData {
     mimeType = "application/gml+xml",
     url = Some(new URL("http://data.roads.wherever.com/wfs?service=WFS&request=GetFeature&typename=my_srf:RoadCollection")),
     title = Some("ID_ROADS1:M30"),
-    content = None
+    content = None,
+    uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565111")
   )
 
   val owccontent2 = OwcContent(
     mimeType = "application/gml+xml",
     url = Some(new URL("http://data.roads.wherever.com/wfs?service=WFS&request=GetFeature&typename=my_srf:RoadCollection")),
     title = Some("ID_ROADS1:M30"),
-    content = Some(xmlContent1)
+    content = Some(xmlContent1),
+    uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565222")
   )
 
   val owccontent2_1: OwcContent = owccontent2.copy(title = Some("ID_ROADS1:M30 Updated"))
@@ -125,7 +137,8 @@ class DemoData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    content = None
+    content = None,
+    uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565333")
   )
 
   val style2 = OwcStyleSet(
@@ -134,7 +147,7 @@ class DemoData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    content = Some(owccontent1.copy(uuid = UUID.randomUUID()))
+    content = Some(owccontent1.copy(uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565444")))
   )
 
   val style3 = OwcStyleSet(
@@ -143,7 +156,9 @@ class DemoData {
     abstrakt = abstrakt.toOption(),
     default = Some(true),
     legendUrl = Some(new URL("http://docs.geoserver.org/latest/en/user/_images/line_simpleline1.png")),
-    content = Some(owccontent1.copy(content = Some(sldContent), uuid = UUID.randomUUID()))
+    content = Some(owccontent1.copy(content = Some(sldContent),
+      uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565555"))),
+    uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565666")
   )
 
   val style3_1: OwcStyleSet = style3.copy(content = Some(owccontent1.copy(content = Some(xmlContent1))))
@@ -170,16 +185,16 @@ class DemoData {
     mimeType = Some("application/xml"),
     requestUrl = new URL("http://portal.smart-project.info/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"),
     request = None,
-    result = Some(owccontent1.copy(uuid = UUID.randomUUID())))
+    result = Some(owccontent1.copy(uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565777"))))
 
   val operation3_1: OwcOperation = operation3.copy(mimeType = Some("application/geojson"))
 
   val operation4 = OwcOperation(
-    "GetRecordById",
-    "POST",
-    Some("application/xml"),
-    new URL("http://portal.smart-project.info/pycsw/csw"),
-    Some(OwcContent(
+    code = "GetRecordById",
+    method = "POST",
+    mimeType = Some("application/xml"),
+    requestUrl = new URL("http://portal.smart-project.info/pycsw/csw"),
+    request = Some(OwcContent(
       "application/xml",
       None,
       None,
@@ -192,10 +207,11 @@ class DemoData {
           |service="CSW" version="2.0.2">
           |<csw:Id>urn:uuid:1f542dbe-a35d-46d7-9dff-64004226d21c-nz_aquifers</csw:Id>
           |<csw:ElementSetName>full</csw:ElementSetName>
-          |</csw:GetRecordById>""".stripMargin))
+          |</csw:GetRecordById>""".stripMargin),
+      uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565888"))
     ),
-    None,
-    UUID.randomUUID())
+    result = None,
+    uuid = UUID.fromString("65e36b29-6f2f-4cc2-8d0e-921bce565999"))
 
   val operation5 = OwcOperation(
     code = "GetCapabilities",
@@ -217,15 +233,18 @@ class DemoData {
     uuid = UUID.randomUUID(),
     code = OwcOfferingType.WMS.code,
     operations = List(operation1.copy(uuid = UUID.randomUUID()), operation2.copy(uuid = UUID.randomUUID())),
-    contents = List(owccontent1.copy(uuid = UUID.randomUUID())),
-    styles = List(style1.copy(uuid = UUID.randomUUID()), style2.copy(uuid = UUID.randomUUID()))
+    contents = List(owccontent1.copy(uuid = UUID.fromString("f811bf08-a158-452b-8c18-3e43c3fdceee"))),
+    styles = List(style1.copy(uuid = UUID.randomUUID()),
+      style2.copy(
+        uuid = UUID.fromString("f811bf08-a158-452b-8c18-3e43c3fdcfff"),
+        content = Some(style2.content.get.copy(uuid = UUID.fromString("f811bf08-a158-452b-8c18-3e43c3fdcbbb")))))
   )
 
   val offering2 = OwcOffering(
     uuid = UUID.randomUUID(),
     code = OwcOfferingType.CSW.code,
     operations = List(operation3.copy(uuid = UUID.randomUUID()), operation4.copy(uuid = UUID.randomUUID())),
-    contents = List(owccontent2.copy(uuid = UUID.randomUUID())),
+    contents = List(owccontent2.copy(uuid = UUID.fromString("f811bf08-a158-452b-8c18-3e43c3fdc000"))),
     styles = List()
   )
 
@@ -242,7 +261,9 @@ class DemoData {
   val offering4 = OwcOffering(
     uuid = UUID.randomUUID(),
     code = OwcOfferingType.CSW.code,
-    operations = List(operation1.copy(uuid = UUID.randomUUID()), operation4.copy(uuid = UUID.randomUUID())),
+    operations = List(operation1.copy(uuid = UUID.randomUUID()), operation4.copy(
+      uuid = UUID.randomUUID(),
+      request = Some(operation4.request.get.copy(uuid = UUID.randomUUID())))),
     contents = List(),
     styles = List()
   )
@@ -288,6 +309,16 @@ class DemoData {
     minScaleDenominator = None,
     maxScaleDenominator = None,
     folder = Some("/sac/data/upload"))
+
+  val owcResource2_1: OwcResource = owcResource2.copy(
+    temporalExtent = Some(List(testTime.minusDays(7), testTime)),
+    subtitle = Some("Some Bla Recharge Updated"),
+    contentByRef = List(OwcLink(href = new URL("http://data.gns.cri.nz/files/234567-234567-345678.bin"),
+      mimeType = Some("application/octet-stream"),
+      lang = None,
+      title = Some("234567-234567-345678.bin"),
+      length = Some(123456),
+      rel = "enclosure")))
 
   val owcContext1 = OwcContext(
     id = new URL("http://portal.smart-project.info/context/smart-sac"),

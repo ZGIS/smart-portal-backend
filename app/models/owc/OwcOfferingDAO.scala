@@ -21,289 +21,34 @@ package models.owc
 
 import java.io.InvalidClassException
 import java.net.URL
+import java.sql.Connection
 import java.util.UUID
-import javax.inject.{Inject, Singleton}
 
 import anorm.SqlParser.{get, str}
 import anorm.{RowParser, SQL, ~}
 import info.smart.models.owc100._
-import play.api.db.Database
 import utils.ClassnameLogger
 
-/**
-  * OwcOfferingDAO - store and retrieve OWS Context Documents
-  * An OWC document is an extended FeatureCollection, where the features (aka entries) hold a variety of metadata
-  * about the things they provide the context for (i.e. other data sets, services, metadata records)
-  * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
-  *
-  * @param db
-  */
-@Singleton
-class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO) extends ClassnameLogger {
-
-  /** *********
-    * OwcOperation
-    * **********/
-
-  /**
-    * Parse a OwcOperation from a ResultSet
-    *
-    */
-  private val owcOperationParser = {
-    str("uuid") ~
-      str("code") ~
-      str("method") ~
-      get[Option[String]]("mime_type") ~
-      str("request_url") ~
-      get[Option[String]]("request_uuid") ~
-      get[Option[String]]("result_uuid") map {
-      case uuid ~ code ~ method ~ mimeType ~ requestUrl ~ requestContentUuid ~ resultContentUuid =>
-        OwcOperation(uuid = UUID.fromString(uuid),
-          code = code,
-          method = method,
-          mimeType = mimeType,
-          requestUrl = new URL(requestUrl),
-          request = requestContentUuid.map(u => owcPropertiesDAO.findOwcContentsByUuid(UUID.fromString(u))).getOrElse(None),
-          result = requestContentUuid.map(u => owcPropertiesDAO.findOwcContentsByUuid(UUID.fromString(u))).getOrElse(None))
-    }
-  }
-
-  /**
-    * Retrieve all OwcOperations.
-    *
-    * @return
-    */
-  def getAllOwcOperations: Seq[OwcOperation] = {
-    db.withConnection { implicit connection =>
-      SQL(s"select * from $tableOwcOperations").as(owcOperationParser *)
-    }
-  }
-
-  /**
-    * Find specific OwcOperation.
-    *
-    * @param code
-    * @return
-    */
-  def findOwcOperationByCode(code: String): Seq[OwcOperation] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcOperations where code like '${code}'""").as(owcOperationParser *)
-    }
-  }
-
-  /**
-    * Find specific OwcOperation.
-    *
-    * @param uuid
-    * @return
-    */
-  def findOwcOperationByUuid(uuid: UUID): Option[OwcOperation] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcOperations where uuid = '${uuid.toString}'""").as(owcOperationParser.singleOpt)
-    }
-  }
-
-
-  /**
-    * Create an owcOperation
-    *
-    * @param owcOperation
-    * @return
-    */
-  def createOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
-
-    val preRequest: Boolean = if (owcOperation.request.isDefined) {
-      val exists = owcPropertiesDAO.findOwcContentsByUuid(owcOperation.request.get.uuid).isDefined
-      if (exists) {
-        logger.error(s"OwcContent with UUID: ${owcOperation.request.get.uuid} exists already, won't create OwcOperation")
-        false
-      } else {
-        owcPropertiesDAO.createOwcContent(owcOperation.request.get).isDefined
-      }
-    } else {
-      true
-    }
-
-    val preResult: Boolean = if (owcOperation.result.isDefined) {
-      val exists = owcPropertiesDAO.findOwcContentsByUuid(owcOperation.result.get.uuid).isDefined
-      if (exists) {
-        logger.error(s"OwcContent with UUID: ${owcOperation.result.get.uuid} exists already, won't create OwcOperation")
-        false
-      } else {
-        owcPropertiesDAO.createOwcContent(owcOperation.result.get).isDefined
-      }
-    } else {
-      true
-    }
-
-    if (preRequest && preResult) {
-
-      db.withTransaction {
-        implicit connection =>
-
-          val prepStatement = SQL(
-            s"""insert into $tableOwcOperations values ( {uuid}, {code}, {method}, {mime_type}, {request_url}, {request_uuid}, {result_uuid})""").on(
-            'uuid -> owcOperation.uuid.toString,
-            'code -> owcOperation.code,
-            'method -> owcOperation.method,
-            'mime_type -> owcOperation.mimeType,
-            'request_url -> owcOperation.requestUrl.toString,
-            'request_uuid -> owcOperation.request.map(_.uuid.toString),
-            'result_uuid -> owcOperation.request.map(_.uuid.toString)
-          )
-
-          val rowCount = prepStatement.executeUpdate()
-
-        rowCount match {
-          case 1 => Some(owcOperation)
-          case _ => logger.error(s"OwcOperation couldn't be created")
-            None
-        }
-      }
-    } else {
-      logger.error(s"Precondition failed, won't create OwcOperation")
-      None
-    }
-  }
-
-  /**
-    * Update single OwcOperation
-    *
-    * @param owcOperation
-    * @return
-    */
-  def updateOwcOperation(owcOperation: OwcOperation): Option[OwcOperation] = {
-
-    val preRequest: Boolean = if (owcOperation.request.isDefined) {
-      val exists = owcOperation.request.map(c => owcPropertiesDAO.findOwcContentsByUuid(c.uuid)).isDefined
-      if (exists) {
-        val update = owcOperation.request.map(owcPropertiesDAO.updateOwcContent(_))
-        update.isDefined
-      } else {
-        val insert = owcOperation.request.map(owcPropertiesDAO.createOwcContent(_))
-        insert.isDefined
-      }
-    } else {
-      val toBeDeleted = findOwcOperationByUuid(owcOperation.uuid).map(_.request).getOrElse(None)
-      if (toBeDeleted.isDefined) {
-        toBeDeleted.exists(owcPropertiesDAO.deleteOwcContent(_))
-      } else {
-        true
-      }
-    }
-
-    val preResult: Boolean = if (owcOperation.result.isDefined) {
-      val exists = owcOperation.result.map(c => owcPropertiesDAO.findOwcContentsByUuid(c.uuid)).isDefined
-      if (exists) {
-        val update = owcOperation.result.map(owcPropertiesDAO.updateOwcContent(_))
-        update.isDefined
-      } else {
-        val insert = owcOperation.result.map(owcPropertiesDAO.createOwcContent(_))
-        insert.isDefined
-      }
-    } else {
-      val toBeDeleted = findOwcOperationByUuid(owcOperation.uuid).map(_.result).getOrElse(None)
-      if (toBeDeleted.isDefined) {
-        toBeDeleted.exists(owcPropertiesDAO.deleteOwcContent(_))
-      } else {
-        true
-      }
-    }
-
-    if (preRequest && preResult) {
-
-      db.withTransaction { implicit connection =>
-        val rowCount = SQL(
-          s"""
-             |update $tableOwcOperations set
-             |code = {code},
-             |method = {method},
-             |mime_type = {mime_type},
-             |request_url = {request_url},
-             |request_uuid = {request_uuid},
-             |result_uuid = {result_uuid}
-             | where uuid = {uuid}
-          """.stripMargin).on(
-          'code -> owcOperation.code,
-          'method -> owcOperation.method,
-          'mime_type -> owcOperation.mimeType,
-          'request_url -> owcOperation.requestUrl.toString,
-          'request_uuid -> owcOperation.request.map(_.uuid.toString),
-          'result_uuid -> owcOperation.request.map(_.uuid.toString),
-          'uuid -> owcOperation.uuid.toString
-        ).executeUpdate()
-
-        rowCount match {
-          case 1 => Some(owcOperation)
-          case _ =>
-            logger.error(s"OwcOperation couldn't be updated")
-            None
-        }
-      }
-    } else {
-      logger.error(s"Precondition failed, won't updated OwcOperation")
-      None
-    }
-  }
-
-  /**
-    * delete an OwcOperation
-    *
-    * @param owcOperation
-    * @return
-    */
-  def deleteOwcOperation(owcOperation: OwcOperation): Boolean = {
-
-    val preDeleteCheckRequest = if (owcOperation.request.isDefined) {
-      owcOperation.request.exists(owcPropertiesDAO.deleteOwcContent(_))
-    } else {
-      true
-    }
-
-    val preDeleteCheckResult = if (owcOperation.result.isDefined) {
-      owcOperation.result.exists(owcPropertiesDAO.deleteOwcContent(_))
-    } else {
-      true
-    }
-
-    if (preDeleteCheckRequest && preDeleteCheckResult) {
-      db.withTransaction { implicit connection =>
-        val rowCount = SQL(s"delete from $tableOwcOperations where uuid = {uuid}").on(
-          'uuid -> owcOperation.uuid.toString
-        ).executeUpdate()
-
-        rowCount match {
-          case 1 => true
-          case _ =>
-            logger.error(s"OwcOperation couldn't be deleted")
-            false
-        }
-      }
-    } else {
-      logger.error(s"Precondition failed, won't delete OwcOperation")
-      false
-    }
-  }
-
-  /** *********
-    * OwcOffering
-    * **********/
+/** *********
+  * OwcOffering
+  * **********/
+object OwcOfferingDAO extends ClassnameLogger {
 
   /**
     * Parse a OwcOperation from a ResultSet
     */
-  private val owcOfferingParser: RowParser[OwcOffering] = {
-    str("uuid") ~
-      str("code") ~
-      get[Option[String]]("operations") ~
-      get[Option[String]]("contents") ~
-      get[Option[String]]("styles") map {
+  private def owcOfferingParser(implicit connection: Connection): RowParser[OwcOffering] = {
+    str("owc_offerings.uuid") ~
+      str("owc_offerings.code") ~
+      get[Option[String]]("owc_offerings.operations") ~
+      get[Option[String]]("owc_offerings.contents") ~
+      get[Option[String]]("owc_offerings.styles") map {
       case uuid ~ code ~ operationsUuids ~ contentsUuids ~ stylesUuids =>
         OwcOffering(
           new URL(code),
-          operations = operationsUuids.map(u => findByPropertiesUUID[OwcOperation](Some(u))(OwcOperationEvidence).toList).getOrElse(List()),
-          contents = contentsUuids.map(u => findByPropertiesUUID[OwcContent](Some(u))(OwcContentEvidence).toList).getOrElse(List()),
-          styles = stylesUuids.map(u => findByPropertiesUUID[OwcStyleSet](Some(u))(OwcStyleSetEvidence).toList).getOrElse(List()),
+          operations = operationsUuids.map(u => findByPropertiesUUID[OwcOperation](Some(u))(OwcOperationEvidence, connection).toList).getOrElse(List()),
+          contents = contentsUuids.map(u => findByPropertiesUUID[OwcContent](Some(u))(OwcContentEvidence, connection).toList).getOrElse(List()),
+          styles = stylesUuids.map(u => findByPropertiesUUID[OwcStyleSet](Some(u))(OwcStyleSetEvidence, connection).toList).getOrElse(List()),
           uuid = UUID.fromString(uuid)
         )
     }
@@ -314,10 +59,8 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     *
     * @return
     */
-  def getAllOwcOfferings: Seq[OwcOffering] = {
-    db.withConnection { implicit connection =>
-      SQL(s"select * from $tableOwcOfferings").as(owcOfferingParser *)
-    }
+  def getAllOwcOfferings(implicit connection: Connection): Seq[OwcOffering] = {
+    SQL(s"select owc_offerings.* from $tableOwcOfferings").as(owcOfferingParser *)
   }
 
   /**
@@ -326,10 +69,8 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param uuid
     * @return
     */
-  def findOwcOfferingByUuid(uuid: UUID): Option[OwcOffering] = {
-    db.withConnection { implicit connection =>
-      SQL(s"""select * from $tableOwcOfferings where uuid = '${uuid.toString}'""").as(owcOfferingParser.singleOpt)
-    }
+  def findOwcOfferingByUuid(uuid: UUID)(implicit connection: Connection): Option[OwcOffering] = {
+    SQL(s"""select owc_offerings.* from $tableOwcOfferings where uuid = '${uuid.toString}'""").as(owcOfferingParser.singleOpt)
   }
 
   /**
@@ -339,15 +80,15 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param operations
     * @return
     */
-  private def preCreateCheckOperations(operations: List[OwcOperation]): Boolean = {
+  private def preCreateCheckOperations(operations: List[OwcOperation])(implicit connection: Connection): Boolean = {
     if (operations.nonEmpty) {
       val uuidString = operations.map(_.uuid.toString).mkString(":")
-      val exists = findByPropertiesUUID[OwcOperation](Some(uuidString))(OwcOperationEvidence).toList.nonEmpty
+      val exists = findByPropertiesUUID[OwcOperation](Some(uuidString))(OwcOperationEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"OwcOperation with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createOffering/operations) OwcOperation with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
-        val insert = operations.map(createOwcOperation(_)).filter(_.isDefined)
+        val insert = operations.map(OwcOperationDAO.createOwcOperation(_)).filter(_.isDefined)
         insert.length == operations.length
       }
     } else {
@@ -362,15 +103,15 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param contents
     * @return
     */
-  private def preCreateCheckContents(contents: List[OwcContent]): Boolean = {
+  private def preCreateCheckContents(contents: List[OwcContent])(implicit connection: Connection): Boolean = {
     if (contents.nonEmpty) {
       val uuidString = contents.map(_.uuid.toString).mkString(":")
-      val exists = findByPropertiesUUID[OwcContent](Some(uuidString))(OwcContentEvidence).toList.isEmpty
+      val exists = findByPropertiesUUID[OwcContent](Some(uuidString))(OwcContentEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"OwcContent with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createOffering/contents) OwcContent with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
-        val insert = contents.map(owcPropertiesDAO.createOwcContent(_)).filter(_.isDefined)
+        val insert = contents.map(OwcContentDAO.createOwcContent(_)).filter(_.isDefined)
         insert.length == contents.length
       }
     } else {
@@ -385,15 +126,15 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param styles
     * @return
     */
-  private def preCreateCheckStyleSets(styles: List[OwcStyleSet]): Boolean = {
+  private def preCreateCheckStyleSets(styles: List[OwcStyleSet])(implicit connection: Connection): Boolean = {
     if (styles.nonEmpty) {
       val uuidString = styles.map(_.uuid.toString).mkString(":")
-      val exists = findByPropertiesUUID[OwcStyleSet](Some(uuidString))(OwcStyleSetEvidence).toList.isEmpty
+      val exists = findByPropertiesUUID[OwcStyleSet](Some(uuidString))(OwcStyleSetEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"OwcStyleSet with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createOffering/styles) OwcStyleSet with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
-        val insert = styles.map(owcPropertiesDAO.createOwcStyleSet(_)).filter(_.isDefined)
+        val insert = styles.map(OwcStyleSetDAO.createOwcStyleSet(_)).filter(_.isDefined)
         insert.length == styles.length
       }
     } else {
@@ -407,35 +148,30 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def createOwcOffering(owcOffering: OwcOffering): Option[OwcOffering] = {
+  def createOwcOffering(owcOffering: OwcOffering)(implicit connection: Connection): Option[OwcOffering] = {
 
     if (preCreateCheckOperations(owcOffering.operations) &&
       preCreateCheckContents(owcOffering.contents) &&
       preCreateCheckStyleSets(owcOffering.styles)) {
 
-      db.withTransaction {
-        implicit connection => {
-
-          val rowCount = SQL(
-            s"""
+      val rowCount = SQL(
+        s"""
           insert into $tableOwcOfferings values (
             {uuid}, {code}, {operations}, {contents}, {styles}
           )
         """).on(
-            'uuid -> owcOffering.uuid.toString,
-            'code -> owcOffering.code.toString,
-            'operations -> owcOffering.operations.map(_.uuid.toString).mkString(":"),
-            'contents -> owcOffering.contents.map(_.uuid.toString).mkString(":"),
-            'styles -> owcOffering.styles.map(_.uuid.toString).mkString(":")
-          ).executeUpdate()
+        'uuid -> owcOffering.uuid.toString,
+        'code -> owcOffering.code.toString,
+        'operations -> owcOffering.operations.map(_.uuid.toString).mkString(":"),
+        'contents -> owcOffering.contents.map(_.uuid.toString).mkString(":"),
+        'styles -> owcOffering.styles.map(_.uuid.toString).mkString(":")
+      ).executeUpdate()
 
-          rowCount match {
-            case 1 => Some(owcOffering)
-            case _ =>
-              logger.error(s"OwcOperation couldn't be created")
-              None
-          }
-        }
+      rowCount match {
+        case 1 => Some(owcOffering)
+        case _ =>
+          logger.error(s"OwcOperation couldn't be created")
+          None
       }
     } else {
       logger.error(s"Precondition failed, won't create OwcOffering")
@@ -450,7 +186,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  private def preUpdateCheckOperationsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckOperationsForOffering(owcOffering: OwcOffering)(implicit connection: Connection): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.operations.map(_.uuid)
@@ -462,21 +198,27 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
     val deleted = owcOffering.operations.filter(o => toBeDeleted.contains(o.uuid))
-      .exists(deleteOwcOperation(_))
+      .map(OwcOperationDAO.deleteOwcOperation(_))
+      .count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
     val updated = owcOffering.operations.filter(o => toBeUpdated.contains(o.uuid))
-      .map(updateOwcOperation(_))
+      .map(OwcOperationDAO.updateOwcOperation(_))
       .count(_.isDefined) == toBeUpdated.length
 
     // in current but not in old -> insert
     val toBeInserted = current.diff(old)
     val inserted = owcOffering.operations.filter(o => toBeInserted.contains(o.uuid))
-      .map(createOwcOperation(_))
+      .map(OwcOperationDAO.createOwcOperation(_))
       .count(_.isDefined) == toBeInserted.length
 
-    deleted && updated && inserted
+    if (deleted && updated && inserted) {
+      true
+    } else {
+      logger.error(s"(updateOffering/operation) one of deleted: $deleted , updated: $updated , inserted: $inserted not complete, recommend abort")
+      false
+    }
   }
 
   /**
@@ -486,7 +228,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  private def preUpdateCheckContentsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckContentsForOffering(owcOffering: OwcOffering)(implicit connection: Connection): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.contents.map(_.uuid)
@@ -498,21 +240,27 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
     val deleted = owcOffering.contents.filter(o => toBeDeleted.contains(o.uuid))
-      .exists(owcPropertiesDAO.deleteOwcContent(_))
+      .map(OwcContentDAO.deleteOwcContent(_))
+      .count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
     val updated = owcOffering.contents.filter(o => toBeUpdated.contains(o.uuid))
-      .map(owcPropertiesDAO.updateOwcContent(_))
+      .map(OwcContentDAO.updateOwcContent(_))
       .count(_.isDefined) == toBeUpdated.length
 
     // in current but not in old -> insert
     val toBeInserted = current.diff(old)
     val inserted = owcOffering.contents.filter(o => toBeInserted.contains(o.uuid))
-      .map(owcPropertiesDAO.createOwcContent(_))
+      .map(OwcContentDAO.createOwcContent(_))
       .count(_.isDefined) == toBeInserted.length
 
-    deleted && updated && inserted
+    if (deleted && updated && inserted) {
+      true
+    } else {
+      logger.error(s"(updateOffering/contents) one of deleted: $deleted , updated: $updated , inserted: $inserted not complete, recommend abort")
+      false
+    }
   }
 
   /**
@@ -522,7 +270,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  private def preUpdateCheckStyleSetsForOffering(owcOffering: OwcOffering): Boolean = {
+  private def preUpdateCheckStyleSetsForOffering(owcOffering: OwcOffering)(implicit connection: Connection): Boolean = {
 
     // get current list,
     val current: List[UUID] = owcOffering.styles.map(_.uuid)
@@ -534,21 +282,27 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
     val deleted = owcOffering.styles.filter(o => toBeDeleted.contains(o.uuid))
-      .exists(owcPropertiesDAO.deleteOwcStyleSet(_))
+      .map(OwcStyleSetDAO.deleteOwcStyleSet(_))
+      .count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
     val updated = owcOffering.styles.filter(o => toBeUpdated.contains(o.uuid))
-      .map(owcPropertiesDAO.updateOwcStyleSet(_))
+      .map(OwcStyleSetDAO.updateOwcStyleSet(_))
       .count(_.isDefined) == toBeUpdated.length
 
     // in current but not in old -> insert
     val toBeInserted = current.diff(old)
     val inserted = owcOffering.styles.filter(o => toBeInserted.contains(o.uuid))
-      .map(owcPropertiesDAO.createOwcStyleSet(_))
+      .map(OwcStyleSetDAO.createOwcStyleSet(_))
       .count(_.isDefined) == toBeInserted.length
 
-    deleted && updated && inserted
+    if (deleted && updated && inserted) {
+      true
+    } else {
+      logger.error(s"(updateOffering/styles) one of deleted: $deleted , updated: $updated , inserted: $inserted not complete, recommend abort")
+      false
+    }
   }
 
   /**
@@ -557,7 +311,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def updateOwcOfferings(owcOffering: OwcOffering): Option[OwcOffering] = {
+  def updateOwcOffering(owcOffering: OwcOffering)(implicit connection: Connection): Option[OwcOffering] = {
 
     // for each operations, contents and styles
     val preUpdateCheckOperations = preUpdateCheckOperationsForOffering(owcOffering)
@@ -568,28 +322,26 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
       preUpdateCheckContents &&
       preUpdateCheckStyleSets) {
 
-      db.withTransaction {
-        implicit connection => {
-
-          val rowCount = SQL(
-            s"""
-          update into $tableOwcOfferings values (
-            {uuid}, {code}, {operations}, {contents}, {styles}
-          )
+      val rowCount = SQL(
+        s"""
+          update $tableOwcOfferings set
+          code = {code},
+          operations = {operations},
+          contents = {contents},
+          styles = {styles}
+          where uuid = {uuid}
         """).on(
-            'uuid -> owcOffering.uuid.toString,
-            'code -> owcOffering.code.toString,
-            'operations -> owcOffering.operations.map(_.uuid.toString).mkString(":"),
-            'contents -> owcOffering.contents.map(_.uuid.toString).mkString(":"),
-            'styles -> owcOffering.styles.map(_.uuid.toString).mkString(":")
-          ).executeUpdate()
+        'uuid -> owcOffering.uuid.toString,
+        'code -> owcOffering.code.toString,
+        'operations -> owcOffering.operations.map(_.uuid.toString).mkString(":"),
+        'contents -> owcOffering.contents.map(_.uuid.toString).mkString(":"),
+        'styles -> owcOffering.styles.map(_.uuid.toString).mkString(":")
+      ).executeUpdate()
 
-          rowCount match {
-            case 1 => Some(owcOffering)
-            case _ => logger.error(s"OwcOffering couldn't be updated")
-              None
-          }
-        }
+      rowCount match {
+        case 1 => Some(owcOffering)
+        case _ => logger.error(s"OwcOffering couldn't be updated")
+          None
       }
     } else {
       logger.error(s"Precondition failed, won't update OwcOffering")
@@ -603,43 +355,39 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @param owcOffering
     * @return
     */
-  def deleteOwcOffering(owcOffering: OwcOffering): Boolean = {
+  def deleteOwcOffering(owcOffering: OwcOffering)(implicit connection: Connection): Boolean = {
 
     val preDeleteCheckOperation = if (owcOffering.operations.nonEmpty) {
-      owcOffering.operations.exists(deleteOwcOperation(_))
+      owcOffering.operations.map(
+        o => OwcOperationDAO.deleteOwcOperation(o)).count(_ == true) == owcOffering.operations.size
     } else {
       true
     }
 
     val preDeleteCheckContents = if (owcOffering.contents.nonEmpty) {
-      owcOffering.contents.exists(owcPropertiesDAO.deleteOwcContent(_))
+      owcOffering.contents.map(
+        o => OwcContentDAO.deleteOwcContent(o)).count(_ == true) == owcOffering.contents.size
     } else {
       true
     }
 
     val preDeleteCheckStyleSets = if (owcOffering.styles.nonEmpty) {
-      owcOffering.styles.exists(owcPropertiesDAO.deleteOwcStyleSet(_))
+      owcOffering.styles.map (
+        o => OwcStyleSetDAO.deleteOwcStyleSet(o)).count(_ == true) == owcOffering.styles.size
     } else {
       true
     }
 
     if (preDeleteCheckOperation && preDeleteCheckContents && preDeleteCheckStyleSets) {
+      val rowCount = SQL(s"delete from $tableOwcOfferings where uuid = {uuid}").on(
+        'uuid -> owcOffering.uuid.toString
+      ).executeUpdate()
 
-      db.withTransaction {
-        implicit connection => {
-
-          val rowCount = SQL(s"delete from $tableOwcOfferings where uuid = {uuid}").on(
-            'uuid -> owcOffering.uuid.toString
-          ).executeUpdate()
-
-          rowCount match {
-            case 1 => true
-            case _ =>
-              logger.error(s"OwcOffering couldn't be deleted")
-              false
-          }
-
-        }
+      rowCount match {
+        case 1 => true
+        case _ =>
+          logger.error(s"OwcOffering couldn't be deleted")
+          false
       }
     } else {
       logger.error(s"Precondition failed, won't delete OwcOffering")
@@ -656,7 +404,7 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     * @tparam A Type of OwcAuthor, OwcCategory, OwcLink, OwcContent, OwcStyleSet, OwcOperation
     * @return Sequence of objects of type A if found, otherwise empty Seq
     */
-  def findByPropertiesUUID[A](propertiesUuid: Option[String])(implicit a: A): Seq[A] = {
+  def findByPropertiesUUID[A](propertiesUuid: Option[String])(implicit a: A, connection: Connection): Seq[A] = {
 
     import utils.StringUtils._
 
@@ -665,14 +413,16 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
         val uuids = potUuids.map(_.toUuidOption).filter(_.isDefined).map(_.get)
         uuids.map { uid =>
           a match {
-            case a: OwcAuthor => owcPropertiesDAO.findOwcAuthorByUuid(uid).asInstanceOf[Option[A]]
-            case a: OwcCategory => owcPropertiesDAO.findOwcCategoriesByUuid(uid).asInstanceOf[Option[A]]
-            case a: OwcLink => owcPropertiesDAO.findOwcLinksByUuid(uid).asInstanceOf[Option[A]]
-            case a: OwcContent => owcPropertiesDAO.findOwcContentsByUuid(uid).asInstanceOf[Option[A]]
-            case a: OwcStyleSet => owcPropertiesDAO.findOwcStyleSetsByUuid(uid).asInstanceOf[Option[A]]
-            case a: OwcOperation => findOwcOperationByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcAuthor => OwcAuthorDAO.findOwcAuthorByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcCategory => OwcCategoryDAO.findOwcCategoryByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcLink => OwcLinkDAO.findOwcLinkByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcContent => OwcContentDAO.findOwcContentByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcCreatorApplication => OwcCreatorApplicationDAO.findOwcCreatorApplicationByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcCreatorDisplay => OwcCreatorDisplayDAO.findOwcCreatorDisplayByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcStyleSet => OwcStyleSetDAO.findOwcStyleSetByUuid(uid).asInstanceOf[Option[A]]
+            case a: OwcOperation => OwcOperationDAO.findOwcOperationByUuid(uid).asInstanceOf[Option[A]]
             case a: OwcOffering => findOwcOfferingByUuid(uid).asInstanceOf[Option[A]]
-            case _ => throw new InvalidClassException("evidence parameter type not supported, only ")
+            case _ => throw new InvalidClassException(s"The evidence parameter type ${a.getClass.getCanonicalName} not supported here")
           }
 
         }.filter(_.isDefined).map(_.get)
@@ -680,99 +430,4 @@ class OwcOfferingDAO @Inject()(db: Database, owcPropertiesDAO: OwcPropertiesDAO)
     )
     values.getOrElse(Seq())
   }
-
-  //  /**
-  //    * get OwcOfferings for a featuretype (OwcEntry or OwcDocument)
-  //    * @param featureTypeId
-  //    * @return
-  //    */
-  //  def findOwcOfferingsForOwcEntry(featureTypeId: String) : Seq[OwcOffering] = {
-  //    db.withConnection { implicit connection =>
-  //      SQL(
-  //        s"""SELECT
-  //           |o.uuid as uuid, o.offering_type as offering_type, o.code as code, o.content as content
-  //           |FROM $tableOwcOfferings o JOIN $tableOwcEntriesHasOwcOfferings eof ON o.uuid=eof.owc_offerings_uuid
-  //           |WHERE eof.owc_feature_types_as_entry_id={owc_feature_types_as_entry_id}""".stripMargin).on(
-  //        'owc_feature_types_as_entry_id -> featureTypeId
-  //      )
-  //        .as(owcOfferingParser *)
-  //    }
-  //  }
-  //
-  //  /**
-  //    * finds owc operations from the offerings relation
-  //    *
-  //    * @param offeringUuid
-  //    * @return
-  //    */
-  //  def findOwcOperationsByOfferingUUID(offeringUuid: UUID): Seq[OwcOperation] = {
-  //    db.withConnection { implicit connection =>
-  //      SQL(
-  //        s"""SELECT op.uuid as uuid, op.code as code, op.method as method, op.content_type as content_type,
-  //           | op.href as href, op.request_content_type as request_content_type, op.request_post_data as request_post_data,
-  //           | op.result_content_type as result_content_type, op.result_data as result_data
-  //           | FROM $tableOwcOperations op JOIN $tableOwcOfferingsHasOwcOperations ofop ON op.uuid=ofop.owc_operations_uuid
-  //           | WHERE ofop.owc_offerings_uuid={uuid}""".stripMargin).on(
-  //        'uuid -> offeringUuid.toString
-  //      )
-  //        .as(owcOperationParser *)
-  //    }
-  //  }
-
-  /*
-    Custom stuff
-   */
-//  case class UploadedFileProperties(
-//                                     owcProperties: OwcResource,
-//                                     owcOperation: OwcOperation
-//                                   )
-//  /**
-//    * Represents an uploaded file in OwnCollection
-//    * @param owcProperties this contains the file name
-//    * @param owcOperation  this contains the URL where it was uploaded to
-//    */
-//  case class UploadedFileProperties(
-//                                     val owcProperties: OwcProperties,
-//                                     val owcOperation: OwcOperation
-//                                   ) {
-//    implicit val reads: Reads[UploadedFileProperties] = (
-//      (JsPath \ "properties").read[OwcProperties] and
-//        (JsPath \ "operation").read[OwcOperation]
-//      )(UploadedFilePropertiesJs.apply _)
-//
-//    implicit val writes: Writes[UploadedFileProperties] = (
-//      (JsPath \ "properties").write[OwcProperties] and
-//        (JsPath \ "operation").write[OwcOperation]
-//      )(unlift(UploadedFilePropertiesJs.unapply))
-//
-//    def toJson: JsValue = Json.toJson(this);
-//  }
-//
-//  /**
-//    * UploadedFileProperties Json stuff
-//    */
-//  object UploadedFilePropertiesJs extends ClassnameLogger {
-//
-//    def apply(
-//               owcProperties: OwcProperties,
-//               owcOperation: OwcOperation
-//             ): UploadedFileProperties = {
-//      UploadedFileProperties(owcProperties, owcOperation)
-//    }
-//
-//    def unapply(arg: UploadedFileProperties): Option[(OwcProperties, OwcOperation)] = {
-//      Some(arg.owcProperties, arg.owcOperation)
-//    }
-//  }
-//
-//  /**
-//    * parseOm2Measurements an uploaded file property + the getfile operation
-//    */
-//  val uploadedFilePropertiesParser: RowParser[UploadedFileProperties] = {
-//    owcPropertiesParser ~
-//      owcOfferingDAO.owcOperationParser map {
-//      case properties ~ operation =>
-//        UploadedFileProperties(properties, operation)
-//    }
-//  }
 }

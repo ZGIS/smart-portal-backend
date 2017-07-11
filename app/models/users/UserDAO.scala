@@ -37,13 +37,13 @@ object UserDAO extends ClassnameLogger {
     *
     */
   val userParser = {
-    get[String]("email") ~
-      get[String]("accountsubject") ~
-      get[String]("firstname") ~
-      get[String]("lastname") ~
-      get[String]("password") ~
-      get[String]("laststatustoken") ~
-      get[ZonedDateTime]("laststatuschange") map {
+    get[String]("users.email") ~
+      get[String]("users.accountsubject") ~
+      get[String]("users.firstname") ~
+      get[String]("users.lastname") ~
+      get[String]("users.password") ~
+      get[String]("users.laststatustoken") ~
+      get[ZonedDateTime]("users.laststatuschange") map {
       case email ~ accountsubject ~ firstname ~ lastname ~ password ~ laststatustoken ~ laststatuschange =>
         User(EmailAddress(email), accountsubject, firstname, lastname, password, laststatustoken, laststatuschange)
     }
@@ -190,7 +190,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findUserByEmailAddress(emailAddress: EmailAddress)(implicit connection: Connection): Option[User] = {
-      SQL("select * from users where email = {email}").on(
+      SQL("select users.* from users where email = {email}").on(
         'email -> emailAddress.value
       ).as(userParser.singleOpt)
   }
@@ -201,7 +201,7 @@ object UserDAO extends ClassnameLogger {
     * @param accountSubject
     */
   def findByAccountSubject(accountSubject: String)(implicit connection: Connection): Option[User] = {
-      SQL("select * from users where accountsubject = {accountsubject}").on(
+      SQL("select users.* from users where accountsubject = {accountsubject}").on(
         'accountsubject -> accountSubject
       ).as(userParser.singleOpt)
   }
@@ -210,7 +210,7 @@ object UserDAO extends ClassnameLogger {
     * Retrieve all users.
     */
   def getAllUsers(implicit connection: Connection): Seq[User] = {
-      SQL("select * from users").as(userParser *)
+      SQL("select users.* from users").as(userParser *)
   }
 
   // more utility functions
@@ -222,7 +222,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findUsersByToken(token: StatusToken, statusInfo: String)(implicit connection: Connection): Seq[User] = {
-      SQL(s"""select * from users where laststatustoken like '$token$statusInfo'""").as(userParser *)
+      SQL(s"""select users.* from users where laststatustoken like '$token$statusInfo'""").as(userParser *)
   }
 
   /**

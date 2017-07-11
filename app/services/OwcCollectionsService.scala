@@ -31,16 +31,13 @@ import models.owc._
 import models.users._
 import play.api.Configuration
 import uk.gov.hmrc.emailaddress.EmailAddress
-import utils.ClassnameLogger
+import utils.{ClassnameLogger, GeoDateParserUtils}
 import utils.StringUtils._
 
 import scala.util.{Success, Try}
 
 @Singleton
 class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
-                                      owcPropertiesDAO: OwcPropertiesDAO,
-                                      owcOfferingDAO: OwcOfferingDAO,
-                                      owcContextDAO: OwcContextDAO,
                                       config: Configuration) extends ClassnameLogger {
 
   val configuration: play.api.Configuration = config
@@ -56,7 +53,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
-          owcContextDAO.findUserDefaultOwcContext(user))).getOrElse(None)
+          OwcContextDAO.findUserDefaultOwcContext(user))).getOrElse(None)
   }
 
   /**
@@ -69,7 +66,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
 
     val userCollection = sessionHolder.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
-        u => owcContextDAO.findUserDefaultOwcContext(u))).getOrElse(None)
+        u => OwcContextDAO.findUserDefaultOwcContext(u))).getOrElse(None)
     userCollection.fold {
       logger.warn(s"user ${authUser} doesn't have personal collection")
       Seq[OwcLink]()
@@ -93,11 +90,11 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       // no email provided
       owcContextIdOption.fold {
         // TODO docs for anonymous, no id provided => all public docs (implies docs must be public)
-        owcContextDAO.getAllPublicOwcContexts
+        sessionHolder.viaConnection(implicit connection => OwcContextDAO.getAllPublicOwcContexts)
       } {
         // TODO find doc by id for anonymous, only one doc if available (implies doc must be public)
         owcContextId => {
-          owcContextDAO.findPublicOwcContextsById(owcContextId).toSeq
+          sessionHolder.viaConnection(implicit connection => OwcContextDAO.findPublicOwcContextsById(owcContextId).toSeq)
         }
       }
     } { authUser => {
@@ -107,11 +104,11 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
           logger.warn("Provided user not found.")
           owcContextIdOption.fold {
             // TODO docs for anonymous, no id provided => all public docs (later maybe check if public)
-            owcContextDAO.getAllPublicOwcContexts
+            OwcContextDAO.getAllPublicOwcContexts
           } {
             // docs for anonymous, but id provided only one doc if available (and only if public)
             owcContextId => {
-              owcContextDAO.findPublicOwcContextsById(owcContextId).toSeq
+              OwcContextDAO.findPublicOwcContextsById(owcContextId).toSeq
             }
           }
         } { user =>
@@ -119,14 +116,14 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
           owcContextIdOption.fold {
             // docs for user, no id provided => all user visible docs
             // TODO technically would be more than "only" publicly visible at some point
-            val publicDocs = owcContextDAO.getAllPublicOwcContexts
-            val userDocs = owcContextDAO.findOwcContextsByUser(user)
+            val publicDocs = OwcContextDAO.getAllPublicOwcContexts
+            val userDocs = OwcContextDAO.findOwcContextsByUser(user)
 
             publicDocs ++ userDocs
           } {
             // TODO find doc by id for provided user if visible/available (later maybe check constraint)
             owcContextId => {
-              owcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+              OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
             }
           }
         }
@@ -165,7 +162,8 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       keyword = List(),
       resource = List())
 
-    val ok = owcContextDAO.createUsersDefaultOwcContext(defaultOwcDoc, user)
+    val ok = sessionHolder.viaTransaction(implicit connection =>
+      OwcContextDAO.createUsersDefaultOwcContext(defaultOwcDoc, user))
     ok match {
       case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}")
       case _ => logger.error("Something failed miserably")
@@ -229,7 +227,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).exists {
         user =>
-          owcContextDAO.findUserDefaultOwcContext(user).exists {
+          OwcContextDAO.findUserDefaultOwcContext(user).exists {
             owcDoc => {
 
               val owcResource = OwcResource(
@@ -243,7 +241,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
                   uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
                 publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
                 rights = mdMetadata.distribution.useLimitation.toOption(),
-                temporalExtent = owcContextDAO.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
+                temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
 
                 // links.alternates[] and rel=alternate
                 contentDescription = List(),
@@ -265,7 +263,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
 
               val entries = owcDoc.resource ++ Seq(owcResource)
               val newDoc = owcDoc.copy(resource = entries)
-              owcContextDAO.updateOwcContext(newDoc, user).isDefined
+              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
           }
       })
@@ -282,77 +280,16 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).exists {
         user =>
-          owcContextDAO.findUserDefaultOwcContext(user).exists {
+          OwcContextDAO.findUserDefaultOwcContext(user).exists {
             owcDoc => {
               val entries = owcDoc.resource ++ Seq(owcResource)
               val newDoc = owcDoc.copy(resource = entries)
-              owcContextDAO.updateOwcContext(newDoc, user).isDefined
+              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
           }
       }
     )
   }
-
-  //  /**
-  //    *
-  //    * @param owcResource
-  //    * @param email
-  //    * @return
-  //    */
-  //  def addResourceToCollection(owcContextId: String, owcResource: OwcResource, email: String) : Option[OwcContext] = {
-  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
-  //
-  //    collection.fold {
-  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
-  //      val empty: Option[OwcContext] = None
-  //      empty
-  //    }{
-  //      owcDoc => {
-  //        val entries = owcDoc.features ++ Seq(owcResource)
-  //        val newDoc = owcDoc.copy(features = entries)
-  //        owcContextDAO.addOwcResourceToOwcContext(newDoc, owcResource, email)
-  //      }
-  //    }
-  //  }
-  //
-  //  /**
-  //    *
-  //    * @param owcResource
-  //    * @param email
-  //    * @return
-  //    */
-  //  def replaceResourceInCollection(owcContextId: String, owcResource: OwcResource, email: String) : Option[OwcContext] = {
-  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
-  //
-  //    collection.fold {
-  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
-  //      val empty: Option[OwcContext] = None
-  //      empty
-  //    }{
-  //      owcDoc => {
-  //        // at first filter the resource out of the current collection and then add the updated resource back in
-  //        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(owcResource.id)) ++ Seq(owcResource)
-  //        val newDoc = owcDoc.copy(features = entries)
-  //        owcContextDAO.replaceResourceInCollection(newDoc, owcResource, email)
-  //      }
-  //    }
-  //  }
-  //
-  //  def deleteResourceFromCollection(owcContextId: String, resourceid: String, email: String) : Option[OwcContext] = {
-  //    val collection = owcContextDAO.findOwcContextByIdAndUser(owcContextId, email)
-  //    collection.fold {
-  //      logger.warn(s"No usable collection owcdoc id $owcContextId found for $email")
-  //      val empty: Option[OwcContext] = None
-  //      empty
-  //    } {
-  //      owcDoc => {
-  //        // filter the resource out of the current collection
-  //        val entries = owcDoc.features.filterNot( _.id.equalsIgnoreCase(resourceid))
-  //        val newDoc = owcDoc.copy(features = entries)
-  //        owcContextDAO.deleteOwcResourceFromOwcContext(newDoc, resourceid, email)
-  //      }
-  //    }
-  //  }
 
   /**
     *
@@ -364,7 +301,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
-          owcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)
+          OwcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)
   }
 
   /**
@@ -377,7 +314,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
-          owcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)
+          OwcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)
   }
 
   /**
@@ -390,12 +327,12 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     sessionHolder.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).exists {
         user =>
-          val hasOwcDoc = owcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
+          val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
           hasOwcDoc.fold {
             false
           } {
             theDoc => {
-              owcContextDAO.deleteOwcContext(owcContext, user)
+              OwcContextDAO.deleteOwcContext(owcContext, user)
             }
           }
       })
@@ -426,5 +363,4 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       }
     }
   }
-
 }

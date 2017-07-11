@@ -67,7 +67,6 @@ case class RegisterJs(email: EmailAddress,
                       lastname: String,
                       password: String)
 
-
 /**
   *
   * @param config
@@ -515,15 +514,6 @@ class UserController @Inject()(config: Configuration,
         BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
-        // find user in db and compare password stuff
-
-        logger.debug(credentials.accesstype)
-
-        // Set path to the Web application client_secret_*.json file you downloaded from the
-        // Google API Console: https://console.developers.google.com/apis/credentials
-        // You can also find your Web application client ID and client secret from the
-        // console and specify them directly when you create the GoogleAuthorizationCodeTokenRequest
-        // object.
         if (!new java.io.File(googleClientSecret).exists) {
           val error = ErrorResult("Service JSON file not available", None)
           InternalServerError(Json.toJson(error)).as(JSON)
@@ -548,11 +538,8 @@ class UserController @Inject()(config: Configuration,
             gauthRedirectUrl).execute()
 
           val accessToken = tokenResponse.getAccessToken()
-          logger.debug(s"accessToken: $accessToken")
-
           // Use access token to call API
           val credential = new GoogleCredential().setAccessToken(accessToken)
-
           // Get profile info from ID token
           val idToken: GoogleIdToken = tokenResponse.parseIdToken()
           val payload = idToken.getPayload()
@@ -560,17 +547,12 @@ class UserController @Inject()(config: Configuration,
           val userId = payload.getSubject()
           val email = payload.getEmail()
           val emailVerified = payload.getEmailVerified()
-
-
           // get further payload things that is easy in java but needs to work in scala too
           val name = Option(payload.get("name").asInstanceOf[String])
           val pictureUrl = Option(payload.get("picture").asInstanceOf[String])
           val locale = Option(payload.get("locale").asInstanceOf[String])
           val familyName = Option(payload.get("family_name").asInstanceOf[String])
           val givenName = Option(payload.get("given_name").asInstanceOf[String])
-
-          logger.debug(s"payload.toPrettyString: ${payload.toPrettyString}")
-
           if ((credentials.accesstype.equalsIgnoreCase("LOGIN") || credentials.accesstype.equalsIgnoreCase("REGISTER")) &&
             emailVerified && EmailAddress.isValid(email)) {
 
@@ -599,8 +581,6 @@ class UserController @Inject()(config: Configuration,
                   collectionsService.createUserDefaultCollection(newUser)
 
                   logger.info(s"New user registered. Email went out $emailWentOut")
-                  // creating default collection only after registration, account is only barely usable here
-
                   val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                   // logger.debug(s"Logging in email from $uaIdentifier")
                   val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
@@ -608,9 +588,7 @@ class UserController @Inject()(config: Configuration,
                   Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs()))
                     .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
                 }
-
               } { user =>
-
                 val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                 // logger.debug(s"Logging in email from $uaIdentifier")
                 val token = passwordHashing.createSessionCookie(user.email.value, uaIdentifier)
@@ -624,55 +602,6 @@ class UserController @Inject()(config: Configuration,
             val error = ErrorResult("Invalid accestype requested", None)
             BadRequest(Json.toJson(error)).as(JSON)
           }
-
-          // Google Sign up always logs in, might create user AND collection on the fly
-          /*          credentials.accesstype match {
-                      case "LOGIN" => {
-                        UserDAO.findUserByEmailAsString(email).fold {
-                          logger.error("User not known.")
-                          Unauthorized(Json.obj("status" -> "ERR", "message" -> "User not known yet, please register first."))
-                        } { user =>
-                          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                          // logger.debug(s"Logging in email from $uaIdentifier")
-                          val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-                          cache.set(token, user.email)
-                          Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email, "userprofile" -> user.asProfileJs()))
-                            .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
-                        }
-                      }
-                      case "REGISTER" => {
-                        // found none, good...
-                        UserDAO.findUserByEmailAsString(email).fold {
-                          // found none, good, create user
-                          val regLinkId = java.util.UUID.randomUUID().toString()
-                          val cryptPass = passwordHashing.createHash(regLinkId)
-
-                          val newUser = User(email,
-                            s"google:${userId}",
-                            givenName.getOrElse(name.getOrElse(email)),
-                            familyName.getOrElse(""),
-                            cryptPass,
-                            s"REGISTERED:$regLinkId",
-                            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-                          UserDAO.createUser(newUser).fold {
-                            logger.error("User create error.")
-                            BadRequest(Json.obj("status" -> "ERR", "message" -> "User create error."))
-                          } { user =>
-                            val emailWentOut = emailService.sendRegistrationEmail(email, "Please confirm your GW HUB account", givenName.getOrElse(name.getOrElse(email)), regLinkId)
-                            logger.info(s"New user registered. Email went out $emailWentOut")
-                            // creating default collection only after registration, account is only barely usable here
-                            Ok(Json.toJson(user.asProfileJs()))
-                          }
-                        } { user =>
-                          // found user with that email already
-                          logger.error("Email already in use.")
-                          BadRequest(Json.obj("status" -> "ERR", "message" -> "Email already in use."))
-                        }
-                      }
-
-                      case _ => BadRequest(Json.obj("status" -> "ERR", "message" -> "invalid accesstype requested"))
-                    }*/
         }
       }
     )

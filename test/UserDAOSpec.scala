@@ -35,28 +35,19 @@ import play.api.libs.json._
 /**
   * Test Spec for [[User]] and [[UserDAO]]
   */
-class UserDaoSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  import scala.language.implicitConversions
+class UserDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
+  import scala.language.implicitConversions
+
   implicit override def newAppForTest(testData: TestData): Application = new
       GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
-
-  before {
-
-  }
-
-  after {
-
-  }
 
   "UserDAO" can {
 
     "handle Users with DB" in {
       withTestDatabase { database =>
         // Evolutions.applyEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/"))
-        //implicit val conn = database.getConnection
         val sessionHolder = new SessionHolder(database)
         sessionHolder.viaConnection { implicit connection =>
 

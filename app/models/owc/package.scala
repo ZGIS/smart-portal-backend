@@ -20,7 +20,7 @@
 package models
 
 import java.net.URL
-import java.time.{OffsetDateTime, ZonedDateTime}
+import java.time.{OffsetDateTime, ZoneOffset, ZonedDateTime}
 
 import anorm.{Column, MetaDataItem, TypeDoesNotMatch}
 import info.smart.models.owc100._
@@ -60,6 +60,8 @@ package object owc {
   implicit val OwcCategoryEvidence = OwcCategory("term", None, None)
   implicit val OwcLinkEvidence = OwcLink(new URL(GENERIC_OWC_SPEC_URL), None, None, None, None, "rel")
   implicit val OwcContentEvidence = OwcContent("text/plain", None, None, None)
+  implicit val OwcCreatorApplicationEvidence = OwcCreatorApplication(None, None, None)
+  implicit val OwcCreatorDisplayEvidence = OwcCreatorDisplay(None, None, None)
   implicit val OwcStyleSetEvidence = OwcStyleSet("name", "title", None, None, None, None)
 
   implicit val OwcOperationEvidence = OwcOperation("GetCapabilties", "GET", None, new URL(GENERIC_OWC_SPEC_URL), None, None)
@@ -94,6 +96,15 @@ package object owc {
       value match {
         case offsetDateTime: OffsetDateTime => Right(offsetDateTime) // default case
         case zonedDateTime: ZonedDateTime => Right(OffsetDateTime.of(zonedDateTime.toLocalDateTime, zonedDateTime.getOffset)) // Custom conversion
+        case h2DateTime: org.h2.api.TimestampWithTimeZone => {
+          // val offsetMinutes = h2DateTime.getTimeZoneOffsetMins
+          val localDateTime = h2DateTime.toLocalDateTime
+          Right(OffsetDateTime.of(localDateTime, ZoneOffset.ofHoursMinutesSeconds(0,0,0)))
+        } // Custom conversion, H2 time stamp with timezone is experimental
+        case sqlTimeStamp: java.sql.Timestamp => {
+          val localDateTime = sqlTimeStamp.toLocalDateTime
+          Right(OffsetDateTime.of(localDateTime, ZoneOffset.ofHoursMinutesSeconds(0,0,0)))
+        } // Custom conversion to omit H2 TimeStamp with TimeZone, for Testing don't use ZoneOffsets
         case _ => {
           Left(TypeDoesNotMatch(s"Cannot convert $value: ${value.asInstanceOf[AnyRef].getClass} to OffsetDateTime for column $qualified"))
         }

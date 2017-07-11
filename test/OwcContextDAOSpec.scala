@@ -19,11 +19,11 @@
 
 
 import java.net.URL
-import java.time.{OffsetDateTime, ZoneId}
 
 import anorm.{SQL, SqlParser}
 import com.typesafe.config.ConfigFactory
 import info.smart.models.owc100._
+import models.db.SessionHolder
 import models.owc._
 import models.users.UserDAO
 import org.locationtech.spatial4j.context.SpatialContext
@@ -40,16 +40,10 @@ import utils.PasswordHashing
 class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
+  import scala.language.implicitConversions
+
   implicit override def newAppForTest(testData: TestData): Application = new
       GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
-
-  before {
-
-  }
-
-  after {
-
-  }
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val owcContextResource1 = this.getClass().getResource("owc100/owc1.geojson")
@@ -66,113 +60,267 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
 
   "OwcContextDAO " can {
 
-    "handle OwcContexts with DB" in {
+    val demodata = new DemoData
+    val owcContext1 = demodata.owcContext1
+
+    "create OwcContexts with DB" in {
       withTestDatabase { database =>
-        /*
-          possibly we should wrap in transactions what belongs into transactions
-         
-          val sessionHolder = new SessionHolder(database)
-          sessionHolder.viaConnection { implicit connection => ... }
-        */
-        implicit val connection = database.getConnection()
-
-        val demodata = new DemoData
-        val testTime = OffsetDateTime.now(ZoneId.systemDefault())
-        lazy val world = ctx.getShapeFactory().rect(-180.0, 180.0, -90.0, 90.0)
-
-        val owcResource1 = demodata.owcResource1
-        val owcResource2 = demodata.owcResource2
-
-        val owcContext1 = demodata.owcContext1
+        val sessionHolder = new SessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
 
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 0
+        }
 
-        UserDAO.createUser(testUser1) mustEqual Some(testUser1)
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+          OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") must contain(owcContext1)
+        }
 
-        OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") mustEqual Some(owcContext1)
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.getAllOwcContexts.size mustEqual 1
+          OwcResourceDAO.getAllOwcResources.size mustEqual 2
 
-        OwcContextDAO.getAllOwcContexts.size mustEqual 1
-        OwcResourceDAO.getAllOwcResources.size mustEqual 2
+          SQL(
+            s"""select owc_context_id from $tableOwcContextHasOwcResources where
+               | owc_context_id={owcContextId} and owc_resource_id={owcResourceId}
+             """.stripMargin).on(
+            'owcContextId -> owcContext1.id.toString,
+            'owcResourceId -> owcContext1.resource.head.id.toString
+          ).as(
+            SqlParser.str("owc_context_id") *
+          ).head mustEqual owcContext1.id.toString
 
-        val thrown1 = the[java.sql.SQLException] thrownBy OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM")
-        thrown1.getErrorCode mustEqual 23505
+          SQL(
+            s"""select owc_context_id from $tableUserHasOwcContextRights where
+               | owc_context_id={owcContextId} and users_accountsubject={accountsubject}
+             """.stripMargin).on(
+            'owcContextId -> owcContext1.id.toString,
+            'accountsubject -> testUser1.accountSubject
+          ).as(
+            SqlParser.str("owc_context_id") *
+          ).head mustEqual owcContext1.id.toString
+        }
 
-        val thrown2 = the[java.sql.SQLException] thrownBy OwcResourceDAO.createOwcResource(owcResource2)
-        thrown2.getErrorCode mustEqual 23505
+        sessionHolder.viaConnection { implicit connection =>
+          val documents = OwcContextDAO.findOwcContextsById(owcContext1.id.toString)
+          documents.size mustEqual 1
+          documents.headOption.get.id mustEqual new URL("http://portal.smart-project.info/context/smart-sac")
 
-        val documents = OwcContextDAO.findOwcContextsById(owcContext1.id.toString)
-        documents.size mustEqual 1
-        documents.headOption.get.id mustEqual new URL("http://portal.smart-project.info/context/smart-sac")
+          OwcResourceDAO.getAllOwcResources.size mustEqual 2
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 8
+          OwcContentDAO.getAllOwcContents.size mustEqual 6
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 2
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 4
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 5
 
-        val entries = OwcResourceDAO.findOwcResourceById(owcResource1.id)
-        entries.size mustEqual 1
-        entries.headOption.get.id mustEqual new URL("http://portal.smart-project.info/context/smart-sac_add-nz-dtm-100x100")
-
-        OwcOfferingDAO.getAllOwcOfferings.size mustEqual 4
-        OwcOperationDAO.findOwcOperationByCode("GetCapabilities").size mustBe 3
-        OwcCategoryDAO.getAllOwcCategories.size mustBe 5
-
-        OwcContextDAO.deleteOwcContext(owcContext1, testUser1) mustBe true
-
-        SQL(s"""select owc_document_id from $tableUserHasOwcContextRights""").as(
-          SqlParser.str("owc_document_id") *
-        ).isEmpty mustBe true
-
-        OwcContextDAO.getAllOwcContexts.size mustEqual 0
-        OwcResourceDAO.getAllOwcResources.size mustEqual 0
-        OwcCategoryDAO.getAllOwcCategories.size mustBe 0
-        OwcOfferingDAO.getAllOwcOfferings.size mustEqual 0
+          OwcOperationDAO.findOwcOperationByCode("GetCapabilities").size mustBe 3
+        }
       }
     }
 
-    "handle Users having OwcContexts with DB" in {
+    "won't create OwcContexts with DB when dependents exist" in {
       withTestDatabase { database =>
-
-        implicit val connection = database.getConnection()
-        //        val sessionHolder = new SessionHolder(database)
-        //        sessionHolder.viaConnection { implicit connection =>
-        //
-        //        }
-
-        val demodata = new DemoData
-
-        val owcDoc1 = Json.parse(jsonTestCollection1).validate[OwcContext].get
-        val owcDoc2 = Json.parse(jsonTestCollection2).validate[OwcContext].get
-        val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
-        val owcDoc4 = Json.parse(jsonTestCollection4).validate[OwcContext].get
-        val owcDoc5 = Json.parse(jsonTestCollection5).validate[OwcContext].get
+        val sessionHolder = new SessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
+        val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
 
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 0
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+          OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") must contain(owcContext1)
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") mustBe None
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.getAllOwcContexts.size mustEqual 1
+          OwcResourceDAO.getAllOwcResources.size mustEqual 2
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          val documents = OwcContextDAO.findOwcContextsById(owcContext1.id.toString)
+          documents.size mustEqual 1
+          documents.headOption.get.id mustEqual new URL("http://portal.smart-project.info/context/smart-sac")
+
+          OwcResourceDAO.getAllOwcResources.size mustEqual 2
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 8
+          OwcContentDAO.getAllOwcContents.size mustEqual 6
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 2
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 4
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 5
+
+          OwcOperationDAO.findOwcOperationByCode("GetCapabilities").size mustBe 3
+        }
+      }
+    }
+
+    "update OwcContexts with DB" in {
+      withTestDatabase { database =>
+        val sessionHolder = new SessionHolder(database)
+
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 0
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+          OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") must contain(owcContext1)
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          val owcUpdate = owcContext1.copy()
+          OwcContextDAO.updateOwcContext(owcUpdate, testUser1) must contain(owcUpdate)
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          val owcUpdate2 = owcContext1.copy(creatorApplication = Some(OwcCreatorApplication(title = Some("SAC Portal"), uri = None, version = None)))
+          OwcContextDAO.updateOwcContext(owcUpdate2, testUser1) must contain(owcUpdate2)
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 1
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          val owcUpdate3 = owcContext1.copy(creatorDisplay = Some(OwcCreatorDisplay(pixelWidth = Some(600), pixelHeight = Some(400), mmPerPixel = None)))
+          OwcContextDAO.updateOwcContext(owcUpdate3, testUser1) must contain(owcUpdate3)
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          val documents = OwcContextDAO.findOwcContextsById(owcContext1.id.toString)
+          documents.size mustEqual 1
+          documents.headOption.get.id mustEqual new URL("http://portal.smart-project.info/context/smart-sac")
+
+          OwcResourceDAO.getAllOwcResources.size mustEqual 2
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 8
+          OwcContentDAO.getAllOwcContents.size mustEqual 6
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 2
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 4
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 5
+          OwcCreatorDisplayDAO.getAllOwcCreatorDisplays.size mustBe 1
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
+
+          OwcOperationDAO.findOwcOperationByCode("GetCapabilities").size mustBe 3
+        }
+      }
+    }
+
+    "delete OwcContexts with DB" in {
+      withTestDatabase { database =>
+        val sessionHolder = new SessionHolder(database)
+
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 0
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+          OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") must contain(owcContext1)
+          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.deleteOwcContext(owcContext1, testUser1) mustBe true
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 0
+
+          SQL(s"""select owc_context_id from $tableUserHasOwcContextRights""").as(
+            SqlParser.str("owc_context_id") *
+          ).isEmpty mustBe true
+
+          SQL(s"""select owc_context_id from $tableOwcContextHasOwcResources""").as(
+            SqlParser.str("owc_context_id") *
+          ).isEmpty mustBe true
+
+          OwcResourceDAO.getAllOwcResources.size mustEqual 0
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 0
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 0
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 0
+          OwcContentDAO.getAllOwcContents.size mustEqual 0
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 0
+          OwcLinkDAO.getAllOwcLinks.size mustEqual 0
+          OwcCategoryDAO.getAllOwcCategories.size mustEqual 0
+          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 0
+        }
+      }
+    }
+
+
+    "bulkload OwcContext from JSON into DB" in {
+      withTestDatabase { database =>
+        val sessionHolder = new SessionHolder(database)
+
+        Json.parse(jsonTestCollection1).validate[OwcContext].isSuccess mustBe true
+        val owcDoc1 = Json.parse(jsonTestCollection1).validate[OwcContext].get
+
+        Json.parse(jsonTestCollection2).validate[OwcContext].isSuccess mustBe true
+        val owcDoc2 = Json.parse(jsonTestCollection2).validate[OwcContext].get
+
+        Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
+        val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
+
+        Json.parse(jsonTestCollection4).validate[OwcContext].isSuccess mustBe true
+        val owcDoc4 = Json.parse(jsonTestCollection4).validate[OwcContext].get
+
+        // Json.parse(jsonTestCollection5).validate[OwcContext].isSuccess mustBe true
+        // val owcDoc5 = Json.parse(jsonTestCollection5).validate[OwcContext].get
+
+        val passwordHashing = new PasswordHashing(app.configuration)
         val cryptPass = passwordHashing.createHash("testpass123")
 
         val testUser1 = demodata.testUser1(cryptPass)
-        val testUser2 = demodata.testUser2(cryptPass)
+        val testUser3 = demodata.testUser3(cryptPass)
 
-        UserDAO.createUser(testUser1) mustEqual Some(testUser1)
-        UserDAO.createUser(testUser2) mustEqual Some(testUser2)
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+          UserDAO.createUser(testUser3) must contain(testUser3)
+        }
 
-        OwcContextDAO.createUsersDefaultOwcContext(owcDoc1, testUser1)
-        OwcContextDAO.createCustomOwcContext(owcDoc2, testUser1)
-        OwcContextDAO.createCustomOwcContext(owcDoc3, testUser1)
-        OwcContextDAO.createCustomOwcContext(owcDoc4, testUser1)
-        OwcContextDAO.createOwcContext(owcDoc5, testUser2, 2, "CUSTOM")
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createUsersDefaultOwcContext(owcDoc1, testUser1)
+          OwcContextDAO.createCustomOwcContext(owcDoc2, testUser1)
+        }
 
-        OwcContextDAO.getAllOwcContexts.size mustEqual 5
-        OwcResourceDAO.getAllOwcResources.size mustEqual 70
-        OwcCategoryDAO.getAllOwcCategories.size mustBe 79
-        OwcOfferingDAO.getAllOwcOfferings.size mustEqual 139
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createUsersDefaultOwcContext(owcDoc3, testUser3)
+          OwcContextDAO.createOwcContext(owcDoc4, testUser3, 2, "CUSTOM")
+        }
+        // OwcContextDAO.createOwcContext(owcDoc5, testUser2, 2, "CUSTOM")
 
-        SQL(s"""select owc_feature_types_as_document_id from $tableUserHasOwcContextRights""").as(
-          SqlParser.str("owc_feature_types_as_document_id") *
-        ).size mustBe 5
-
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.getAllOwcContexts.size mustEqual 4
+          OwcResourceDAO.getAllOwcResources.size mustEqual 70
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 79
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 139
+        }
       }
     }
 
+    /** ************
+      * TBD overwork
+      * *************/
+
     "find users own uploaded files" in {
+      (pending)
+
       withTestDatabase { database =>
 
         implicit val connection = database.getConnection()

@@ -170,11 +170,11 @@ object OwcOfferingDAO extends ClassnameLogger {
       rowCount match {
         case 1 => Some(owcOffering)
         case _ =>
-          logger.error(s"OwcOperation couldn't be created")
+          logger.error("OwcOperation couldn't be created")
           None
       }
     } else {
-      logger.error(s"Precondition failed, won't create OwcOffering")
+      logger.error("Precondition failed, won't create OwcOffering")
       None
     }
   }
@@ -340,11 +340,11 @@ object OwcOfferingDAO extends ClassnameLogger {
 
       rowCount match {
         case 1 => Some(owcOffering)
-        case _ => logger.error(s"OwcOffering couldn't be updated")
+        case _ => logger.error("OwcOffering couldn't be updated")
           None
       }
     } else {
-      logger.error(s"Precondition failed, won't update OwcOffering")
+      logger.error("Precondition failed, won't update OwcOffering")
       None
     }
   }
@@ -386,11 +386,11 @@ object OwcOfferingDAO extends ClassnameLogger {
       rowCount match {
         case 1 => true
         case _ =>
-          logger.error(s"OwcOffering couldn't be deleted")
+          logger.error("OwcOffering couldn't be deleted")
           false
       }
     } else {
-      logger.error(s"Precondition failed, won't delete OwcOffering")
+      logger.error("Precondition failed, won't delete OwcOffering")
       false
     }
   }

@@ -117,7 +117,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
         FakeRequest(POST, "/api/v1/login") withXmlBody (<email>alex@blub.de</email> <password>testpass123</password>))
         .map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
       route(app, FakeRequest(POST, "/api/v1/users/register")).map(status(_)) mustBe Some(UNSUPPORTED_MEDIA_TYPE)
-      route(app, FakeRequest(GET, "/api/v1/users/delete/testuser")).map(status(_)) mustBe Some(NOT_IMPLEMENTED)
+      route(app, FakeRequest(GET, "/api/v1/users/delete/testuser")).map(status(_)) mustBe Some(NOT_FOUND)
     }
   }
 
@@ -126,8 +126,8 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
       val home = route(app, FakeRequest(GET, "/")).get
 
       status(home) mustBe OK
-      contentType(home) mustBe Some("text/html")
-      contentAsString(home) must include("Your new application is ready.")
+      contentType(home) mustBe Some("application/json")
+      contentAsString(home) must include("application is ready.")
     }
 
     // TODO AK enable Filters module in test guice builder

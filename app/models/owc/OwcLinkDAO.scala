@@ -96,7 +96,7 @@ object OwcLinkDAO extends ClassnameLogger {
     rowCount match {
       case 1 => Some(owcLink)
       case _ =>
-        logger.error(s"OwcLink couldn't be created")
+        logger.error("OwcLink couldn't be created")
         None
     }
   }
@@ -131,7 +131,7 @@ object OwcLinkDAO extends ClassnameLogger {
     rowCount match {
       case 1 => Some(owcLink)
       case _ =>
-        logger.error(s"OwcLink couldn't be updated")
+        logger.error("OwcLink couldn't be updated")
         None
     }
   }
@@ -161,7 +161,7 @@ object OwcLinkDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => true
-      case _ => logger.error(s"OwcLink couldn't be deleted")
+      case _ => logger.error("OwcLink couldn't be deleted")
         false
     }
   }

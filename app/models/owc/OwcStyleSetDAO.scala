@@ -118,12 +118,12 @@ object OwcStyleSetDAO extends ClassnameLogger {
           rowCount match {
             case 1 => Some(owcStyleSet)
             case _ => {
-              logger.error(s"OwcStyleSet couldn't be created")
+              logger.error("OwcStyleSet couldn't be created")
               None
             }
           }
     } else {
-      logger.error(s"Precondition failed, won't create OwcStyleSet")
+      logger.error("Precondition failed, won't create OwcStyleSet")
       None
     }
   }
@@ -174,11 +174,11 @@ object OwcStyleSetDAO extends ClassnameLogger {
 
         rowCount1 match {
           case 1 => Some(owcStyleSet)
-          case _ => logger.error(s"OwcStyleSet couldn't be updated")
+          case _ => logger.error("OwcStyleSet couldn't be updated")
             None
         }
       } else {
-        logger.error(s"Precondition failed, won't update OwcStyleSet")
+        logger.error("Precondition failed, won't update OwcStyleSet")
         None
       }
   }
@@ -210,11 +210,11 @@ object OwcStyleSetDAO extends ClassnameLogger {
 
         rowCount match {
           case 1 => true
-          case _ => logger.error(s"OwcStyleSet couldn't be deleted")
+          case _ => logger.error("OwcStyleSet couldn't be deleted")
             false
         }
       } else {
-        logger.error(s"Precondition failed, won't delete OwcStyleSet")
+        logger.error("Precondition failed, won't delete OwcStyleSet")
         false
       }
   }

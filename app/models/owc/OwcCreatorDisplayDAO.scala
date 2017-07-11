@@ -91,7 +91,7 @@ object OwcCreatorDisplayDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCreatorDisplay)
-      case _ => logger.error(s"owcCreatorDisplay couldn't be created")
+      case _ => logger.error("owcCreatorDisplay couldn't be created")
         None
     }
   }
@@ -119,7 +119,7 @@ object OwcCreatorDisplayDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCreatorDisplay)
-      case _ => logger.error(s"owcCreatorDisplay couldn't be updated")
+      case _ => logger.error("owcCreatorDisplay couldn't be updated")
         None
     }
   }
@@ -151,7 +151,7 @@ object OwcCreatorDisplayDAO extends ClassnameLogger {
     rowCount match {
       case 1 => true
       case _ =>
-        logger.error(s"owcCreatorDisplay couldn't be deleted")
+        logger.error("owcCreatorDisplay couldn't be deleted")
         false
     }
   }

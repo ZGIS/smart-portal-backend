@@ -72,6 +72,17 @@ case class User(email: EmailAddress,
     ProfileJs(email, accountSubject, firstname, lastname)
   }
 
+  def isActive: Boolean = {
+    StatusToken.isActive(StatusToken(laststatustoken.split(":")(0)))
+  }
+
+}
+
+/**
+  * Companion object
+  */
+object User extends ClassnameLogger {
+
 }
 
 /**

@@ -29,7 +29,7 @@ import info.smart.models.owc100._
 import utils.ClassnameLogger
 
 /** *********
-  * OwcCreatorApplication
+  * DAO for [[OwcCreatorApplication]]
   * **********/
 object OwcCreatorApplicationDAO extends ClassnameLogger {
 
@@ -92,7 +92,7 @@ object OwcCreatorApplicationDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCreatorApplication)
-      case _ => logger.error(s"owcCreatorApplication couldn't be created")
+      case _ => logger.error("owcCreatorApplication couldn't be created")
         None
     }
   }
@@ -120,7 +120,7 @@ object OwcCreatorApplicationDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCreatorApplication)
-      case _ => logger.error(s"owcCreatorApplication couldn't be updated")
+      case _ => logger.error("owcCreatorApplication couldn't be updated")
         None
     }
   }
@@ -151,7 +151,7 @@ object OwcCreatorApplicationDAO extends ClassnameLogger {
     rowCount match {
       case 1 => true
       case _ =>
-        logger.error(s"owcCreatorApplication couldn't be deleted")
+        logger.error("owcCreatorApplication couldn't be deleted")
         false
     }
   }

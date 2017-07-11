@@ -332,7 +332,7 @@ class DemoData {
     author = List(author3.copy(uuid = UUID.randomUUID())),
     publisher = Some("GNS Science"),
     creatorApplication = None,
-    creatorDisplay = None,
+    creatorDisplay = Some(OwcCreatorDisplay(pixelWidth = Some(1024), pixelHeight = Some(860), mmPerPixel = None)),
     rights = Some("CC BY SA 4.0 NZ"),
     timeIntervalOfInterest = None,
     keyword = List(category1.copy(uuid = UUID.randomUUID()), category2.copy(uuid = UUID.randomUUID()), category3.copy(uuid = UUID.randomUUID())),

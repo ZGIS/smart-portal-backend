@@ -94,7 +94,7 @@ object OwcContentDAO extends ClassnameLogger {
     rowCount match {
       case 1 => Some(owcContent)
       case _ =>
-        logger.error(s"OwcContent couldn't be created")
+        logger.error("OwcContent couldn't be created")
         None
     }
   }
@@ -124,7 +124,7 @@ object OwcContentDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcContent)
-      case _ => logger.error(s"OwcContent couldn't be updated")
+      case _ => logger.error("OwcContent couldn't be updated")
         None
     }
   }
@@ -155,7 +155,7 @@ object OwcContentDAO extends ClassnameLogger {
     rowCount match {
       case 1 => true
       case _ =>
-        logger.error(s"OwcContent couldn't be deleted")
+        logger.error("OwcContent couldn't be deleted")
         false
     }
   }

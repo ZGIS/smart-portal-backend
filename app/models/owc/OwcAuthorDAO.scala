@@ -91,7 +91,7 @@ object OwcAuthorDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcAuthor)
-      case _ => logger.error(s"owcAuthor couldn't be created")
+      case _ => logger.error("owcAuthor couldn't be created")
         None
     }
   }
@@ -119,7 +119,7 @@ object OwcAuthorDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcAuthor)
-      case _ => logger.error(s"owcAuthor couldn't be updated")
+      case _ => logger.error("owcAuthor couldn't be updated")
         None
     }
   }
@@ -151,7 +151,7 @@ object OwcAuthorDAO extends ClassnameLogger {
     rowCount match {
       case 1 => true
       case _ =>
-        logger.error(s"owcAuthor couldn't be deleted")
+        logger.error("owcAuthor couldn't be deleted")
         false
     }
   }

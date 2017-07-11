@@ -154,7 +154,7 @@ object OwcResourceDAO extends ClassnameLogger {
   def findOwcResourcesForOwcContext(owcContextId: String)(implicit connection: Connection): Seq[OwcResource] = {
     SQL(
       s"""SELECT
-         |res.*
+         |$tableOwcResources.*
          |FROM $tableOwcResources JOIN $tableOwcContextHasOwcResources ON $tableOwcResources.id=$tableOwcContextHasOwcResources.owc_resource_id
          |WHERE $tableOwcContextHasOwcResources.owc_context_id={owc_context_id}""".stripMargin).on(
       'owc_context_id -> owcContextId
@@ -175,7 +175,7 @@ object OwcResourceDAO extends ClassnameLogger {
       val uuidString = authors.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcAuthor](Some(uuidString))(OwcAuthorEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"(createResource/authors) OwcAuthor with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createResourceOrContext/authors) OwcAuthor with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
         val insert = authors.map(OwcAuthorDAO.createOwcAuthor(_)).filter(_.isDefined)
@@ -199,7 +199,7 @@ object OwcResourceDAO extends ClassnameLogger {
       val uuidString = links.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcLink](Some(uuidString))(OwcLinkEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"(createResource/links) OwcLink with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createResourceOrContext/links) OwcLink with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
         val insert = links.map(OwcLinkDAO.createOwcLink(_)).filter(_.isDefined)
@@ -247,7 +247,7 @@ object OwcResourceDAO extends ClassnameLogger {
       val uuidString = categories.map(_.uuid.toString).mkString(":")
       val exists = findByPropertiesUUID[OwcCategory](Some(uuidString))(OwcCategoryEvidence, connection).toList.nonEmpty
       if (exists) {
-        logger.error(s"(createResource/categories) OwcCategory with UUID one of: ${uuidString} exists already, recommend abort")
+        logger.error(s"(createResourceOrContext/categories) OwcCategory with UUID one of: ${uuidString} exists already, recommend abort")
         false
       } else {
         val insert = categories.map(OwcCategoryDAO.createOwcCategory(_)).filter(_.isDefined)
@@ -311,13 +311,18 @@ object OwcResourceDAO extends ClassnameLogger {
       rowCount match {
         case 1 => Some(owcResource)
         case _ =>
-          logger.error(s"OwcResource couldn't be created")
+          logger.error("OwcResource couldn't be created")
           // we need to think where to place rollback most appropriately
           connection.rollback()
           None
       }
     } else {
-      logger.error(s"Precondition failed, won't create OwcResource")
+      logger.error("OwcResource/create: one of " +
+        s"preCreateCheckOwcAuthorsForResource: $preCreateCheckOwcAuthorsForResource  " +
+        s"preCreateCheckOwcLinksForResource: $preCreateCheckOwcLinksForResource + " +
+        s"preCreateCheckOwcOfferingsForResource: $preCreateCheckOwcOfferingsForResource + " +
+        s"preCreateCheckOwcCategoriesForResource: $preCreateCheckOwcCategoriesForResource was not successful")
+      logger.error("Precondition failed, won't create OwcResource")
       // we need to think where to place rollback most appropriately
       connection.rollback()
       None
@@ -348,7 +353,7 @@ object OwcResourceDAO extends ClassnameLogger {
     // get old list of UUIDs,
     val old: List[UUID] = owcAggregator match {
       case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.author.map(_.uuid)).getOrElse(List())
-      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextsById(owcAggregator.id.toString).map(o => o.author.map(_.uuid)).getOrElse(List())
+      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.author.map(_.uuid)).getOrElse(List())
       case _ => throw new InvalidClassException(s"The parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
 
@@ -379,7 +384,7 @@ object OwcResourceDAO extends ClassnameLogger {
   }
 
   /**
-    * pre Check for authors Update For an owcAggregator of type [[OwcContext]] or [[OwcResource]],
+    * pre Check for OwcLinks Update For an owcAggregator of type [[OwcContext]] or [[OwcResource]],
     * will delete, update and insert required [[OwcLink]] in order to make owcAggregator type Update consistent
     *
     * @param owcAggregator of type [[OwcContext]] or [[OwcResource]]
@@ -406,7 +411,7 @@ object OwcResourceDAO extends ClassnameLogger {
         findOwcResourceById(owcAggregator.id).map(o => (o.contentDescription ++ o.preview ++
           o.contentByRef ++ o.resourceMetadata).map(_.uuid)).getOrElse(List())
       case owcAggregator: OwcContext =>
-        OwcContextDAO.findOwcContextsById(owcAggregator.id.toString).map(o => (o.specReference ++ o.contextMetadata).map(_.uuid)).getOrElse(List())
+        OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => (o.specReference ++ o.contextMetadata).map(_.uuid)).getOrElse(List())
       case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
 
@@ -437,8 +442,8 @@ object OwcResourceDAO extends ClassnameLogger {
   }
 
   /**
-    * pre Check for authors Update For an [[OwcResource]],
-    * will delete, update and insert required [[OwcLink]] in order to make OwcResource Update consistent
+    * pre Check for offerings Update For an [[OwcResource]],
+    * will delete, update and insert required [[OwcOffering]] in order to make OwcResource Update consistent
     *
     * @param owcResource
     * @param connection
@@ -479,6 +484,15 @@ object OwcResourceDAO extends ClassnameLogger {
     }
   }
 
+  /**
+    * pre Check for categories Update For an owcAggregator of type [[OwcContext]] or [[OwcResource]],
+    * will delete, update and insert required [[OwcCategory]] in order to make owcAggregator type Update consistent
+    *
+    * @param owcAggregator
+    * @param connection
+    * @tparam A
+    * @return
+    */
   def preUpdateCheckOwcCategories[A](owcAggregator: A)(implicit connection: Connection): Boolean = {
 
     // get current list of full OwcCategory objects,
@@ -494,7 +508,7 @@ object OwcResourceDAO extends ClassnameLogger {
     // get old list of UUIDs,
     val old: List[UUID] = owcAggregator match {
       case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.keyword.map(_.uuid)).getOrElse(List())
-      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextsById(owcAggregator.id).map(o => o.keyword.map(_.uuid)).getOrElse(List())
+      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.keyword.map(_.uuid)).getOrElse(List())
       case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
 
@@ -581,13 +595,13 @@ object OwcResourceDAO extends ClassnameLogger {
 
       rowCount match {
         case 1 => Some(owcResource)
-        case _ => logger.error(s"OwcResource couldn't be updated")
+        case _ => logger.error("OwcResource couldn't be updated")
           // we need to think where to place rollback most appropriately
           connection.rollback()
           None
       }
     } else {
-      logger.error(s"Precondition failed, won't update OwcResource")
+      logger.error("Precondition failed, won't update OwcResource")
       // we need to think where to place rollback most appropriately
       connection.rollback()
       None
@@ -595,7 +609,7 @@ object OwcResourceDAO extends ClassnameLogger {
   }
 
   /**
-    * delete an OwcResource with dependent offerings and properties links etc
+    * delete an OwcResource with dependent offerings and properties links etc hierarchically
     *
     * @param owcResource
     * @return
@@ -643,13 +657,13 @@ object OwcResourceDAO extends ClassnameLogger {
       rowCount match {
         case 1 => true
         case _ =>
-          logger.error(s"OwcResource couldn't be deleted")
+          logger.error("OwcResource couldn't be deleted")
           // we need to think where to place rollback most appropriately
           connection.rollback()
           false
       }
     } else {
-      logger.error(s"Precondition failed, won't delete OwcResource")
+      logger.error("Precondition failed, won't delete OwcResource")
       // we need to think where to place rollback most appropriately
       connection.rollback()
       false

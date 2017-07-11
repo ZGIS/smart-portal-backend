@@ -61,7 +61,7 @@ CREATE TABLE owc_context_has_owc_resources (
 CREATE TABLE user_has_owc_context_rights (
   users_accountsubject varchar(255) REFERENCES users(accountsubject),
   owc_context_id varchar(2047) REFERENCES owc_contexts(id),
-  rights_relation_type SMALLINT,
+  rights_relation_type varchar(255),
   visibility SMALLINT
 );
 

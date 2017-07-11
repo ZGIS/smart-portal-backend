@@ -88,7 +88,7 @@ object OwcCategoryDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCategory)
-      case _ => logger.error(s"OwcCategory couldn't be created")
+      case _ => logger.error("OwcCategory couldn't be created")
         None
     }
   }
@@ -116,7 +116,7 @@ object OwcCategoryDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => Some(owcCategory)
-      case _ => logger.error(s"OwcCategory couldn't be updated")
+      case _ => logger.error("OwcCategory couldn't be updated")
         None
     }
   }
@@ -146,7 +146,7 @@ object OwcCategoryDAO extends ClassnameLogger {
 
     rowCount match {
       case 1 => true
-      case _ => logger.error(s"OwcCategory couldn't be deleted")
+      case _ => logger.error("OwcCategory couldn't be deleted")
         false
     }
   }

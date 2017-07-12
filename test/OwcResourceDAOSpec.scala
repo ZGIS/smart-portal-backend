@@ -198,14 +198,14 @@ class OwcResourceDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         }
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcResourceDAO.getAllOwcResources.size mustEqual 3
-          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 5
-          OwcOperationDAO.getAllOwcOperations.size mustEqual 11
-          OwcContentDAO.getAllOwcContents.size mustEqual 5
+          OwcResourceDAO.getAllOwcResources.size mustEqual 5
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 2
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 7
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 17
           OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 2
-          OwcLinkDAO.getAllOwcLinks.size mustEqual 5
-          OwcCategoryDAO.getAllOwcCategories.size mustEqual 2
-          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 1
+          OwcLinkDAO.getAllOwcLinks.size mustEqual 7
+          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 3
+          OwcContentDAO.getAllOwcContents.size mustEqual 6
         }
       }
     }

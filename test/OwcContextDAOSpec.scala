@@ -341,10 +341,6 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
       }
     }
 
-    /** ************
-      * TBD overwork
-      * *************/
-
     "parse and load OwcContext from CSW Ingester into DB" in {
 
       Json.parse(jsonIngesterCollection1).validate[OwcContext].isSuccess mustBe true
@@ -407,6 +403,10 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
         }
       }
     }
+
+    /** ************
+      * TBD overwork
+      * *************/
 
     "find users own uploaded files" in {
       (pending)

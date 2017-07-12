@@ -28,7 +28,7 @@ import anorm.SqlParser.{get, str}
 import anorm.{RowParser, SQL, ~}
 import info.smart.models.owc100._
 import models.users.User
-import utils.{ClassnameLogger, GeoDateParserUtils}
+import utils.{ClassnameLogger, GeoDateParserUtils, OwcGeoJsonFixes}
 
 /**
   * OwcContextDAO - store and retrieve OWS Context Documents [[OwcContext]]
@@ -323,13 +323,17 @@ object OwcContextDAO extends ClassnameLogger {
   /**
     * create/insert into db Owc Context
     *
-    * @param owcContext
+    * @param owcContextUnfixed should make issue on github for owc geojson and portal backend
+    *                          and then remove the fix see [[OwcGeoJsonFixes]]
     * @param user
     * @param visibility
     * @param rightsRelationType
     * @return
     */
-  def createOwcContext(owcContext: OwcContext, user: User, visibility: Int, rightsRelationType: String)(implicit connection: Connection): Option[OwcContext] = {
+  def createOwcContext(owcContextUnfixed: OwcContext, user: User, visibility: Int, rightsRelationType: String)
+                      (implicit connection: Connection): Option[OwcContext] = {
+
+    val owcContext = OwcGeoJsonFixes.fixRelPropertyForOwcLinks(owcContextUnfixed)
 
     val preCreateCheckOwcAuthorsForContext = OwcResourceDAO.preCreateCheckOwcAuthors(owcContext.author)
     val preCreateCheckOwcLinksForContext = OwcResourceDAO.preCreateCheckOwcLinks(owcContext.specReference ++ owcContext.contextMetadata)
@@ -627,11 +631,14 @@ object OwcContextDAO extends ClassnameLogger {
   /**
     * update an OwcContext with dependent resources and properties links etc hierarchically
     *
-    * @param owcContext
+    * @param owcContextUnfixed should make issue on github for owc geojson and portal backend
+    *                          and then remove the fix see [[OwcGeoJsonFixes]]
     * @param user
     * @return
     */
-  def updateOwcContext(owcContext: OwcContext, user: User)(implicit connection: Connection): Option[OwcContext] = {
+  def updateOwcContext(owcContextUnfixed: OwcContext, user: User)(implicit connection: Connection): Option[OwcContext] = {
+
+    val owcContext = OwcGeoJsonFixes.fixRelPropertyForOwcLinks(owcContextUnfixed)
 
     /*
     TODO:

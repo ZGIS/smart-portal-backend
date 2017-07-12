@@ -186,7 +186,7 @@ class OwcResourceDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter
         val owcDoc2 = Json.parse(jsonTestCollection2).validate[OwcContext].get
         val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
         val owcDoc4 = Json.parse(jsonTestCollection4).validate[OwcContext].get
-        // val owcDoc5 = Json.parse(jsonTestCollection5).validate[OwcContext].get
+        // val owcDoc5 = Json.parse(jsonIngesterCollection2).validate[OwcContext].get
 
         val resources = owcDoc1.resource ++
           owcDoc2.resource ++

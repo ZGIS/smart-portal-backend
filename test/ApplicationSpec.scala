@@ -127,7 +127,7 @@ class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter wi
 
       status(home) mustBe OK
       contentType(home) mustBe Some("application/json")
-      contentAsString(home) must include("application is ready.")
+      contentAsJson(home) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
     }
 
     // TODO AK enable Filters module in test guice builder

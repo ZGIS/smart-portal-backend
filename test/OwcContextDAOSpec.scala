@@ -49,14 +49,18 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
   private lazy val owcContextResource1 = this.getClass().getResource("owc100/owc1.geojson")
   private lazy val owcContextResource2 = this.getClass().getResource("owc100/owc2.geojson")
   private lazy val owcContextResource3 = this.getClass().getResource("owc100/owc3.geojson")
-  private lazy val owcIngesterResource = this.getClass().getResource("owc100/ingester1.owc.geojson")
+  private lazy val owcIngesterResource1 = this.getClass().getResource("owc100/ingester1.owc.geojson")
+  private lazy val owcIngesterResource2 = this.getClass().getResource("owc100/ingester_badgeom.owc.geojson")
+  private lazy val owcIngesterResource3 = this.getClass().getResource("owc100/ingester_long.owc.geojson")
   private lazy val owcResourceDefaultCollectionWithFiles = this.getClass().getResource("owc100/DefaultCollectionWithFiles100.json")
 
   val jsonTestCollection1 = scala.io.Source.fromURL(owcContextResource1).getLines.mkString
   val jsonTestCollection2 = scala.io.Source.fromURL(owcContextResource2).getLines.mkString
   val jsonTestCollection3 = scala.io.Source.fromURL(owcContextResource3).getLines.mkString
-  val jsonTestCollection4 = scala.io.Source.fromURL(owcIngesterResource).getLines.mkString
-  val jsonTestCollection5 = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
+  val jsonIngesterCollection1 = scala.io.Source.fromURL(owcIngesterResource1).getLines.mkString
+  val jsonIngesterCollection2 = scala.io.Source.fromURL(owcIngesterResource2).getLines.mkString
+  val jsonIngesterCollection3 = scala.io.Source.fromURL(owcIngesterResource3).getLines.mkString
+  val jsonDefaultFilesCollection = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
 
   "OwcContextDAO " can {
 
@@ -263,7 +267,6 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
       }
     }
 
-
     "bulkload OwcContext from JSON into DB" in {
       withTestDatabase { database =>
         val sessionHolder = new SessionHolder(database)
@@ -276,12 +279,6 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
 
         Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
         val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
-
-        Json.parse(jsonTestCollection4).validate[OwcContext].isSuccess mustBe true
-        val owcDoc4 = Json.parse(jsonTestCollection4).validate[OwcContext].get
-
-        // Json.parse(jsonTestCollection5).validate[OwcContext].isSuccess mustBe true
-        // val owcDoc5 = Json.parse(jsonTestCollection5).validate[OwcContext].get
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val cryptPass = passwordHashing.createHash("testpass123")
@@ -301,15 +298,45 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcContextDAO.createUsersDefaultOwcContext(owcDoc3, testUser3)
-          OwcContextDAO.createOwcContext(owcDoc4, testUser3, 2, "CUSTOM")
+
         }
-        // OwcContextDAO.createOwcContext(owcDoc5, testUser2, 2, "CUSTOM")
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.getAllOwcContexts.size mustEqual 4
-          OwcResourceDAO.getAllOwcResources.size mustEqual 70
-          OwcCategoryDAO.getAllOwcCategories.size mustBe 79
-          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 139
+          OwcContextDAO.getAllOwcContexts.size mustEqual 3
+          OwcResourceDAO.getAllOwcResources.size mustEqual 3
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 7
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 5
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 13
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 2
+          OwcLinkDAO.getAllOwcLinks.size mustEqual 9
+          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 3
+          OwcCreatorDisplayDAO.getAllOwcCreatorDisplays.size mustBe 1
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 1
+          OwcContentDAO.getAllOwcContents.size mustEqual 6
+        }
+      }
+    }
+
+    "Apply GeoJsonFixes for empty rels JSON into DB" in {
+      withTestDatabase { database =>
+        val sessionHolder = new SessionHolder(database)
+
+        Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
+        val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
+
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val cryptPass = passwordHashing.createHash("testpass123")
+
+        val testUser3 = demodata.testUser3(cryptPass)
+
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser3) must contain(testUser3)
+          OwcContextDAO.createUsersDefaultOwcContext(owcDoc3, testUser3)
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          owcDoc3.specReference.head.rel mustEqual "alternate"
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser3).get.specReference.head.rel mustEqual "profile"
         }
       }
     }
@@ -317,6 +344,69 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
     /** ************
       * TBD overwork
       * *************/
+
+    "parse and load OwcContext from CSW Ingester into DB" in {
+
+      Json.parse(jsonIngesterCollection1).validate[OwcContext].isSuccess mustBe true
+      val owcDoc1 = Json.parse(jsonIngesterCollection1).validate[OwcContext].get
+
+      // will not contain any OwcResource https://github.com/ZGIS/smart-owc-geojson/issues/8
+      Json.parse(jsonIngesterCollection2).validate[OwcContext].isSuccess mustBe true
+      val owcDoc2 = Json.parse(jsonIngesterCollection2).validate[OwcContext].get
+
+      Json.parse(jsonIngesterCollection3).validate[OwcContext].isSuccess mustBe true
+      val owcDoc3 = Json.parse(jsonIngesterCollection3).validate[OwcContext].get
+
+      val passwordHashing = new PasswordHashing(app.configuration)
+      val cryptPass = passwordHashing.createHash("testpass123")
+
+      val testUser1 = demodata.testUser1(cryptPass)
+
+      withTestDatabase { database =>
+        val sessionHolder = new SessionHolder(database)
+
+        sessionHolder.viaTransaction { implicit connection =>
+          UserDAO.createUser(testUser1) must contain(testUser1)
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createUsersDefaultOwcContext(owcDoc1, testUser1) mustBe defined
+        }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createCustomOwcContext(owcDoc2, testUser1) mustBe defined
+          OwcContextDAO.createCustomOwcContext(owcDoc3, testUser1) mustBe defined
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc1.id, testUser1) mustBe defined
+          val owcFromDb1 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc1.id, testUser1).get
+          owcFromDb1.resource.size mustEqual 2
+
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1)  mustBe defined
+          val owcFromDb2 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1).get
+          // https://github.com/ZGIS/smart-owc-geojson/issues/8
+          // owcFromDb2.resource.size mustEqual 1
+
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1)  mustBe defined
+          val owcFromDb3 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1).get
+          owcFromDb3.resource.size mustEqual 21
+
+          OwcContextDAO.getAllOwcContexts.size mustEqual 3
+          OwcResourceDAO.getAllOwcResources.size mustEqual 23
+          OwcCategoryDAO.getAllOwcCategories.size mustBe 0
+          OwcOfferingDAO.getAllOwcOfferings.size mustEqual 23
+          OwcOperationDAO.getAllOwcOperations.size mustEqual 46
+          OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 0
+          OwcLinkDAO.getAllOwcLinks.size mustEqual 26
+          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 26
+          OwcCreatorDisplayDAO.getAllOwcCreatorDisplays.size mustBe 0
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
+          OwcContentDAO.getAllOwcContents.size mustEqual 0
+
+        }
+      }
+    }
 
     "find users own uploaded files" in {
       (pending)
@@ -330,8 +420,7 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
         //        }
 
         val demodata = new DemoData
-        val defaultCollectionRaw = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
-        val defaultCollection = Json.parse(defaultCollectionRaw).validate[OwcContext].get
+        val defaultCollection = Json.parse(jsonDefaultFilesCollection).validate[OwcContext].get
 
         // TODO SR this should be injected probably
         val passwordHashing = new PasswordHashing(app.configuration)

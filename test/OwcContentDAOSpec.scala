@@ -72,7 +72,7 @@ class OwcContentDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           OwcContentDAO.getAllOwcContents.size mustEqual 1
         }
         database.withTransaction { implicit connection =>
-          OwcContentDAO.updateOwcContent(owccontent2_1) must contain (owccontent2_1)
+          OwcContentDAO.updateOwcContent(owccontent2_1) must contain(owccontent2_1)
           OwcContentDAO.findOwcContentByUuid(owccontent2_1.uuid).get mustEqual owccontent2_1
         }
       }

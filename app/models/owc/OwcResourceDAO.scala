@@ -29,7 +29,7 @@ import anorm.SqlParser.{get, str}
 import anorm.{RowParser, SQL, ~}
 import info.smart.models.owc100._
 import models.owc.OwcOfferingDAO.findByPropertiesUUID
-import utils.{ClassnameLogger, GeoDateParserUtils}
+import utils.{ClassnameLogger, GeoDateParserUtils, OwcGeoJsonFixes}
 
 /**
   * OwcResourceDAO - store and retrieve OWS Context Resources
@@ -261,10 +261,13 @@ object OwcResourceDAO extends ClassnameLogger {
   /**
     * create an owc resource with dependent offerings and properties
     *
-    * @param owcResource
+    * @param owcResourceUnfixed should make issue on github for owc geojson and portal backend
+    *                           and then remove the fix see [[OwcGeoJsonFixes]]
     * @return
     */
-  def createOwcResource(owcResource: OwcResource)(implicit connection: Connection): Option[OwcResource] = {
+  def createOwcResource(owcResourceUnfixed: OwcResource)(implicit connection: Connection): Option[OwcResource] = {
+
+    val owcResource = OwcGeoJsonFixes.fixRelPropertyForOwcLinks(owcResourceUnfixed)
 
     val preCreateCheckOwcAuthorsForResource = preCreateCheckOwcAuthors(owcResource.author)
     val preCreateCheckOwcLinksForResource = preCreateCheckOwcLinks(owcResource.contentDescription ++ owcResource.preview ++
@@ -541,10 +544,13 @@ object OwcResourceDAO extends ClassnameLogger {
   /**
     * update OwcResource and hierarchical dependents
     *
-    * @param owcResource
+    * @param owcResourceUnfixed should make issue on github for owc geojson and portal backend
+    *                           and then remove the fix see [[OwcGeoJsonFixes]]
     * @return
     */
-  def updateOwcResource(owcResource: OwcResource)(implicit connection: Connection): Option[OwcResource] = {
+  def updateOwcResource(owcResourceUnfixed: OwcResource)(implicit connection: Connection): Option[OwcResource] = {
+
+    val owcResource = OwcGeoJsonFixes.fixRelPropertyForOwcLinks(owcResourceUnfixed)
 
     if (preUpdateCheckOwcAuthors(owcResource) && preUpdateCheckOwcLinks(owcResource) &&
       preUpdateCheckOwcOfferings(owcResource) && preUpdateCheckOwcCategories(owcResource)) {

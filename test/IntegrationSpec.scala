@@ -24,7 +24,8 @@ class IntegrationSpec extends PlaySpec with OneServerPerTest with BeforeAndAfter
 
       go to ("http://localhost:" + port)
 
-      pageSource must include ("application is ready.")
+      // contentAsJson(home) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+      pageSource must include ("application is ready")
     }
   }
 }

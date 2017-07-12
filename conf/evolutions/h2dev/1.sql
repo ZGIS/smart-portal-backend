@@ -67,7 +67,7 @@ CREATE TABLE user_has_owc_context_rights (
 
 CREATE TABLE owc_authors (
   uuid varchar(255) NOT NULL,
-  name varchar(255) NOT NULL,
+  name varchar(255),
   email varchar(2047),
   uri varchar(2047),
   PRIMARY KEY (uuid)

@@ -399,7 +399,7 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           OwcOperationDAO.getAllOwcOperations.size mustEqual 46
           OwcStyleSetDAO.getAllOwcStyleSets.size mustEqual 0
           OwcLinkDAO.getAllOwcLinks.size mustEqual 26
-          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 26
+          OwcAuthorDAO.getAllOwcAuthors.size mustEqual 23
           OwcCreatorDisplayDAO.getAllOwcCreatorDisplays.size mustBe 0
           OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
           OwcContentDAO.getAllOwcContents.size mustEqual 0

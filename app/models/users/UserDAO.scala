@@ -261,7 +261,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findRegisteredOnlyUsers(implicit connection: Connection): Seq[User] = {
-    findUsersByToken(StatusToken.REGISTERED, s"%")
+    findUsersByToken(StatusToken.REGISTERED, "%")
   }
 
   /**
@@ -270,6 +270,6 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findActiveUsers(implicit connection: Connection): Seq[User] = {
-    StatusToken.activatedTokens.flatMap(t => findUsersByToken(t, s"%"))
+    StatusToken.activatedTokens.flatMap(t => findUsersByToken(StatusToken(t), "%"))
   }
 }

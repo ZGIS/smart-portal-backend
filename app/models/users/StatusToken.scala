@@ -28,19 +28,19 @@ sealed trait StatusToken {
 object StatusToken {
 
   case object REGISTERED extends StatusToken {
-    val value: String = this.getClass.getName
+    val value: String = "REGISTERED"
   }
 
   case object ACTIVE extends StatusToken {
-    val value: String = this.getClass.getName
+    val value: String = "ACTIVE"
   }
 
   case object PASSWORDRESET extends StatusToken {
-    val value: String = this.getClass.getName
+    val value: String = "PASSWORDRESET"
   }
 
   case object EMAILVALIDATION extends StatusToken {
-    val value: String = this.getClass.getName
+    val value: String = "EMAILVALIDATION"
   }
 
   def apply(v: String) : StatusToken = {
@@ -53,17 +53,13 @@ object StatusToken {
     }
   }
 
-  val activatedTokens = List(ACTIVE, PASSWORDRESET, EMAILVALIDATION)
+  val activatedTokens: List[String] = List(ACTIVE.value, PASSWORDRESET.value, EMAILVALIDATION.value)
 
   def isValid(v: String) : Boolean = {
     Try (apply(v)).isSuccess
   }
 
   def isActive(token: StatusToken): Boolean = {
-    activatedTokens.contains(token)
+    activatedTokens.contains(token.value)
   }
-
-
-
-
 }

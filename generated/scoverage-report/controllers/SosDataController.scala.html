@@ -1,0 +1,5383 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          controllers/SosDataController.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package controllers
+</span>21 <span style=''>
+</span>22 <span style=''>import javax.inject.Inject
+</span>23 <span style=''>
+</span>24 <span style=''>import models.ErrorResult
+</span>25 <span style=''>import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData}
+</span>26 <span style=''>import models.tvp.XmlTvpParser
+</span>27 <span style=''>import play.api.libs.json.{JsError, JsValue, Json}
+</span>28 <span style=''>import play.api.libs.ws.WSClient
+</span>29 <span style=''>import play.api.mvc.{Action, AnyContent, Controller}
+</span>30 <span style=''>import utils.ClassnameLogger
+</span>31 <span style=''>
+</span>32 <span style=''>import scala.concurrent.ExecutionContext.Implicits.global
+</span>33 <span style=''>import scala.concurrent.Future
+</span>34 <span style=''>import scala.io.Source
+</span>35 <span style=''>
+</span>36 <span style=''>/**
+</span>37 <span style=''>  * Controller to access SOS server and return parsed time series to frontend.
+</span>38 <span style=''>  */
+</span>39 <span style=''>class SosDataController @Inject()(wsClient: WSClient)
+</span>40 <span style=''>  extends Controller with ClassnameLogger {
+</span>41 <span style=''>
+</span>42 <span style=''>  val GET_CAPABILITIES_XML =
+</span>43 <span style=''>    </span><span style='background: #AEF1AE'>&quot;&quot;&quot;&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+</span>44 <span style=''></span><span style='background: #AEF1AE'>      |&lt;sos:GetCapabilities
+</span>45 <span style=''></span><span style='background: #AEF1AE'>      |    xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
+</span>46 <span style=''></span><span style='background: #AEF1AE'>      |    xmlns:sos=&quot;http://www.opengis.net/sos/2.0&quot;
+</span>47 <span style=''></span><span style='background: #AEF1AE'>      |    xmlns:ows=&quot;http://www.opengis.net/ows/1.1&quot;
+</span>48 <span style=''></span><span style='background: #AEF1AE'>      |    xmlns:swe=&quot;http://www.opengis.net/swe/2.0&quot; service=&quot;SOS&quot; xsi:schemaLocation=&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sosGetCapabilities.xsd&quot;&gt;
+</span>49 <span style=''></span><span style='background: #AEF1AE'>      |    &lt;ows:AcceptVersions&gt;
+</span>50 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Version&gt;2.0.0&lt;/ows:Version&gt;
+</span>51 <span style=''></span><span style='background: #AEF1AE'>      |    &lt;/ows:AcceptVersions&gt;
+</span>52 <span style=''></span><span style='background: #AEF1AE'>      |    &lt;ows:Sections&gt;
+</span>53 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Section&gt;OperationsMetadata&lt;/ows:Section&gt;
+</span>54 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Section&gt;ServiceIdentification&lt;/ows:Section&gt;
+</span>55 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Section&gt;ServiceProvider&lt;/ows:Section&gt;
+</span>56 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Section&gt;FilterCapabilities&lt;/ows:Section&gt;
+</span>57 <span style=''></span><span style='background: #AEF1AE'>      |        &lt;ows:Section&gt;Contents&lt;/ows:Section&gt;
+</span>58 <span style=''></span><span style='background: #AEF1AE'>      |    &lt;/ows:Sections&gt;
+</span>59 <span style=''></span><span style='background: #AEF1AE'>      |&lt;/sos:GetCapabilities&gt;
+</span>60 <span style=''></span><span style='background: #AEF1AE'>    &quot;&quot;&quot;.stripMargin</span><span style=''>
+</span>61 <span style=''>
+</span>62 <span style=''>
+</span>63 <span style=''>  /**
+</span>64 <span style=''>    * Loads a time series from a SOS server. A Timeseries &quot;configuration&quot; has to be passd within the POST
+</span>65 <span style=''>    * request.
+</span>66 <span style=''>    *
+</span>67 <span style=''>    * @return
+</span>68 <span style=''>    */
+</span>69 <span style=''>  def getTimeseries: Action[JsValue] = </span><span style='background: #F0ADAD'>Action.async(parse.json) { request =&gt;
+</span>70 <span style=''></span><span style='background: #F0ADAD'>    request.body.validate[Timeseries].fold(
+</span>71 <span style=''></span><span style='background: #F0ADAD'>      errors =&gt; {
+</span>72 <span style=''></span><span style='background: #F0ADAD'>        logger.error(JsError.toJson(errors).toString())
+</span>73 <span style=''></span><span style='background: #F0ADAD'>        val error = ErrorResult(&quot;Error while validating request.&quot;, Some(JsError.toJson(errors).toString))
+</span>74 <span style=''></span><span style='background: #F0ADAD'>        Future {
+</span>75 <span style=''></span><span style='background: #F0ADAD'>          BadRequest(Json.toJson(error)).as(JSON)
+</span>76 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>77 <span style=''></span><span style='background: #F0ADAD'>      },
+</span>78 <span style=''></span><span style='background: #F0ADAD'>
+</span>79 <span style=''></span><span style='background: #F0ADAD'>      timeseries =&gt; {
+</span>80 <span style=''></span><span style='background: #F0ADAD'>        val responseFuture = wsClient.url(timeseries.sosUrl)
+</span>81 <span style=''></span><span style='background: #F0ADAD'>          .withHeaders(CONTENT_TYPE -&gt; &quot;application/xml&quot;)
+</span>82 <span style=''></span><span style='background: #F0ADAD'>          .post(getObservationRequestXml(timeseries))
+</span>83 <span style=''></span><span style='background: #F0ADAD'>
+</span>84 <span style=''></span><span style='background: #F0ADAD'>        responseFuture.recover {
+</span>85 <span style=''></span><span style='background: #F0ADAD'>          case e: Exception =&gt;
+</span>86 <span style=''></span><span style='background: #F0ADAD'>            logger.error(&quot;Sos get capabilities threw exception&quot;, e)
+</span>87 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(s&quot;Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.&quot;,
+</span>88 <span style=''></span><span style='background: #F0ADAD'>              Some(e.getMessage))
+</span>89 <span style=''></span><span style='background: #F0ADAD'>            InternalServerError(Json.toJson(error)).as(JSON)
+</span>90 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>91 <span style=''></span><span style='background: #F0ADAD'>
+</span>92 <span style=''></span><span style='background: #F0ADAD'>        responseFuture.map(response =&gt; {
+</span>93 <span style=''></span><span style='background: #F0ADAD'>          if (response.status != 200) {
+</span>94 <span style=''></span><span style='background: #F0ADAD'>            logger.error(s&quot;Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation&quot;)
+</span>95 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(s&quot;Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation&quot;,
+</span>96 <span style=''></span><span style='background: #F0ADAD'>              Some(response.body))
+</span>97 <span style=''></span><span style='background: #F0ADAD'>            InternalServerError(Json.toJson(error)).as(JSON)
+</span>98 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>99 <span style=''></span><span style='background: #F0ADAD'>          else if (!response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;)) {
+</span>100 <span style=''></span><span style='background: #F0ADAD'>            logger.error(s&quot;SOS GetCapabilities result was not XML but ${response.header(&quot;Content-Type&quot;).get}&quot;)
+</span>101 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(
+</span>102 <span style=''></span><span style='background: #F0ADAD'>              s&quot;SOS GetCapabilities result was not XML but ${response.header(&quot;Content-Type&quot;).get}&quot;,
+</span>103 <span style=''></span><span style='background: #F0ADAD'>              Some(response.body))
+</span>104 <span style=''></span><span style='background: #F0ADAD'>            InternalServerError(Json.toJson(error)).as(JSON)
+</span>105 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>106 <span style=''></span><span style='background: #F0ADAD'>          else {
+</span>107 <span style=''></span><span style='background: #F0ADAD'>            val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(response.body))
+</span>108 <span style=''></span><span style='background: #F0ADAD'>            val tsdata =
+</span>109 <span style=''></span><span style='background: #F0ADAD'>              if (tvp.isEmpty) {
+</span>110 <span style=''></span><span style='background: #F0ADAD'>                TimeseriesData(
+</span>111 <span style=''></span><span style='background: #F0ADAD'>                  x = Seq.empty[String],
+</span>112 <span style=''></span><span style='background: #F0ADAD'>                  y = Seq.empty[String],
+</span>113 <span style=''></span><span style='background: #F0ADAD'>                  name = timeseries.timeseriesName
+</span>114 <span style=''></span><span style='background: #F0ADAD'>                )
+</span>115 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>116 <span style=''></span><span style='background: #F0ADAD'>              else {
+</span>117 <span style=''></span><span style='background: #F0ADAD'>                TimeseriesData(
+</span>118 <span style=''></span><span style='background: #F0ADAD'>                  x = tvp.map(_.datetime),
+</span>119 <span style=''></span><span style='background: #F0ADAD'>                  y = tvp.map(_.measValue),
+</span>120 <span style=''></span><span style='background: #F0ADAD'>                  name = timeseries.timeseriesName
+</span>121 <span style=''></span><span style='background: #F0ADAD'>                )
+</span>122 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>123 <span style=''></span><span style='background: #F0ADAD'>            val result = timeseries.copy(data = Some(tsdata), uom = Some(tvp.head.measUnit))
+</span>124 <span style=''></span><span style='background: #F0ADAD'>            Ok(result.toJson()).as(JSON)
+</span>125 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>126 <span style=''></span><span style='background: #F0ADAD'>        })
+</span>127 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>128 <span style=''></span><span style='background: #F0ADAD'>    )
+</span>129 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>130 <span style=''>
+</span>131 <span style=''>  /**
+</span>132 <span style=''>    * Create GetObservation Request XML String.
+</span>133 <span style=''>    *
+</span>134 <span style=''>    * @param timeseries
+</span>135 <span style=''>    * @return
+</span>136 <span style=''>    */
+</span>137 <span style=''>  private def getObservationRequestXml(timeseries: Timeseries) = {
+</span>138 <span style=''>    </span><span style='background: #F0ADAD'>s&quot;&quot;&quot;
+</span>139 <span style=''></span><span style='background: #F0ADAD'>       |&lt;sos:GetObservation
+</span>140 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:sos=&quot;http://www.opengis.net/sos/2.0&quot;
+</span>141 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:fes=&quot;http://www.opengis.net/fes/2.0&quot;
+</span>142 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:gml=&quot;http://www.opengis.net/gml/3.2&quot;
+</span>143 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:swe=&quot;http://www.opengis.net/swe/2.0&quot;
+</span>144 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:xlink=&quot;http://www.w3.org/1999/xlink&quot;
+</span>145 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:swes=&quot;http://www.opengis.net/swes/2.0&quot;
+</span>146 <span style=''></span><span style='background: #F0ADAD'>       |    xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; service=&quot;SOS&quot; version=&quot;2.0.0&quot; xsi:schemaLocation=&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sos.xsd&quot;&gt;
+</span>147 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>148 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:procedure&gt;${timeseries.procedure}&lt;/sos:procedure&gt;
+</span>149 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>150 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:offering&gt;${timeseries.offering}&lt;/sos:offering&gt;
+</span>151 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>152 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:observedProperty&gt;${timeseries.observedProperty}&lt;/sos:observedProperty&gt;
+</span>153 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>154 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:temporalFilter&gt;
+</span>155 <span style=''></span><span style='background: #F0ADAD'>       |        &lt;fes:During&gt;
+</span>156 <span style=''></span><span style='background: #F0ADAD'>       |            &lt;fes:ValueReference&gt;phenomenonTime&lt;/fes:ValueReference&gt;
+</span>157 <span style=''></span><span style='background: #F0ADAD'>       |            &lt;gml:TimePeriod gml:id=&quot;tp_1&quot;&gt;
+</span>158 <span style=''></span><span style='background: #F0ADAD'>       |                &lt;gml:beginPosition&gt;${timeseries.fromDate}&lt;/gml:beginPosition&gt;
+</span>159 <span style=''></span><span style='background: #F0ADAD'>       |                &lt;gml:endPosition&gt;${timeseries.toDate}&lt;/gml:endPosition&gt;
+</span>160 <span style=''></span><span style='background: #F0ADAD'>       |            &lt;/gml:TimePeriod&gt;
+</span>161 <span style=''></span><span style='background: #F0ADAD'>       |        &lt;/fes:During&gt;
+</span>162 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;/sos:temporalFilter&gt;
+</span>163 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>164 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:featureOfInterest&gt;${timeseries.featureOfInterest}&lt;/sos:featureOfInterest&gt;
+</span>165 <span style=''></span><span style='background: #F0ADAD'>       |
+</span>166 <span style=''></span><span style='background: #F0ADAD'>       |    &lt;sos:responseFormat&gt;http://www.opengis.net/om/2.0&lt;/sos:responseFormat&gt;
+</span>167 <span style=''></span><span style='background: #F0ADAD'>       |&lt;/sos:GetObservation&gt;
+</span>168 <span style=''></span><span style='background: #F0ADAD'>          &quot;&quot;&quot;.stripMargin</span><span style=''>
+</span>169 <span style=''>  }
+</span>170 <span style=''>
+</span>171 <span style=''>  /**
+</span>172 <span style=''>    * gets Capabilities from s specified SOS server.
+</span>173 <span style=''>    *
+</span>174 <span style=''>    * @param sosUrl
+</span>175 <span style=''>    * @return
+</span>176 <span style=''>    */
+</span>177 <span style=''>  def getCapabilities(sosUrl: String): Action[AnyContent] = </span><span style='background: #F0ADAD'>Action.async { request =&gt;
+</span>178 <span style=''></span><span style='background: #F0ADAD'>
+</span>179 <span style=''></span><span style='background: #F0ADAD'>    val responseFuture = wsClient.url(sosUrl)
+</span>180 <span style=''></span><span style='background: #F0ADAD'>      .withHeaders(CONTENT_TYPE -&gt; &quot;application/xml&quot;)
+</span>181 <span style=''></span><span style='background: #F0ADAD'>      .post(GET_CAPABILITIES_XML)
+</span>182 <span style=''></span><span style='background: #F0ADAD'>
+</span>183 <span style=''></span><span style='background: #F0ADAD'>    responseFuture.recover {
+</span>184 <span style=''></span><span style='background: #F0ADAD'>      case e: Exception =&gt;
+</span>185 <span style=''></span><span style='background: #F0ADAD'>        logger.error(&quot;Sos get capabilities threw exception&quot;, e)
+</span>186 <span style=''></span><span style='background: #F0ADAD'>        val error = ErrorResult(s&quot;Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.&quot;,
+</span>187 <span style=''></span><span style='background: #F0ADAD'>          Some(e.getMessage))
+</span>188 <span style=''></span><span style='background: #F0ADAD'>        InternalServerError(Json.toJson(error)).as(JSON)
+</span>189 <span style=''></span><span style='background: #F0ADAD'>    }
+</span>190 <span style=''></span><span style='background: #F0ADAD'>
+</span>191 <span style=''></span><span style='background: #F0ADAD'>    responseFuture.map(response =&gt; {
+</span>192 <span style=''></span><span style='background: #F0ADAD'>      if (response.status != 200) {
+</span>193 <span style=''></span><span style='background: #F0ADAD'>        logger.error(s&quot;Calling SOS ${sosUrl} HTTP result status ${response.status}&quot;)
+</span>194 <span style=''></span><span style='background: #F0ADAD'>        val error = ErrorResult(s&quot;Server ${sosUrl} responded with ${response.status} on GetCapabilities&quot;,
+</span>195 <span style=''></span><span style='background: #F0ADAD'>          Some(response.body))
+</span>196 <span style=''></span><span style='background: #F0ADAD'>        InternalServerError(Json.toJson(error)).as(JSON)
+</span>197 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>198 <span style=''></span><span style='background: #F0ADAD'>      else if (!response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;)) {
+</span>199 <span style=''></span><span style='background: #F0ADAD'>        logger.error(s&quot;SOS GetCapabilities result was not XML but ${response.header(&quot;Content-Type&quot;).get}&quot;)
+</span>200 <span style=''></span><span style='background: #F0ADAD'>        val error = ErrorResult(s&quot;SOS GetCapabilities result was not XML but ${response.header(&quot;Content-Type&quot;).get}&quot;,
+</span>201 <span style=''></span><span style='background: #F0ADAD'>          Some(response.body))
+</span>202 <span style=''></span><span style='background: #F0ADAD'>        InternalServerError(Json.toJson(error)).as(JSON)
+</span>203 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>204 <span style=''></span><span style='background: #F0ADAD'>      else {
+</span>205 <span style=''></span><span style='background: #F0ADAD'>        val json = SosCapabilities.fromXml(response.xml, sosUrl).get.toJson()
+</span>206 <span style=''></span><span style='background: #F0ADAD'>        Ok(json).as(JSON)
+</span>207 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>208 <span style=''></span><span style='background: #F0ADAD'>    })
+</span>209 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>210 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          1168
+        </td>
+        <td>
+          1553
+          -
+          2473
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n      |&lt;sos:GetCapabilities\n      |    xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;\n      |    xmlns:sos=\&quot;http://www.opengis.net/sos/2.0\&quot;\n      |    xmlns:ows=\&quot;http://www.opengis.net/ows/1.1\&quot;\n      |    xmlns:swe=\&quot;http://www.opengis.net/swe/2.0\&quot; service=\&quot;SOS\&quot; xsi:schemaLocation=\&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sosGetCapabilities.xsd\&quot;&gt;\n      |    &lt;ows:AcceptVersions&gt;\n      |        &lt;ows:Version&gt;2.0.0&lt;/ows:Version&gt;\n      |    &lt;/ows:AcceptVersions&gt;\n      |    &lt;ows:Sections&gt;\n      |        &lt;ows:Section&gt;OperationsMetadata&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;ServiceIdentification&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;ServiceProvider&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;FilterCapabilities&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;Contents&lt;/ows:Section&gt;\n      |    &lt;/ows:Sections&gt;\n      |&lt;/sos:GetCapabilities&gt;\n    &quot;
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          1169
+        </td>
+        <td>
+          1553
+          -
+          2485
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(&quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n      |&lt;sos:GetCapabilities\n      |    xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot;\n      |    xmlns:sos=\&quot;http://www.opengis.net/sos/2.0\&quot;\n      |    xmlns:ows=\&quot;http://www.opengis.net/ows/1.1\&quot;\n      |    xmlns:swe=\&quot;http://www.opengis.net/swe/2.0\&quot; service=\&quot;SOS\&quot; xsi:schemaLocation=\&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sosGetCapabilities.xsd\&quot;&gt;\n      |    &lt;ows:AcceptVersions&gt;\n      |        &lt;ows:Version&gt;2.0.0&lt;/ows:Version&gt;\n      |    &lt;/ows:AcceptVersions&gt;\n      |    &lt;ows:Sections&gt;\n      |        &lt;ows:Section&gt;OperationsMetadata&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;ServiceIdentification&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;ServiceProvider&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;FilterCapabilities&lt;/ows:Section&gt;\n      |        &lt;ows:Section&gt;Contents&lt;/ows:Section&gt;\n      |    &lt;/ows:Sections&gt;\n      |&lt;/sos:GetCapabilities&gt;\n    &quot;).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          1300
+        </td>
+        <td>
+          2681
+          -
+          5211
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.async
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Action.async[play.api.libs.json.JsValue](SosDataController.this.parse.json)(((request: play.api.mvc.Request[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.sosdata.Timeseries](sosdata.this.Timeseries.reads).fold[scala.concurrent.Future[play.api.mvc.Result]](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  SosDataController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error while validating request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()));
+  scala.concurrent.Future.apply[play.api.mvc.Result](SosDataController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON))(scala.concurrent.ExecutionContext.Implicits.global)
+}), ((timeseries: models.sosdata.Timeseries) =&gt; {
+  val responseFuture: scala.concurrent.Future[play.api.libs.ws.WSResponse] = SosDataController.this.wsClient.url(timeseries.sosUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)).post[String](SosDataController.this.getObservationRequestXml(timeseries))(http.this.Writeable.wString(mvc.this.Codec.utf_8));
+  responseFuture.recover[Object](({
+    @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+      def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+        $anonfun.super.&lt;init&gt;();
+        ()
+      };
+      final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x1: A1, default: A1 =&gt; B1): B1 = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; {
+          SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e);
+          val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()));
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        }
+        case (defaultCase$ @ _) =&gt; default.apply(x1)
+      };
+      final def isDefinedAt(x1: Throwable): Boolean = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; true
+        case (defaultCase$ @ _) =&gt; false
+      }
+    };
+    new $anonfun()
+  }: PartialFunction[Throwable,play.api.mvc.Result]))(scala.concurrent.ExecutionContext.Implicits.global);
+  responseFuture.map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; if (response.status.!=(200))
+    {
+      SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status));
+      val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status), scala.Some.apply[String](response.body));
+      SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }
+  else
+    if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+      {
+        SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+        val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+        SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }
+    else
+      {
+        val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body));
+        val tsdata: models.sosdata.TimeseriesData = if (tvp.isEmpty)
+          {
+            &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+            &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+            &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+            &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+            &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+            &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+            models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+          }
+        else
+          {
+            &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+            &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+            &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+            &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+            &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+            &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+            models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+          };
+        val result: models.sosdata.Timeseries = {
+          &lt;artifact&gt; val x$15: Some[models.sosdata.TimeseriesData] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[models.sosdata.TimeseriesData](tsdata);
+          &lt;artifact&gt; val x$16: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](tvp.head.measUnit);
+          &lt;artifact&gt; val x$17: String = timeseries.copy$default$1;
+          &lt;artifact&gt; val x$18: String = timeseries.copy$default$2;
+          &lt;artifact&gt; val x$19: String = timeseries.copy$default$3;
+          &lt;artifact&gt; val x$20: String = timeseries.copy$default$4;
+          &lt;artifact&gt; val x$21: String = timeseries.copy$default$5;
+          &lt;artifact&gt; val x$22: String = timeseries.copy$default$6;
+          &lt;artifact&gt; val x$23: String = timeseries.copy$default$7;
+          &lt;artifact&gt; val x$24: String = timeseries.copy$default$9;
+          timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+        };
+        SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }))(scala.concurrent.ExecutionContext.Implicits.global)
+}))))
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          1170
+        </td>
+        <td>
+          2694
+          -
+          2704
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          1171
+        </td>
+        <td>
+          2744
+          -
+          2744
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.reads
+        </td>
+        <td style="background: #F0ADAD">
+          sosdata.this.Timeseries.reads
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          1299
+        </td>
+        <td>
+          2723
+          -
+          5207
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsResult.fold
+        </td>
+        <td style="background: #F0ADAD">
+          request.body.validate[models.sosdata.Timeseries](sosdata.this.Timeseries.reads).fold[scala.concurrent.Future[play.api.mvc.Result]](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  SosDataController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error while validating request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()));
+  scala.concurrent.Future.apply[play.api.mvc.Result](SosDataController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON))(scala.concurrent.ExecutionContext.Implicits.global)
+}), ((timeseries: models.sosdata.Timeseries) =&gt; {
+  val responseFuture: scala.concurrent.Future[play.api.libs.ws.WSResponse] = SosDataController.this.wsClient.url(timeseries.sosUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)).post[String](SosDataController.this.getObservationRequestXml(timeseries))(http.this.Writeable.wString(mvc.this.Codec.utf_8));
+  responseFuture.recover[Object](({
+    @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+      def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+        $anonfun.super.&lt;init&gt;();
+        ()
+      };
+      final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x1: A1, default: A1 =&gt; B1): B1 = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; {
+          SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e);
+          val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()));
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        }
+        case (defaultCase$ @ _) =&gt; default.apply(x1)
+      };
+      final def isDefinedAt(x1: Throwable): Boolean = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; true
+        case (defaultCase$ @ _) =&gt; false
+      }
+    };
+    new $anonfun()
+  }: PartialFunction[Throwable,play.api.mvc.Result]))(scala.concurrent.ExecutionContext.Implicits.global);
+  responseFuture.map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; if (response.status.!=(200))
+    {
+      SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status));
+      val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status), scala.Some.apply[String](response.body));
+      SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }
+  else
+    if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+      {
+        SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+        val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+        SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }
+    else
+      {
+        val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body));
+        val tsdata: models.sosdata.TimeseriesData = if (tvp.isEmpty)
+          {
+            &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+            &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+            &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+            &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+            &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+            &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+            models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+          }
+        else
+          {
+            &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+            &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+            &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+            &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+            &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+            &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+            models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+          };
+        val result: models.sosdata.Timeseries = {
+          &lt;artifact&gt; val x$15: Some[models.sosdata.TimeseriesData] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[models.sosdata.TimeseriesData](tsdata);
+          &lt;artifact&gt; val x$16: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](tvp.head.measUnit);
+          &lt;artifact&gt; val x$17: String = timeseries.copy$default$1;
+          &lt;artifact&gt; val x$18: String = timeseries.copy$default$2;
+          &lt;artifact&gt; val x$19: String = timeseries.copy$default$3;
+          &lt;artifact&gt; val x$20: String = timeseries.copy$default$4;
+          &lt;artifact&gt; val x$21: String = timeseries.copy$default$5;
+          &lt;artifact&gt; val x$22: String = timeseries.copy$default$6;
+          &lt;artifact&gt; val x$23: String = timeseries.copy$default$7;
+          &lt;artifact&gt; val x$24: String = timeseries.copy$default$9;
+          timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+        };
+        SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }))(scala.concurrent.ExecutionContext.Implicits.global)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1173
+        </td>
+        <td>
+          2789
+          -
+          2836
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          1172
+        </td>
+        <td>
+          2802
+          -
+          2835
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1177
+        </td>
+        <td>
+          2857
+          -
+          2942
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Error while validating request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()))
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1174
+        </td>
+        <td>
+          2869
+          -
+          2902
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Error while validating request.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1176
+        </td>
+        <td>
+          2904
+          -
+          2941
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1175
+        </td>
+        <td>
+          2909
+          -
+          2940
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1184
+        </td>
+        <td>
+          2951
+          -
+          3019
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.concurrent.Future.apply[play.api.mvc.Result](SosDataController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON))(scala.concurrent.ExecutionContext.Implicits.global)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1178
+        </td>
+        <td>
+          2992
+          -
+          2992
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1180
+        </td>
+        <td>
+          2980
+          -
+          2980
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1183
+        </td>
+        <td>
+          2970
+          -
+          3009
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1179
+        </td>
+        <td>
+          2981
+          -
+          2999
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1182
+        </td>
+        <td>
+          3004
+          -
+          3008
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1181
+        </td>
+        <td>
+          2980
+          -
+          2980
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          1185
+        </td>
+        <td>
+          3094
+          -
+          3111
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.sosUrl
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.sosUrl
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          1186
+        </td>
+        <td>
+          3136
+          -
+          3169
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1187
+        </td>
+        <td>
+          3187
+          -
+          3223
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.SosDataController.getObservationRequestXml
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.getObservationRequestXml(timeseries)
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1189
+        </td>
+        <td>
+          3186
+          -
+          3186
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.wString
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.wString(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1188
+        </td>
+        <td>
+          3186
+          -
+          3186
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          1190
+        </td>
+        <td>
+          3081
+          -
+          3224
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.ws.WSRequest.post
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.wsClient.url(timeseries.sosUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)).post[String](SosDataController.this.getObservationRequestXml(timeseries))(http.this.Writeable.wString(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1205
+        </td>
+        <td>
+          3257
+          -
+          3257
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.SosDataController.$anonfun.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new $anonfun()
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          1206
+        </td>
+        <td>
+          3234
+          -
+          3570
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.recover
+        </td>
+        <td style="background: #F0ADAD">
+          responseFuture.recover[Object](({
+  @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+    def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+      $anonfun.super.&lt;init&gt;();
+      ()
+    };
+    final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x1: A1, default: A1 =&gt; B1): B1 = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; {
+        SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e);
+        val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()));
+        SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }
+      case (defaultCase$ @ _) =&gt; default.apply(x1)
+    };
+    final def isDefinedAt(x1: Throwable): Boolean = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; true
+      case (defaultCase$ @ _) =&gt; false
+    }
+  };
+  new $anonfun()
+}: PartialFunction[Throwable,play.api.mvc.Result]))(scala.concurrent.ExecutionContext.Implicits.global)
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          1191
+        </td>
+        <td>
+          3302
+          -
+          3357
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1195
+        </td>
+        <td>
+          3394
+          -
+          3464
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName())
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1198
+        </td>
+        <td>
+          3382
+          -
+          3499
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1192
+        </td>
+        <td>
+          3396
+          -
+          3408
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Exception (&quot;
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1194
+        </td>
+        <td>
+          3409
+          -
+          3436
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Class.getCanonicalName
+        </td>
+        <td style="background: #F0ADAD">
+          e.getClass().getCanonicalName()
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1193
+        </td>
+        <td>
+          3437
+          -
+          3464
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;) on SOS get capabilities.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          1196
+        </td>
+        <td>
+          3485
+          -
+          3497
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getMessage()
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          1197
+        </td>
+        <td>
+          3480
+          -
+          3498
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](e.getMessage())
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1204
+        </td>
+        <td>
+          3512
+          -
+          3560
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1201
+        </td>
+        <td>
+          3531
+          -
+          3531
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1200
+        </td>
+        <td>
+          3532
+          -
+          3550
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1203
+        </td>
+        <td>
+          3555
+          -
+          3559
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1199
+        </td>
+        <td>
+          3543
+          -
+          3543
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          1202
+        </td>
+        <td>
+          3531
+          -
+          3531
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1298
+        </td>
+        <td>
+          3580
+          -
+          5193
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.map
+        </td>
+        <td style="background: #F0ADAD">
+          responseFuture.map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; if (response.status.!=(200))
+  {
+    SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status));
+    val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status), scala.Some.apply[String](response.body));
+    SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+else
+  if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+    {
+      SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+      val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+      SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }
+  else
+    {
+      val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body));
+      val tsdata: models.sosdata.TimeseriesData = if (tvp.isEmpty)
+        {
+          &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+          &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+          &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+          &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+          &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+          &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+          models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+        }
+      else
+        {
+          &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+          &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+          &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+          &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+          &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+          &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+          models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+        };
+      val result: models.sosdata.Timeseries = {
+        &lt;artifact&gt; val x$15: Some[models.sosdata.TimeseriesData] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[models.sosdata.TimeseriesData](tsdata);
+        &lt;artifact&gt; val x$16: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](tvp.head.measUnit);
+        &lt;artifact&gt; val x$17: String = timeseries.copy$default$1;
+        &lt;artifact&gt; val x$18: String = timeseries.copy$default$2;
+        &lt;artifact&gt; val x$19: String = timeseries.copy$default$3;
+        &lt;artifact&gt; val x$20: String = timeseries.copy$default$4;
+        &lt;artifact&gt; val x$21: String = timeseries.copy$default$5;
+        &lt;artifact&gt; val x$22: String = timeseries.copy$default$6;
+        &lt;artifact&gt; val x$23: String = timeseries.copy$default$7;
+        &lt;artifact&gt; val x$24: String = timeseries.copy$default$9;
+        timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+      };
+      SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }))(scala.concurrent.ExecutionContext.Implicits.global)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          1207
+        </td>
+        <td>
+          3627
+          -
+          3649
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.!=
+        </td>
+        <td style="background: #F0ADAD">
+          response.status.!=(200)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          1230
+        </td>
+        <td>
+          3651
+          -
+          3998
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status));
+  val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status), scala.Some.apply[String](response.body));
+  SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1214
+        </td>
+        <td>
+          3665
+          -
+          3770
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1213
+        </td>
+        <td>
+          3678
+          -
+          3769
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1210
+        </td>
+        <td>
+          3750
+          -
+          3769
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; on GetObservation&quot;
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1209
+        </td>
+        <td>
+          3712
+          -
+          3733
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; HTTP result status &quot;
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1212
+        </td>
+        <td>
+          3734
+          -
+          3749
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.status
+        </td>
+        <td style="background: #F0ADAD">
+          response.status
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1208
+        </td>
+        <td>
+          3680
+          -
+          3693
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Calling SOS &quot;
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1211
+        </td>
+        <td>
+          3694
+          -
+          3711
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.sosUrl
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.sosUrl
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1216
+        </td>
+        <td>
+          3836
+          -
+          3853
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; responded with &quot;
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1219
+        </td>
+        <td>
+          3854
+          -
+          3869
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.status
+        </td>
+        <td style="background: #F0ADAD">
+          response.status
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1218
+        </td>
+        <td>
+          3818
+          -
+          3835
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.sosUrl
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.sosUrl
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1215
+        </td>
+        <td>
+          3809
+          -
+          3817
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Server &quot;
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1223
+        </td>
+        <td>
+          3795
+          -
+          3925
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status), scala.Some.apply[String](response.body))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1217
+        </td>
+        <td>
+          3870
+          -
+          3889
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; on GetObservation&quot;
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1220
+        </td>
+        <td>
+          3807
+          -
+          3889
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetObservation&quot;).s(timeseries.sosUrl, response.status)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1222
+        </td>
+        <td>
+          3905
+          -
+          3924
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](response.body)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1221
+        </td>
+        <td>
+          3910
+          -
+          3923
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.body
+        </td>
+        <td style="background: #F0ADAD">
+          response.body
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1225
+        </td>
+        <td>
+          3958
+          -
+          3976
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1228
+        </td>
+        <td>
+          3981
+          -
+          3985
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1227
+        </td>
+        <td>
+          3957
+          -
+          3957
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1224
+        </td>
+        <td>
+          3969
+          -
+          3969
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1226
+        </td>
+        <td>
+          3957
+          -
+          3957
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1229
+        </td>
+        <td>
+          3938
+          -
+          3986
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1297
+        </td>
+        <td>
+          4014
+          -
+          5182
+        </td>
+        <td>
+          If
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+  {
+    SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+    val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+    SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+else
+  {
+    val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body));
+    val tsdata: models.sosdata.TimeseriesData = if (tvp.isEmpty)
+      {
+        &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+        &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+        &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+        &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+        &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+        &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+        models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+      }
+    else
+      {
+        &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+        &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+        &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+        &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+        &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+        &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+        models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+      };
+    val result: models.sosdata.Timeseries = {
+      &lt;artifact&gt; val x$15: Some[models.sosdata.TimeseriesData] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[models.sosdata.TimeseriesData](tsdata);
+      &lt;artifact&gt; val x$16: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](tvp.head.measUnit);
+      &lt;artifact&gt; val x$17: String = timeseries.copy$default$1;
+      &lt;artifact&gt; val x$18: String = timeseries.copy$default$2;
+      &lt;artifact&gt; val x$19: String = timeseries.copy$default$3;
+      &lt;artifact&gt; val x$20: String = timeseries.copy$default$4;
+      &lt;artifact&gt; val x$21: String = timeseries.copy$default$5;
+      &lt;artifact&gt; val x$22: String = timeseries.copy$default$6;
+      &lt;artifact&gt; val x$23: String = timeseries.copy$default$7;
+      &lt;artifact&gt; val x$24: String = timeseries.copy$default$9;
+      timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+    };
+    SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1231
+        </td>
+        <td>
+          4035
+          -
+          4049
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1254
+        </td>
+        <td>
+          4084
+          -
+          4441
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+  val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+  SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1233
+        </td>
+        <td>
+          4018
+          -
+          4082
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Boolean.unary_!
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          1232
+        </td>
+        <td>
+          4064
+          -
+          4081
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;application/xml&quot;
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1237
+        </td>
+        <td>
+          4158
+          -
+          4193
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1234
+        </td>
+        <td>
+          4113
+          -
+          4157
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;SOS GetCapabilities result was not XML but &quot;
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1236
+        </td>
+        <td>
+          4174
+          -
+          4188
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1239
+        </td>
+        <td>
+          4098
+          -
+          4196
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1235
+        </td>
+        <td>
+          4194
+          -
+          4195
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          1238
+        </td>
+        <td>
+          4111
+          -
+          4195
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          1247
+        </td>
+        <td>
+          4221
+          -
+          4368
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body))
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1240
+        </td>
+        <td>
+          4250
+          -
+          4294
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;SOS GetCapabilities result was not XML but &quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1243
+        </td>
+        <td>
+          4295
+          -
+          4330
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1242
+        </td>
+        <td>
+          4311
+          -
+          4325
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1241
+        </td>
+        <td>
+          4331
+          -
+          4332
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1244
+        </td>
+        <td>
+          4248
+          -
+          4332
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          1246
+        </td>
+        <td>
+          4348
+          -
+          4367
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](response.body)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          1245
+        </td>
+        <td>
+          4353
+          -
+          4366
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.body
+        </td>
+        <td style="background: #F0ADAD">
+          response.body
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1249
+        </td>
+        <td>
+          4401
+          -
+          4419
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1252
+        </td>
+        <td>
+          4424
+          -
+          4428
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1248
+        </td>
+        <td>
+          4412
+          -
+          4412
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1251
+        </td>
+        <td>
+          4400
+          -
+          4400
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1250
+        </td>
+        <td>
+          4400
+          -
+          4400
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1253
+        </td>
+        <td>
+          4381
+          -
+          4429
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1296
+        </td>
+        <td>
+          4457
+          -
+          5182
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body));
+  val tsdata: models.sosdata.TimeseriesData = if (tvp.isEmpty)
+    {
+      &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+      &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+      &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+      &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+      &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+      &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+      models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+    }
+  else
+    {
+      &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+      &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+      &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+      &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+      &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+      &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+      models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+    };
+  val result: models.sosdata.Timeseries = {
+    &lt;artifact&gt; val x$15: Some[models.sosdata.TimeseriesData] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[models.sosdata.TimeseriesData](tsdata);
+    &lt;artifact&gt; val x$16: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](tvp.head.measUnit);
+    &lt;artifact&gt; val x$17: String = timeseries.copy$default$1;
+    &lt;artifact&gt; val x$18: String = timeseries.copy$default$2;
+    &lt;artifact&gt; val x$19: String = timeseries.copy$default$3;
+    &lt;artifact&gt; val x$20: String = timeseries.copy$default$4;
+    &lt;artifact&gt; val x$21: String = timeseries.copy$default$5;
+    &lt;artifact&gt; val x$22: String = timeseries.copy$default$6;
+    &lt;artifact&gt; val x$23: String = timeseries.copy$default$7;
+    &lt;artifact&gt; val x$24: String = timeseries.copy$default$9;
+    timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+  };
+  SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1255
+        </td>
+        <td>
+          4539
+          -
+          4552
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.body
+        </td>
+        <td style="background: #F0ADAD">
+          response.body
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1257
+        </td>
+        <td>
+          4481
+          -
+          4554
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.parseOm2Measurements
+        </td>
+        <td style="background: #F0ADAD">
+          new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(response.body))
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1256
+        </td>
+        <td>
+          4521
+          -
+          4553
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.io.Source.fromString
+        </td>
+        <td style="background: #F0ADAD">
+          scala.io.Source.fromString(response.body)
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          1258
+        </td>
+        <td>
+          4598
+          -
+          4609
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.SeqLike.isEmpty
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1264
+        </td>
+        <td>
+          4629
+          -
+          4629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$6
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1263
+        </td>
+        <td>
+          4629
+          -
+          4629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1266
+        </td>
+        <td>
+          4629
+          -
+          4795
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  &lt;artifact&gt; val x$3: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+  &lt;artifact&gt; val x$4: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = collection.this.Seq.empty[String];
+  &lt;artifact&gt; val x$5: String = timeseries.timeseriesName;
+  &lt;artifact&gt; val x$6: String = models.sosdata.TimeseriesData.apply$default$3;
+  &lt;artifact&gt; val x$7: String = models.sosdata.TimeseriesData.apply$default$5;
+  &lt;artifact&gt; val x$8: String = models.sosdata.TimeseriesData.apply$default$6;
+  models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+}
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1262
+        </td>
+        <td>
+          4629
+          -
+          4629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          1265
+        </td>
+        <td>
+          4629
+          -
+          4795
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply(x$3, x$4, x$6, x$5, x$7, x$8)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          1259
+        </td>
+        <td>
+          4667
+          -
+          4684
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.empty
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.empty[String]
+        </td>
+      </tr><tr>
+        <td>
+          112
+        </td>
+        <td>
+          1260
+        </td>
+        <td>
+          4708
+          -
+          4725
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.empty
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.empty[String]
+        </td>
+      </tr><tr>
+        <td>
+          113
+        </td>
+        <td>
+          1261
+        </td>
+        <td>
+          4752
+          -
+          4777
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.timeseriesName
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.timeseriesName
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1276
+        </td>
+        <td>
+          4849
+          -
+          4849
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$6
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1278
+        </td>
+        <td>
+          4849
+          -
+          5020
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  &lt;artifact&gt; val x$9: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String]);
+  &lt;artifact&gt; val x$10: Seq[String] @scala.reflect.internal.annotations.uncheckedBounds = tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String]);
+  &lt;artifact&gt; val x$11: String = timeseries.timeseriesName;
+  &lt;artifact&gt; val x$12: String = models.sosdata.TimeseriesData.apply$default$3;
+  &lt;artifact&gt; val x$13: String = models.sosdata.TimeseriesData.apply$default$5;
+  &lt;artifact&gt; val x$14: String = models.sosdata.TimeseriesData.apply$default$6;
+  models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+}
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1275
+        </td>
+        <td>
+          4849
+          -
+          4849
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1277
+        </td>
+        <td>
+          4849
+          -
+          5020
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply(x$9, x$10, x$12, x$11, x$13, x$14)
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          1274
+        </td>
+        <td>
+          4849
+          -
+          4849
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.TimeseriesData.apply$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.TimeseriesData.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1267
+        </td>
+        <td>
+          4895
+          -
+          4905
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.datetime
+        </td>
+        <td style="background: #F0ADAD">
+          x$1.datetime
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1269
+        </td>
+        <td>
+          4887
+          -
+          4906
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.map[String, Seq[String]](((x$1: models.tvp.TimeValuePair) =&gt; x$1.datetime))(collection.this.Seq.canBuildFrom[String])
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          1268
+        </td>
+        <td>
+          4894
+          -
+          4894
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          1270
+        </td>
+        <td>
+          4938
+          -
+          4949
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.measValue
+        </td>
+        <td style="background: #F0ADAD">
+          x$2.measValue
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          1272
+        </td>
+        <td>
+          4930
+          -
+          4950
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.map[String, Seq[String]](((x$2: models.tvp.TimeValuePair) =&gt; x$2.measValue))(collection.this.Seq.canBuildFrom[String])
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          1271
+        </td>
+        <td>
+          4937
+          -
+          4937
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[String]
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1273
+        </td>
+        <td>
+          4977
+          -
+          5002
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.timeseriesName
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.timeseriesName
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1282
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$1
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$1
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1285
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$4
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1279
+        </td>
+        <td>
+          5085
+          -
+          5097
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[models.sosdata.TimeseriesData](tsdata)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1288
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$7
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$7
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1287
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$6
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$6
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1281
+        </td>
+        <td>
+          5105
+          -
+          5128
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](tvp.head.measUnit)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1290
+        </td>
+        <td>
+          5062
+          -
+          5129
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy(x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$16, x$24, x$15)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1284
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$3
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1283
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$2
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1286
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$5
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1289
+        </td>
+        <td>
+          5073
+          -
+          5073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.copy$default$9
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.copy$default$9
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1280
+        </td>
+        <td>
+          5110
+          -
+          5127
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.measUnit
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.head.measUnit
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1291
+        </td>
+        <td>
+          5145
+          -
+          5160
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.Timeseries.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          result.toJson()
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1294
+        </td>
+        <td>
+          5165
+          -
+          5169
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1293
+        </td>
+        <td>
+          5144
+          -
+          5144
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1292
+        </td>
+        <td>
+          5144
+          -
+          5144
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1295
+        </td>
+        <td>
+          5142
+          -
+          5170
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.Ok.apply[play.api.libs.json.JsValue](result.toJson())(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          1314
+        </td>
+        <td>
+          5389
+          -
+          6893
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;\n       |&lt;sos:GetObservation\n       |    xmlns:sos=\&quot;http://www.opengis.net/sos/2.0\&quot;\n       |    xmlns:fes=\&quot;http://www.opengis.net/fes/2.0\&quot;\n       |    xmlns:gml=\&quot;http://www.opengis.net/gml/3.2\&quot;\n       |    xmlns:swe=\&quot;http://www.opengis.net/swe/2.0\&quot;\n       |    xmlns:xlink=\&quot;http://www.w3.org/1999/xlink\&quot;\n       |    xmlns:swes=\&quot;http://www.opengis.net/swes/2.0\&quot;\n       |    xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot; service=\&quot;SOS\&quot; version=\&quot;2.0.0\&quot; xsi:schemaLocation=\&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sos.xsd\&quot;&gt;\n       |\n       |    &lt;sos:procedure&gt;&quot;, &quot;&lt;/sos:procedure&gt;\n       |\n       |    &lt;sos:offering&gt;&quot;, &quot;&lt;/sos:offering&gt;\n       |\n       |    &lt;sos:observedProperty&gt;&quot;, &quot;&lt;/sos:observedProperty&gt;\n       |\n       |    &lt;sos:temporalFilter&gt;\n       |        &lt;fes:During&gt;\n       |            &lt;fes:ValueReference&gt;phenomenonTime&lt;/fes:ValueReference&gt;\n       |            &lt;gml:TimePeriod gml:id=\&quot;tp_1\&quot;&gt;\n       |                &lt;gml:beginPosition&gt;&quot;, &quot;&lt;/gml:beginPosition&gt;\n       |                &lt;gml:endPosition&gt;&quot;, &quot;&lt;/gml:endPosition&gt;\n       |            &lt;/gml:TimePeriod&gt;\n       |        &lt;/fes:During&gt;\n       |    &lt;/sos:temporalFilter&gt;\n       |\n       |    &lt;sos:featureOfInterest&gt;&quot;, &quot;&lt;/sos:featureOfInterest&gt;\n       |\n       |    &lt;sos:responseFormat&gt;http://www.opengis.net/om/2.0&lt;/sos:responseFormat&gt;\n       |&lt;/sos:GetObservation&gt;\n          &quot;).s(timeseries.procedure, timeseries.offering, timeseries.observedProperty, timeseries.fromDate, timeseries.toDate, timeseries.featureOfInterest)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          1301
+        </td>
+        <td>
+          5393
+          -
+          5983
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;\n       |&lt;sos:GetObservation\n       |    xmlns:sos=\&quot;http://www.opengis.net/sos/2.0\&quot;\n       |    xmlns:fes=\&quot;http://www.opengis.net/fes/2.0\&quot;\n       |    xmlns:gml=\&quot;http://www.opengis.net/gml/3.2\&quot;\n       |    xmlns:swe=\&quot;http://www.opengis.net/swe/2.0\&quot;\n       |    xmlns:xlink=\&quot;http://www.w3.org/1999/xlink\&quot;\n       |    xmlns:swes=\&quot;http://www.opengis.net/swes/2.0\&quot;\n       |    xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot; service=\&quot;SOS\&quot; version=\&quot;2.0.0\&quot; xsi:schemaLocation=\&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sos.xsd\&quot;&gt;\n       |\n       |    &lt;sos:procedure&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          1308
+        </td>
+        <td>
+          5984
+          -
+          6004
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.procedure
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.procedure
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          1302
+        </td>
+        <td>
+          6005
+          -
+          6058
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/sos:procedure&gt;\n       |\n       |    &lt;sos:offering&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          1309
+        </td>
+        <td>
+          6059
+          -
+          6078
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.offering
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.offering
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          1303
+        </td>
+        <td>
+          6079
+          -
+          6139
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/sos:offering&gt;\n       |\n       |    &lt;sos:observedProperty&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          1310
+        </td>
+        <td>
+          6140
+          -
+          6167
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.observedProperty
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.observedProperty
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          1304
+        </td>
+        <td>
+          6168
+          -
+          6434
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/sos:observedProperty&gt;\n       |\n       |    &lt;sos:temporalFilter&gt;\n       |        &lt;fes:During&gt;\n       |            &lt;fes:ValueReference&gt;phenomenonTime&lt;/fes:ValueReference&gt;\n       |            &lt;gml:TimePeriod gml:id=\&quot;tp_1\&quot;&gt;\n       |                &lt;gml:beginPosition&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1305
+        </td>
+        <td>
+          6455
+          -
+          6518
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/gml:beginPosition&gt;\n       |                &lt;gml:endPosition&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1311
+        </td>
+        <td>
+          6435
+          -
+          6454
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.fromDate
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.fromDate
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1306
+        </td>
+        <td>
+          6537
+          -
+          6703
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/gml:endPosition&gt;\n       |            &lt;/gml:TimePeriod&gt;\n       |        &lt;/fes:During&gt;\n       |    &lt;/sos:temporalFilter&gt;\n       |\n       |    &lt;sos:featureOfInterest&gt;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1312
+        </td>
+        <td>
+          6519
+          -
+          6536
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.toDate
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.toDate
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1313
+        </td>
+        <td>
+          6704
+          -
+          6732
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.Timeseries.featureOfInterest
+        </td>
+        <td style="background: #F0ADAD">
+          timeseries.featureOfInterest
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1307
+        </td>
+        <td>
+          6733
+          -
+          6893
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&lt;/sos:featureOfInterest&gt;\n       |\n       |    &lt;sos:responseFormat&gt;http://www.opengis.net/om/2.0&lt;/sos:responseFormat&gt;\n       |&lt;/sos:GetObservation&gt;\n          &quot;
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          1315
+        </td>
+        <td>
+          5389
+          -
+          6905
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.augmentString(scala.StringContext.apply(&quot;\n       |&lt;sos:GetObservation\n       |    xmlns:sos=\&quot;http://www.opengis.net/sos/2.0\&quot;\n       |    xmlns:fes=\&quot;http://www.opengis.net/fes/2.0\&quot;\n       |    xmlns:gml=\&quot;http://www.opengis.net/gml/3.2\&quot;\n       |    xmlns:swe=\&quot;http://www.opengis.net/swe/2.0\&quot;\n       |    xmlns:xlink=\&quot;http://www.w3.org/1999/xlink\&quot;\n       |    xmlns:swes=\&quot;http://www.opengis.net/swes/2.0\&quot;\n       |    xmlns:xsi=\&quot;http://www.w3.org/2001/XMLSchema-instance\&quot; service=\&quot;SOS\&quot; version=\&quot;2.0.0\&quot; xsi:schemaLocation=\&quot;http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sos.xsd\&quot;&gt;\n       |\n       |    &lt;sos:procedure&gt;&quot;, &quot;&lt;/sos:procedure&gt;\n       |\n       |    &lt;sos:offering&gt;&quot;, &quot;&lt;/sos:offering&gt;\n       |\n       |    &lt;sos:observedProperty&gt;&quot;, &quot;&lt;/sos:observedProperty&gt;\n       |\n       |    &lt;sos:temporalFilter&gt;\n       |        &lt;fes:During&gt;\n       |            &lt;fes:ValueReference&gt;phenomenonTime&lt;/fes:ValueReference&gt;\n       |            &lt;gml:TimePeriod gml:id=\&quot;tp_1\&quot;&gt;\n       |                &lt;gml:beginPosition&gt;&quot;, &quot;&lt;/gml:beginPosition&gt;\n       |                &lt;gml:endPosition&gt;&quot;, &quot;&lt;/gml:endPosition&gt;\n       |            &lt;/gml:TimePeriod&gt;\n       |        &lt;/fes:During&gt;\n       |    &lt;/sos:temporalFilter&gt;\n       |\n       |    &lt;sos:featureOfInterest&gt;&quot;, &quot;&lt;/sos:featureOfInterest&gt;\n       |\n       |    &lt;sos:responseFormat&gt;http://www.opengis.net/om/2.0&lt;/sos:responseFormat&gt;\n       |&lt;/sos:GetObservation&gt;\n          &quot;).s(timeseries.procedure, timeseries.offering, timeseries.observedProperty, timeseries.fromDate, timeseries.toDate, timeseries.featureOfInterest)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1391
+        </td>
+        <td>
+          7077
+          -
+          8456
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.async
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Action.async(((request: play.api.mvc.Request[play.api.mvc.AnyContent]) =&gt; {
+  val responseFuture: scala.concurrent.Future[play.api.libs.ws.WSResponse] = SosDataController.this.wsClient.url(sosUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)).post[String](SosDataController.this.GET_CAPABILITIES_XML)(http.this.Writeable.wString(mvc.this.Codec.utf_8));
+  responseFuture.recover[Object](({
+    @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+      def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+        $anonfun.super.&lt;init&gt;();
+        ()
+      };
+      final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x2: A1, default: A1 =&gt; B1): B1 = ((x2.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; {
+          SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e);
+          val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()));
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        }
+        case (defaultCase$ @ _) =&gt; default.apply(x2)
+      };
+      final def isDefinedAt(x2: Throwable): Boolean = ((x2.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+        case (e @ (_: Exception)) =&gt; true
+        case (defaultCase$ @ _) =&gt; false
+      }
+    };
+    new $anonfun()
+  }: PartialFunction[Throwable,play.api.mvc.Result]))(scala.concurrent.ExecutionContext.Implicits.global);
+  responseFuture.map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; if (response.status.!=(200))
+    {
+      SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot;&quot;).s(sosUrl, response.status));
+      val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetCapabilities&quot;).s(sosUrl, response.status), scala.Some.apply[String](response.body));
+      SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }
+  else
+    if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+      {
+        SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+        val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+        SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }
+    else
+      {
+        val json: play.api.libs.json.JsValue = models.sosdata.SosCapabilities.fromXml(response.xml, sosUrl).get.toJson();
+        SosDataController.this.Ok.apply[play.api.libs.json.JsValue](json)(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }))(scala.concurrent.ExecutionContext.Implicits.global)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          1316
+        </td>
+        <td>
+          7169
+          -
+          7202
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          1318
+        </td>
+        <td>
+          7215
+          -
+          7215
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          1320
+        </td>
+        <td>
+          7129
+          -
+          7237
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.ws.WSRequest.post
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.wsClient.url(sosUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](SosDataController.this.CONTENT_TYPE).-&gt;[String](&quot;application/xml&quot;)).post[String](SosDataController.this.GET_CAPABILITIES_XML)(http.this.Writeable.wString(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          1317
+        </td>
+        <td>
+          7216
+          -
+          7236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.SosDataController.GET_CAPABILITIES_XML
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.GET_CAPABILITIES_XML
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          1319
+        </td>
+        <td>
+          7215
+          -
+          7215
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.wString
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.wString(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          183
+        </td>
+        <td>
+          1336
+        </td>
+        <td>
+          7243
+          -
+          7555
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.recover
+        </td>
+        <td style="background: #F0ADAD">
+          responseFuture.recover[Object](({
+  @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+    def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+      $anonfun.super.&lt;init&gt;();
+      ()
+    };
+    final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x2: A1, default: A1 =&gt; B1): B1 = ((x2.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; {
+        SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e);
+        val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()));
+        SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+      }
+      case (defaultCase$ @ _) =&gt; default.apply(x2)
+    };
+    final def isDefinedAt(x2: Throwable): Boolean = ((x2.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; true
+      case (defaultCase$ @ _) =&gt; false
+    }
+  };
+  new $anonfun()
+}: PartialFunction[Throwable,play.api.mvc.Result]))(scala.concurrent.ExecutionContext.Implicits.global)
+        </td>
+      </tr><tr>
+        <td>
+          183
+        </td>
+        <td>
+          1335
+        </td>
+        <td>
+          7266
+          -
+          7266
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.SosDataController.$anonfun.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new $anonfun()
+        </td>
+      </tr><tr>
+        <td>
+          185
+        </td>
+        <td>
+          1321
+        </td>
+        <td>
+          7303
+          -
+          7358
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(&quot;Sos get capabilities threw exception&quot;, e)
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          1324
+        </td>
+        <td>
+          7406
+          -
+          7433
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Class.getCanonicalName
+        </td>
+        <td style="background: #F0ADAD">
+          e.getClass().getCanonicalName()
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          1323
+        </td>
+        <td>
+          7434
+          -
+          7461
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;) on SOS get capabilities.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          1328
+        </td>
+        <td>
+          7379
+          -
+          7492
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName()), scala.Some.apply[String](e.getMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          1322
+        </td>
+        <td>
+          7393
+          -
+          7405
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Exception (&quot;
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          1325
+        </td>
+        <td>
+          7391
+          -
+          7461
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Exception (&quot;, &quot;) on SOS get capabilities.&quot;).s(e.getClass().getCanonicalName())
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          1327
+        </td>
+        <td>
+          7473
+          -
+          7491
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](e.getMessage())
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          1326
+        </td>
+        <td>
+          7478
+          -
+          7490
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getMessage()
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1333
+        </td>
+        <td>
+          7544
+          -
+          7548
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1330
+        </td>
+        <td>
+          7521
+          -
+          7539
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1329
+        </td>
+        <td>
+          7532
+          -
+          7532
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1332
+        </td>
+        <td>
+          7520
+          -
+          7520
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1334
+        </td>
+        <td>
+          7501
+          -
+          7549
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          1331
+        </td>
+        <td>
+          7520
+          -
+          7520
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1390
+        </td>
+        <td>
+          7561
+          -
+          8452
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.map
+        </td>
+        <td style="background: #F0ADAD">
+          responseFuture.map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; if (response.status.!=(200))
+  {
+    SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot;&quot;).s(sosUrl, response.status));
+    val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetCapabilities&quot;).s(sosUrl, response.status), scala.Some.apply[String](response.body));
+    SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+else
+  if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+    {
+      SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+      val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+      SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }
+  else
+    {
+      val json: play.api.libs.json.JsValue = models.sosdata.SosCapabilities.fromXml(response.xml, sosUrl).get.toJson();
+      SosDataController.this.Ok.apply[play.api.libs.json.JsValue](json)(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+    }))(scala.concurrent.ExecutionContext.Implicits.global)
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1337
+        </td>
+        <td>
+          7604
+          -
+          7626
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.!=
+        </td>
+        <td style="background: #F0ADAD">
+          response.status.!=(200)
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1358
+        </td>
+        <td>
+          7628
+          -
+          7916
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot;&quot;).s(sosUrl, response.status));
+  val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetCapabilities&quot;).s(sosUrl, response.status), scala.Some.apply[String](response.body));
+  SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1342
+        </td>
+        <td>
+          7651
+          -
+          7713
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot;&quot;).s(sosUrl, response.status)
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1339
+        </td>
+        <td>
+          7674
+          -
+          7695
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; HTTP result status &quot;
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1338
+        </td>
+        <td>
+          7653
+          -
+          7666
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Calling SOS &quot;
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1341
+        </td>
+        <td>
+          7696
+          -
+          7711
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.status
+        </td>
+        <td style="background: #F0ADAD">
+          response.status
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1343
+        </td>
+        <td>
+          7638
+          -
+          7714
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(scala.StringContext.apply(&quot;Calling SOS &quot;, &quot; HTTP result status &quot;, &quot;&quot;).s(sosUrl, response.status))
+        </td>
+      </tr><tr>
+        <td>
+          193
+        </td>
+        <td>
+          1340
+        </td>
+        <td>
+          7712
+          -
+          7713
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1351
+        </td>
+        <td>
+          7735
+          -
+          7851
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetCapabilities&quot;).s(sosUrl, response.status), scala.Some.apply[String](response.body))
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1345
+        </td>
+        <td>
+          7765
+          -
+          7782
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; responded with &quot;
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1348
+        </td>
+        <td>
+          7747
+          -
+          7819
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Server &quot;, &quot; responded with &quot;, &quot; on GetCapabilities&quot;).s(sosUrl, response.status)
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1347
+        </td>
+        <td>
+          7783
+          -
+          7798
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.status
+        </td>
+        <td style="background: #F0ADAD">
+          response.status
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1344
+        </td>
+        <td>
+          7749
+          -
+          7757
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Server &quot;
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          1346
+        </td>
+        <td>
+          7799
+          -
+          7819
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; on GetCapabilities&quot;
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          1350
+        </td>
+        <td>
+          7831
+          -
+          7850
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](response.body)
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          1349
+        </td>
+        <td>
+          7836
+          -
+          7849
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.body
+        </td>
+        <td style="background: #F0ADAD">
+          response.body
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1357
+        </td>
+        <td>
+          7860
+          -
+          7908
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1354
+        </td>
+        <td>
+          7879
+          -
+          7879
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1356
+        </td>
+        <td>
+          7903
+          -
+          7907
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1353
+        </td>
+        <td>
+          7880
+          -
+          7898
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1352
+        </td>
+        <td>
+          7891
+          -
+          7891
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          1355
+        </td>
+        <td>
+          7879
+          -
+          7879
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          1360
+        </td>
+        <td>
+          7978
+          -
+          7995
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;application/xml&quot;
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          1389
+        </td>
+        <td>
+          7928
+          -
+          8445
+        </td>
+        <td>
+          If
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          if (response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!)
+  {
+    SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+    val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+    SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+else
+  {
+    val json: play.api.libs.json.JsValue = models.sosdata.SosCapabilities.fromXml(response.xml, sosUrl).get.toJson();
+    SosDataController.this.Ok.apply[play.api.libs.json.JsValue](json)(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+  }
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          1359
+        </td>
+        <td>
+          7949
+          -
+          7963
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          1361
+        </td>
+        <td>
+          7932
+          -
+          7996
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Boolean.unary_!
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get.contains(&quot;application/xml&quot;).unary_!
+        </td>
+      </tr><tr>
+        <td>
+          198
+        </td>
+        <td>
+          1382
+        </td>
+        <td>
+          7998
+          -
+          8320
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get));
+  val error: models.ErrorResult = models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body));
+  SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1366
+        </td>
+        <td>
+          8021
+          -
+          8105
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get)
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1363
+        </td>
+        <td>
+          8104
+          -
+          8105
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1365
+        </td>
+        <td>
+          8068
+          -
+          8103
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1362
+        </td>
+        <td>
+          8023
+          -
+          8067
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;SOS GetCapabilities result was not XML but &quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1364
+        </td>
+        <td>
+          8084
+          -
+          8098
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          1367
+        </td>
+        <td>
+          8008
+          -
+          8106
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.logger.error(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get))
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1375
+        </td>
+        <td>
+          8127
+          -
+          8255
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get), scala.Some.apply[String](response.body))
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1369
+        </td>
+        <td>
+          8222
+          -
+          8223
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1372
+        </td>
+        <td>
+          8139
+          -
+          8223
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;SOS GetCapabilities result was not XML but &quot;, &quot;&quot;).s(response.header(&quot;Content-Type&quot;).get)
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1368
+        </td>
+        <td>
+          8141
+          -
+          8185
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;SOS GetCapabilities result was not XML but &quot;
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1371
+        </td>
+        <td>
+          8186
+          -
+          8221
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          response.header(&quot;Content-Type&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          1370
+        </td>
+        <td>
+          8202
+          -
+          8216
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Content-Type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          201
+        </td>
+        <td>
+          1374
+        </td>
+        <td>
+          8235
+          -
+          8254
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](response.body)
+        </td>
+      </tr><tr>
+        <td>
+          201
+        </td>
+        <td>
+          1373
+        </td>
+        <td>
+          8240
+          -
+          8253
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.body
+        </td>
+        <td style="background: #F0ADAD">
+          response.body
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1378
+        </td>
+        <td>
+          8283
+          -
+          8283
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1381
+        </td>
+        <td>
+          8264
+          -
+          8312
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1380
+        </td>
+        <td>
+          8307
+          -
+          8311
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1377
+        </td>
+        <td>
+          8284
+          -
+          8302
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1379
+        </td>
+        <td>
+          8283
+          -
+          8283
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          1376
+        </td>
+        <td>
+          8295
+          -
+          8295
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          204
+        </td>
+        <td>
+          1388
+        </td>
+        <td>
+          8332
+          -
+          8445
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val json: play.api.libs.json.JsValue = models.sosdata.SosCapabilities.fromXml(response.xml, sosUrl).get.toJson();
+  SosDataController.this.Ok.apply[play.api.libs.json.JsValue](json)(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          205
+        </td>
+        <td>
+          1383
+        </td>
+        <td>
+          8353
+          -
+          8411
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.SosCapabilities.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          models.sosdata.SosCapabilities.fromXml(response.xml, sosUrl).get.toJson()
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          1384
+        </td>
+        <td>
+          8422
+          -
+          8422
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          1387
+        </td>
+        <td>
+          8420
+          -
+          8437
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.Ok.apply[play.api.libs.json.JsValue](json)(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(SosDataController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          1386
+        </td>
+        <td>
+          8432
+          -
+          8436
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          SosDataController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          1385
+        </td>
+        <td>
+          8422
+          -
+          8422
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

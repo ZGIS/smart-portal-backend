@@ -1,0 +1,1219 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcLinkDAO.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.net.URL
+</span>23 <span style=''>import java.sql.Connection
+</span>24 <span style=''>import java.util.UUID
+</span>25 <span style=''>
+</span>26 <span style=''>import anorm.SqlParser._
+</span>27 <span style=''>import anorm._
+</span>28 <span style=''>import info.smart.models.owc100._
+</span>29 <span style=''>import utils.ClassnameLogger
+</span>30 <span style=''>
+</span>31 <span style=''>/** ************
+</span>32 <span style=''>  * OwcLink
+</span>33 <span style=''>  * ************/
+</span>34 <span style=''>object OwcLinkDAO extends ClassnameLogger {
+</span>35 <span style=''>
+</span>36 <span style=''>  /**
+</span>37 <span style=''>    * Parse a OwcLink from a ResultSet
+</span>38 <span style=''>    */
+</span>39 <span style=''>  private val owcLinkParser = {
+</span>40 <span style=''>    </span><span style='background: #AEF1AE'>str(&quot;owc_links.uuid&quot;) ~
+</span>41 <span style=''></span><span style='background: #AEF1AE'>      str(&quot;owc_links.href&quot;) ~
+</span>42 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]](&quot;owc_links.mime_type&quot;) ~
+</span>43 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]](&quot;owc_links.lang&quot;) ~
+</span>44 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]](&quot;owc_links.title&quot;) ~
+</span>45 <span style=''></span><span style='background: #AEF1AE'>      get[Option[Int]](&quot;owc_links.length&quot;) ~
+</span>46 <span style=''></span><span style='background: #AEF1AE'>      str(&quot;owc_links.rel&quot;) map {
+</span>47 <span style=''></span><span style='background: #AEF1AE'>      case uuid ~ href ~ mimeType ~ lang ~ title ~ length ~ rel =&gt;
+</span>48 <span style=''></span><span style='background: #AEF1AE'>        OwcLink(new URL(href), mimeType, lang, title, length, rel, UUID.fromString(uuid))
+</span>49 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>50 <span style=''>  }
+</span>51 <span style=''>
+</span>52 <span style=''>  /**
+</span>53 <span style=''>    * Retrieve all OwcLink.
+</span>54 <span style=''>    *
+</span>55 <span style=''>    * @param connection implicit connection
+</span>56 <span style=''>    * @return
+</span>57 <span style=''>    */
+</span>58 <span style=''>  def getAllOwcLinks(implicit connection: Connection): Seq[OwcLink] = {
+</span>59 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;select owc_links.* from $tableOwcLinks&quot;).as(owcLinkParser *)</span><span style=''>
+</span>60 <span style=''>  }
+</span>61 <span style=''>
+</span>62 <span style=''>  /**
+</span>63 <span style=''>    * Find OwcLinks by uuid
+</span>64 <span style=''>    *
+</span>65 <span style=''>    * @param uuid
+</span>66 <span style=''>    * @param connection implicit connection
+</span>67 <span style=''>    * @return
+</span>68 <span style=''>    */
+</span>69 <span style=''>  def findOwcLinkByUuid(uuid: UUID)(implicit connection: Connection): Option[OwcLink] = {
+</span>70 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;&quot;&quot;select owc_links.* from $tableOwcLinks where uuid = '${uuid.toString}'&quot;&quot;&quot;).as(owcLinkParser.singleOpt)</span><span style=''>
+</span>71 <span style=''>  }
+</span>72 <span style=''>
+</span>73 <span style=''>  /**
+</span>74 <span style=''>    * Create an OwcLink.
+</span>75 <span style=''>    *
+</span>76 <span style=''>    * @param owcLink
+</span>77 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>78 <span style=''>    * @return
+</span>79 <span style=''>    */
+</span>80 <span style=''>  def createOwcLink(owcLink: OwcLink)(implicit connection: Connection): Option[OwcLink] = {
+</span>81 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>82 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>83 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcLinks values (
+</span>84 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {href}, {mimeType}, {lang}, {title}, {length}, {rel}
+</span>85 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>86 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(
+</span>87 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcLink.uuid.toString,
+</span>88 <span style=''></span><span style='background: #AEF1AE'>      'href -&gt; owcLink.href.toString,
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      'mimeType -&gt; owcLink.mimeType,
+</span>90 <span style=''></span><span style='background: #AEF1AE'>      'lang -&gt; owcLink.lang,
+</span>91 <span style=''></span><span style='background: #AEF1AE'>      'title -&gt; owcLink.title,
+</span>92 <span style=''></span><span style='background: #AEF1AE'>      'length -&gt; owcLink.length,
+</span>93 <span style=''></span><span style='background: #AEF1AE'>      'rel -&gt; owcLink.rel
+</span>94 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>95 <span style=''>
+</span>96 <span style=''>    rowCount match {
+</span>97 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcLink)</span><span style=''>
+</span>98 <span style=''>      case _ =&gt;
+</span>99 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(&quot;OwcLink couldn't be created&quot;)</span><span style=''>
+</span>100 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>101 <span style=''>    }
+</span>102 <span style=''>  }
+</span>103 <span style=''>
+</span>104 <span style=''>  /**
+</span>105 <span style=''>    * Update single OwcLink
+</span>106 <span style=''>    *
+</span>107 <span style=''>    * @param owcLink
+</span>108 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>109 <span style=''>    * @return
+</span>110 <span style=''>    */
+</span>111 <span style=''>  def updateOwcLink(owcLink: OwcLink)(implicit connection: Connection): Option[OwcLink] = {
+</span>112 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>113 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>114 <span style=''></span><span style='background: #AEF1AE'>          update $tableOwcLinks set
+</span>115 <span style=''></span><span style='background: #AEF1AE'>            href = {href},
+</span>116 <span style=''></span><span style='background: #AEF1AE'>            mime_type = {mimeType},
+</span>117 <span style=''></span><span style='background: #AEF1AE'>            lang = {lang},
+</span>118 <span style=''></span><span style='background: #AEF1AE'>            title = {title},
+</span>119 <span style=''></span><span style='background: #AEF1AE'>            length = {length},
+</span>120 <span style=''></span><span style='background: #AEF1AE'>            rel = {rel} where uuid = {uuid}
+</span>121 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(
+</span>122 <span style=''></span><span style='background: #AEF1AE'>      'href -&gt; owcLink.href.toString,
+</span>123 <span style=''></span><span style='background: #AEF1AE'>      'mimeType -&gt; owcLink.mimeType,
+</span>124 <span style=''></span><span style='background: #AEF1AE'>      'lang -&gt; owcLink.lang,
+</span>125 <span style=''></span><span style='background: #AEF1AE'>      'title -&gt; owcLink.title,
+</span>126 <span style=''></span><span style='background: #AEF1AE'>      'length -&gt; owcLink.length,
+</span>127 <span style=''></span><span style='background: #AEF1AE'>      'rel -&gt; owcLink.rel,
+</span>128 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcLink.uuid.toString
+</span>129 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>130 <span style=''>
+</span>131 <span style=''>    rowCount match {
+</span>132 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcLink)</span><span style=''>
+</span>133 <span style=''>      case _ =&gt;
+</span>134 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(&quot;OwcLink couldn't be updated&quot;)</span><span style=''>
+</span>135 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>136 <span style=''>    }
+</span>137 <span style=''>  }
+</span>138 <span style=''>
+</span>139 <span style=''>  /**
+</span>140 <span style=''>    * delete an OwcLink
+</span>141 <span style=''>    *
+</span>142 <span style=''>    * @param owcLink
+</span>143 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>144 <span style=''>    * @return
+</span>145 <span style=''>    */
+</span>146 <span style=''>  def deleteOwcLink(owcLink: OwcLink)(implicit connection: Connection): Boolean = {
+</span>147 <span style=''>    </span><span style='background: #AEF1AE'>deleteOwcLinkByUuid(owcLink.uuid)</span><span style=''>
+</span>148 <span style=''>  }
+</span>149 <span style=''>
+</span>150 <span style=''>  /**
+</span>151 <span style=''>    * delete an OwcLink by uuid
+</span>152 <span style=''>    *
+</span>153 <span style=''>    * @param uuid
+</span>154 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>155 <span style=''>    * @return
+</span>156 <span style=''>    */
+</span>157 <span style=''>  def deleteOwcLinkByUuid(uuid: UUID)(implicit connection: Connection): Boolean = {
+</span>158 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(s&quot;delete from $tableOwcLinks where uuid = {uuid}&quot;).on(
+</span>159 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; uuid.toString
+</span>160 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>161 <span style=''>
+</span>162 <span style=''>    rowCount match {
+</span>163 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>164 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;OwcLink couldn't be deleted&quot;)</span><span style=''>
+</span>165 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>166 <span style=''>    }
+</span>167 <span style=''>  }
+</span>168 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          4984
+        </td>
+        <td>
+          1256
+          -
+          1256
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          4983
+        </td>
+        <td>
+          1257
+          -
+          1273
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4987
+        </td>
+        <td>
+          1283
+          -
+          1304
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_links.href&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4986
+        </td>
+        <td>
+          1286
+          -
+          1286
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4985
+        </td>
+        <td>
+          1287
+          -
+          1303
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.href&quot;
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4991
+        </td>
+        <td>
+          1313
+          -
+          1355
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_links.mime_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4990
+        </td>
+        <td>
+          1332
+          -
+          1332
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4989
+        </td>
+        <td>
+          1332
+          -
+          1332
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4988
+        </td>
+        <td>
+          1333
+          -
+          1354
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.mime_type&quot;
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4993
+        </td>
+        <td>
+          1383
+          -
+          1383
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4992
+        </td>
+        <td>
+          1384
+          -
+          1400
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.lang&quot;
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4995
+        </td>
+        <td>
+          1364
+          -
+          1401
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_links.lang&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4994
+        </td>
+        <td>
+          1383
+          -
+          1383
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          4999
+        </td>
+        <td>
+          1410
+          -
+          1448
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_links.title&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          4996
+        </td>
+        <td>
+          1430
+          -
+          1447
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.title&quot;
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          4998
+        </td>
+        <td>
+          1429
+          -
+          1429
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          4997
+        </td>
+        <td>
+          1429
+          -
+          1429
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          5000
+        </td>
+        <td>
+          1474
+          -
+          1492
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.length&quot;
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          5002
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt)
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          5001
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToInt
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToInt
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          5003
+        </td>
+        <td>
+          1457
+          -
+          1493
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[Int]](&quot;owc_links.length&quot;)(anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt))
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          5005
+        </td>
+        <td>
+          1505
+          -
+          1505
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          5010
+        </td>
+        <td>
+          1253
+          -
+          1691
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_links.uuid&quot;)(anorm.this.Column.columnToString).~[String](anorm.SqlParser.str(&quot;owc_links.href&quot;)(anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_links.mime_type&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_links.lang&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_links.title&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[Int]](anorm.SqlParser.get[Option[Int]](&quot;owc_links.length&quot;)(anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt))).~[String](anorm.SqlParser.str(&quot;owc_links.rel&quot;)(anorm.this.Column.columnToString)).map[info.smart.models.owc100.OwcLink](((x0$1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]],Option[Int]],String]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]],Option[Int]], _2: String)anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]],Option[Int]],String]((_1: anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]], _2: Option[Int])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]],Option[Int]]((_1: anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]],Option[String]]((_1: anorm.~[anorm.~[String,String],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[String]]((_1: anorm.~[String,String], _2: Option[String])anorm.~[anorm.~[String,String],Option[String]]((_1: String, _2: String)anorm.~[String,String]((uuid @ _), (href @ _)), (mimeType @ _)), (lang @ _)), (title @ _)), (length @ _)), (rel @ _)) =&gt; info.smart.models.owc100.OwcLink.apply(new java.net.URL(href), mimeType, lang, title, length, rel, java.util.UUID.fromString(uuid))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          5004
+        </td>
+        <td>
+          1506
+          -
+          1521
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_links.rel&quot;
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          5006
+        </td>
+        <td>
+          1502
+          -
+          1522
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_links.rel&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          5009
+        </td>
+        <td>
+          1604
+          -
+          1685
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcLink.apply
+        </td>
+        <td style="background: #AEF1AE">
+          info.smart.models.owc100.OwcLink.apply(new java.net.URL(href), mimeType, lang, title, length, rel, java.util.UUID.fromString(uuid))
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          5008
+        </td>
+        <td>
+          1663
+          -
+          1684
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          5007
+        </td>
+        <td>
+          1612
+          -
+          1625
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.net.URL.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new java.net.URL(href)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          5011
+        </td>
+        <td>
+          1878
+          -
+          1944
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_links.* from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcLinks))).as[List[info.smart.models.owc100.OwcLink]](OwcLinkDAO.this.owcLinkParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          5012
+        </td>
+        <td>
+          2167
+          -
+          2277
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_links.* from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcLinks, uuid.toString()))).as[Option[info.smart.models.owc100.OwcLink]](OwcLinkDAO.this.owcLinkParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          5013
+        </td>
+        <td>
+          2571
+          -
+          2988
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {href}, {mimeType}, {lang}, {title}, {length}, {rel}\n          )\n        &quot;).s(owc.this.`package`.tableOwcLinks))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcLink.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$4: String = a;
+    &lt;artifact&gt; val x$5: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$6: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$4);
+    anorm.this.ParameterValue.toParameterValue[String](x$4)(x$6, x$5)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcLink.href.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$10: String = a;
+    &lt;artifact&gt; val x$11: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$12: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$10);
+    anorm.this.ParameterValue.toParameterValue[String](x$10)(x$12, x$11)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;mimeType&quot;)).-&gt;[Option[String]](owcLink.mimeType))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$16: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$17: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$18: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$16);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$16)(x$18, x$17)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;lang&quot;)).-&gt;[Option[String]](owcLink.lang))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$22: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$22);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$22)(x$24, x$23)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[Option[String]](owcLink.title))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$28: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$28);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$28)(x$30, x$29)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;length&quot;)).-&gt;[Option[Int]](owcLink.length))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$34: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$34);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$34)(x$36, x$35)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;rel&quot;)).-&gt;[String](owcLink.rel))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$40: String = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$40);
+    anorm.this.ParameterValue.toParameterValue[String](x$40)(x$42, x$41)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          5014
+        </td>
+        <td>
+          3027
+          -
+          3040
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcLink](owcLink)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          5015
+        </td>
+        <td>
+          3065
+          -
+          3108
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcLinkDAO.this.logger.error(&quot;OwcLink couldn\'t be created&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          5016
+        </td>
+        <td>
+          3117
+          -
+          3121
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          5017
+        </td>
+        <td>
+          3424
+          -
+          3940
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          update &quot;, &quot; set\n            href = {href},\n            mime_type = {mimeType},\n            lang = {lang},\n            title = {title},\n            length = {length},\n            rel = {rel} where uuid = {uuid}\n        &quot;).s(owc.this.`package`.tableOwcLinks))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;href&quot;)).-&gt;[String](owcLink.href.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$46: String = a;
+    &lt;artifact&gt; val x$47: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$48: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$46);
+    anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;mimeType&quot;)).-&gt;[Option[String]](owcLink.mimeType))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$52: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$53: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$54: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$52);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$52)(x$54, x$53)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;lang&quot;)).-&gt;[Option[String]](owcLink.lang))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$58: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$59: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$60: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$58);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$58)(x$60, x$59)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[Option[String]](owcLink.title))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$64: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$65: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$66: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$64);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$64)(x$66, x$65)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;length&quot;)).-&gt;[Option[Int]](owcLink.length))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$70: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$71: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$72: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$70);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$70)(x$72, x$71)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;rel&quot;)).-&gt;[String](owcLink.rel))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$76: String = a;
+    &lt;artifact&gt; val x$77: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$78: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$76);
+    anorm.this.ParameterValue.toParameterValue[String](x$76)(x$78, x$77)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcLink.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$82: String = a;
+    &lt;artifact&gt; val x$83: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$84: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$82);
+    anorm.this.ParameterValue.toParameterValue[String](x$82)(x$84, x$83)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          5018
+        </td>
+        <td>
+          3979
+          -
+          3992
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcLink](owcLink)
+        </td>
+      </tr><tr>
+        <td>
+          134
+        </td>
+        <td>
+          5019
+        </td>
+        <td>
+          4017
+          -
+          4060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcLinkDAO.this.logger.error(&quot;OwcLink couldn\'t be updated&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          5020
+        </td>
+        <td>
+          4069
+          -
+          4073
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          147
+        </td>
+        <td>
+          5021
+        </td>
+        <td>
+          4349
+          -
+          4382
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcLinkDAO.deleteOwcLinkByUuid
+        </td>
+        <td style="background: #AEF1AE">
+          OwcLinkDAO.this.deleteOwcLinkByUuid(owcLink.uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          5022
+        </td>
+        <td>
+          4672
+          -
+          4781
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcLinks))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$88: String = a;
+    &lt;artifact&gt; val x$89: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$90: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$88);
+    anorm.this.ParameterValue.toParameterValue[String](x$88)(x$90, x$89)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          5023
+        </td>
+        <td>
+          4820
+          -
+          4824
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          5024
+        </td>
+        <td>
+          4841
+          -
+          4884
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcLinkDAO.this.logger.error(&quot;OwcLink couldn\'t be deleted&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          5025
+        </td>
+        <td>
+          4893
+          -
+          4898
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

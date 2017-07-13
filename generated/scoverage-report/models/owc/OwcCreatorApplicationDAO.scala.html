@@ -1,0 +1,978 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcCreatorApplicationDAO.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.net.URL
+</span>23 <span style=''>import java.sql.Connection
+</span>24 <span style=''>import java.util.UUID
+</span>25 <span style=''>
+</span>26 <span style=''>import anorm.SqlParser._
+</span>27 <span style=''>import anorm._
+</span>28 <span style=''>import info.smart.models.owc100._
+</span>29 <span style=''>import utils.ClassnameLogger
+</span>30 <span style=''>
+</span>31 <span style=''>/** *********
+</span>32 <span style=''>  * DAO for [[OwcCreatorApplication]]
+</span>33 <span style=''>  * **********/
+</span>34 <span style=''>object OwcCreatorApplicationDAO extends ClassnameLogger {
+</span>35 <span style=''>
+</span>36 <span style=''>  /**
+</span>37 <span style=''>    * Parse a OwcCreatorApplication from a ResultSet
+</span>38 <span style=''>    */
+</span>39 <span style=''>  private val owcCreatorApplicationParser = {
+</span>40 <span style=''>    </span><span style='background: #AEF1AE'>get[Option[String]](&quot;owc_creator_applications.title&quot;) ~
+</span>41 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]](&quot;owc_creator_applications.uri&quot;) ~
+</span>42 <span style=''></span><span style='background: #AEF1AE'>      get[Option[String]](&quot;owc_creator_applications.version&quot;) ~
+</span>43 <span style=''></span><span style='background: #AEF1AE'>      str(&quot;owc_creator_applications.uuid&quot;) map {
+</span>44 <span style=''></span><span style='background: #AEF1AE'>      case title ~ uri ~ version ~ uuid =&gt;
+</span>45 <span style=''></span><span style='background: #AEF1AE'>        OwcCreatorApplication(title = title,
+</span>46 <span style=''></span><span style='background: #AEF1AE'>          uri = uri.map(new URL(_)),
+</span>47 <span style=''></span><span style='background: #AEF1AE'>          version = version,
+</span>48 <span style=''></span><span style='background: #AEF1AE'>          uuid = UUID.fromString(uuid))
+</span>49 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>50 <span style=''>  }
+</span>51 <span style=''>
+</span>52 <span style=''>  /**
+</span>53 <span style=''>    * Retrieve all OwcCreatorApplications.
+</span>54 <span style=''>    *
+</span>55 <span style=''>    * @param connection implicit connection
+</span>56 <span style=''>    * @return
+</span>57 <span style=''>    */
+</span>58 <span style=''>  def getAllOwcCreatorApplications()(implicit connection: Connection): Seq[OwcCreatorApplication] = {
+</span>59 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;select owc_creator_applications.* from $tableOwcCreatorApplications&quot;).as(owcCreatorApplicationParser *)</span><span style=''>
+</span>60 <span style=''>  }
+</span>61 <span style=''>
+</span>62 <span style=''>  /**
+</span>63 <span style=''>    * Find specific OwcCreatorApplication.
+</span>64 <span style=''>    *
+</span>65 <span style=''>    * @param uuid
+</span>66 <span style=''>    * @param connection implicit connection
+</span>67 <span style=''>    * @return
+</span>68 <span style=''>    */
+</span>69 <span style=''>  def findOwcCreatorApplicationByUuid(uuid: UUID)(implicit connection: Connection): Option[OwcCreatorApplication] = {
+</span>70 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;&quot;&quot;select owc_creator_applications.* from $tableOwcCreatorApplications where uuid = '${uuid.toString}'&quot;&quot;&quot;).as(owcCreatorApplicationParser.singleOpt)</span><span style=''>
+</span>71 <span style=''>  }
+</span>72 <span style=''>
+</span>73 <span style=''>  /**
+</span>74 <span style=''>    * Create an owcCreatorApplication.
+</span>75 <span style=''>    *
+</span>76 <span style=''>    * @param owcCreatorApplication
+</span>77 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>78 <span style=''>    * @return
+</span>79 <span style=''>    */
+</span>80 <span style=''>  def createOwcCreatorApplication(owcCreatorApplication: OwcCreatorApplication)(implicit connection: Connection): Option[OwcCreatorApplication] = {
+</span>81 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>82 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>83 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcCreatorApplications values (
+</span>84 <span style=''></span><span style='background: #AEF1AE'>            {uuid}, {title}, {uri}, {version}
+</span>85 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>86 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(
+</span>87 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcCreatorApplication.uuid.toString,
+</span>88 <span style=''></span><span style='background: #AEF1AE'>      'title -&gt; owcCreatorApplication.title,
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      'uri -&gt; owcCreatorApplication.uri.map(_.toString),
+</span>90 <span style=''></span><span style='background: #AEF1AE'>      'version -&gt; owcCreatorApplication.version
+</span>91 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>92 <span style=''>
+</span>93 <span style=''>    rowCount match {
+</span>94 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcCreatorApplication)</span><span style=''>
+</span>95 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;owcCreatorApplication couldn't be created&quot;)</span><span style=''>
+</span>96 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>97 <span style=''>    }
+</span>98 <span style=''>  }
+</span>99 <span style=''>
+</span>100 <span style=''>  /**
+</span>101 <span style=''>    * Update single OwcCreatorApplication
+</span>102 <span style=''>    *
+</span>103 <span style=''>    * @param owcCreatorApplication
+</span>104 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>105 <span style=''>    * @return
+</span>106 <span style=''>    */
+</span>107 <span style=''>  def updateOwcCreatorApplication(owcCreatorApplication: OwcCreatorApplication)(implicit connection: Connection): Option[OwcCreatorApplication] = {
+</span>108 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>109 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>110 <span style=''></span><span style='background: #AEF1AE'>          update $tableOwcCreatorApplications set
+</span>111 <span style=''></span><span style='background: #AEF1AE'>            title = {title},
+</span>112 <span style=''></span><span style='background: #AEF1AE'>            uri = {uri},
+</span>113 <span style=''></span><span style='background: #AEF1AE'>            version = {version} where uuid = {uuid}
+</span>114 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(
+</span>115 <span style=''></span><span style='background: #AEF1AE'>      'title -&gt; owcCreatorApplication.title,
+</span>116 <span style=''></span><span style='background: #AEF1AE'>      'uri -&gt; owcCreatorApplication.uri.map(_.toString()),
+</span>117 <span style=''></span><span style='background: #AEF1AE'>      'version -&gt; owcCreatorApplication.version,
+</span>118 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcCreatorApplication.uuid.toString
+</span>119 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>120 <span style=''>
+</span>121 <span style=''>    rowCount match {
+</span>122 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcCreatorApplication)</span><span style=''>
+</span>123 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;owcCreatorApplication couldn't be updated&quot;)</span><span style=''>
+</span>124 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>125 <span style=''>    }
+</span>126 <span style=''>  }
+</span>127 <span style=''>
+</span>128 <span style=''>  /**
+</span>129 <span style=''>    * delete an OwcCreatorApplication
+</span>130 <span style=''>    *
+</span>131 <span style=''>    * @param owcCreatorApplication
+</span>132 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>133 <span style=''>    * @return
+</span>134 <span style=''>    */
+</span>135 <span style=''>  def deleteOwcCreatorApplication(owcCreatorApplication: OwcCreatorApplication)(implicit connection: Connection): Boolean = {
+</span>136 <span style=''>    </span><span style='background: #AEF1AE'>deleteOwcCreatorApplicationByUuid(owcCreatorApplication.uuid)</span><span style=''>
+</span>137 <span style=''>  }
+</span>138 <span style=''>
+</span>139 <span style=''>  /**
+</span>140 <span style=''>    * delete an OwcCreatorApplication
+</span>141 <span style=''>    *
+</span>142 <span style=''>    * @param uuid
+</span>143 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>144 <span style=''>    * @return
+</span>145 <span style=''>    */
+</span>146 <span style=''>  def deleteOwcCreatorApplicationByUuid(uuid: UUID)(implicit connection: Connection): Boolean = {
+</span>147 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(s&quot;delete from $tableOwcCreatorApplications where uuid = {uuid}&quot;).on(
+</span>148 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; uuid.toString
+</span>149 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>150 <span style=''>
+</span>151 <span style=''>    rowCount match {
+</span>152 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>153 <span style=''>      case _ =&gt;
+</span>154 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(&quot;owcCreatorApplication couldn't be deleted&quot;)</span><span style=''>
+</span>155 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>156 <span style=''>    }
+</span>157 <span style=''>  }
+</span>158 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          4919
+        </td>
+        <td>
+          1335
+          -
+          1335
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          4918
+        </td>
+        <td>
+          1335
+          -
+          1335
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          4917
+        </td>
+        <td>
+          1336
+          -
+          1368
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_applications.title&quot;
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4922
+        </td>
+        <td>
+          1397
+          -
+          1397
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4921
+        </td>
+        <td>
+          1397
+          -
+          1397
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4920
+        </td>
+        <td>
+          1398
+          -
+          1428
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_applications.uri&quot;
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          4923
+        </td>
+        <td>
+          1378
+          -
+          1429
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_creator_applications.uri&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4924
+        </td>
+        <td>
+          1458
+          -
+          1492
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_applications.version&quot;
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4927
+        </td>
+        <td>
+          1438
+          -
+          1493
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_creator_applications.version&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4926
+        </td>
+        <td>
+          1457
+          -
+          1457
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          4925
+        </td>
+        <td>
+          1457
+          -
+          1457
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4928
+        </td>
+        <td>
+          1506
+          -
+          1537
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_applications.uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4930
+        </td>
+        <td>
+          1502
+          -
+          1538
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_creator_applications.uuid&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4929
+        </td>
+        <td>
+          1505
+          -
+          1505
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          43
+        </td>
+        <td>
+          4935
+        </td>
+        <td>
+          1316
+          -
+          1744
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_creator_applications.title&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_creator_applications.uri&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_creator_applications.version&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[String](anorm.SqlParser.str(&quot;owc_creator_applications.uuid&quot;)(anorm.this.Column.columnToString)).map[info.smart.models.owc100.OwcCreatorApplication](((x0$1: anorm.~[anorm.~[anorm.~[Option[String],Option[String]],Option[String]],String]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[Option[String],Option[String]],Option[String]], _2: String)anorm.~[anorm.~[anorm.~[Option[String],Option[String]],Option[String]],String]((_1: anorm.~[Option[String],Option[String]], _2: Option[String])anorm.~[anorm.~[Option[String],Option[String]],Option[String]]((_1: Option[String], _2: Option[String])anorm.~[Option[String],Option[String]]((title @ _), (uri @ _)), (version @ _)), (uuid @ _)) =&gt; info.smart.models.owc100.OwcCreatorApplication.apply(title, uri.map[java.net.URL](((x$1: String) =&gt; new java.net.URL(x$1))), version, java.util.UUID.fromString(uuid))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          4934
+        </td>
+        <td>
+          1596
+          -
+          1738
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcCreatorApplication.apply
+        </td>
+        <td style="background: #AEF1AE">
+          info.smart.models.owc100.OwcCreatorApplication.apply(title, uri.map[java.net.URL](((x$1: String) =&gt; new java.net.URL(x$1))), version, java.util.UUID.fromString(uuid))
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          4931
+        </td>
+        <td>
+          1657
+          -
+          1667
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.net.URL.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new java.net.URL(x$1)
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          4932
+        </td>
+        <td>
+          1649
+          -
+          1668
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td style="background: #AEF1AE">
+          uri.map[java.net.URL](((x$1: String) =&gt; new java.net.URL(x$1)))
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          4933
+        </td>
+        <td>
+          1716
+          -
+          1737
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          4936
+        </td>
+        <td>
+          1976
+          -
+          2085
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_creator_applications.* from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcCreatorApplications))).as[List[info.smart.models.owc100.OwcCreatorApplication]](OwcCreatorApplicationDAO.this.owcCreatorApplicationParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          4937
+        </td>
+        <td>
+          2351
+          -
+          2504
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_creator_applications.* from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcCreatorApplications, uuid.toString()))).as[Option[info.smart.models.owc100.OwcCreatorApplication]](OwcCreatorApplicationDAO.this.owcCreatorApplicationParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          4938
+        </td>
+        <td>
+          2882
+          -
+          3256
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {uuid}, {title}, {uri}, {version}\n          )\n        &quot;).s(owc.this.`package`.tableOwcCreatorApplications))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcCreatorApplication.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$7: String = a;
+    &lt;artifact&gt; val x$8: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$9: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$7);
+    anorm.this.ParameterValue.toParameterValue[String](x$7)(x$9, x$8)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[Option[String]](owcCreatorApplication.title))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$14: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$15: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$13);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$13)(x$15, x$14)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uri&quot;)).-&gt;[Option[String]](owcCreatorApplication.uri.map[String](((x$2: java.net.URL) =&gt; x$2.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$19: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$20: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$21: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$19);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$19)(x$21, x$20)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;version&quot;)).-&gt;[Option[String]](owcCreatorApplication.version))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$25: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$26: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$27: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$25);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$25)(x$27, x$26)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          4939
+        </td>
+        <td>
+          3295
+          -
+          3322
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcCreatorApplication](owcCreatorApplication)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          4940
+        </td>
+        <td>
+          3339
+          -
+          3396
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCreatorApplicationDAO.this.logger.error(&quot;owcCreatorApplication couldn\'t be created&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          4941
+        </td>
+        <td>
+          3405
+          -
+          3409
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          4942
+        </td>
+        <td>
+          3796
+          -
+          4210
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          update &quot;, &quot; set\n            title = {title},\n            uri = {uri},\n            version = {version} where uuid = {uuid}\n        &quot;).s(owc.this.`package`.tableOwcCreatorApplications))).on(anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[Option[String]](owcCreatorApplication.title))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$31: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$32: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$33: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$31);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$31)(x$33, x$32)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uri&quot;)).-&gt;[Option[String]](owcCreatorApplication.uri.map[String](((x$3: java.net.URL) =&gt; x$3.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$37: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$38: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$39: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$37);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$37)(x$39, x$38)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;version&quot;)).-&gt;[Option[String]](owcCreatorApplication.version))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$43: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$44: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$45: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$43);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$43)(x$45, x$44)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcCreatorApplication.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$49: String = a;
+    &lt;artifact&gt; val x$50: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$51: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$49);
+    anorm.this.ParameterValue.toParameterValue[String](x$49)(x$51, x$50)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          4943
+        </td>
+        <td>
+          4249
+          -
+          4276
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcCreatorApplication](owcCreatorApplication)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          4944
+        </td>
+        <td>
+          4293
+          -
+          4350
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCreatorApplicationDAO.this.logger.error(&quot;owcCreatorApplication couldn\'t be updated&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          4945
+        </td>
+        <td>
+          4359
+          -
+          4363
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          4946
+        </td>
+        <td>
+          4709
+          -
+          4770
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcCreatorApplicationDAO.deleteOwcCreatorApplicationByUuid
+        </td>
+        <td style="background: #AEF1AE">
+          OwcCreatorApplicationDAO.this.deleteOwcCreatorApplicationByUuid(owcCreatorApplication.uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          4947
+        </td>
+        <td>
+          5080
+          -
+          5203
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcCreatorApplications))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$55: String = a;
+    &lt;artifact&gt; val x$56: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$57: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$55);
+    anorm.this.ParameterValue.toParameterValue[String](x$55)(x$57, x$56)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          4948
+        </td>
+        <td>
+          5242
+          -
+          5246
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          4949
+        </td>
+        <td>
+          5271
+          -
+          5328
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCreatorApplicationDAO.this.logger.error(&quot;owcCreatorApplication couldn\'t be deleted&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          4950
+        </td>
+        <td>
+          5337
+          -
+          5342
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

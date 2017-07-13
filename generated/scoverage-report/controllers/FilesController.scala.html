@@ -4,7 +4,7 @@
         <title id="title">
           controllers/FilesController.scala.html
         </title>
-        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="http://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="http://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
         $(document).ready(function() {$(".tablesorter").tablesorter();});
       </script>
         <style>
@@ -24,18 +24,18 @@
           <div class="tab-pane active" id="codegrid">
             <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
 </span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
-</span>3 <span style=''> * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
 </span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
 </span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
 </span>6 <span style=''> *
-</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the "License");
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
 </span>8 <span style=''> * you may not use this file except in compliance with the License.
 </span>9 <span style=''> * You may obtain a copy of the License at
 </span>10 <span style=''> *
 </span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
 </span>12 <span style=''> *
 </span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
-</span>14 <span style=''> * distributed under the License is distributed on an "AS IS" BASIS,
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
 </span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 </span>16 <span style=''> * See the License for the specific language governing permissions and
 </span>17 <span style=''> * limitations under the License.
@@ -43,174 +43,179 @@
 </span>19 <span style=''>
 </span>20 <span style=''>package controllers
 </span>21 <span style=''>
-</span>22 <span style=''>import java.io.FileInputStream
-</span>23 <span style=''>import java.time.{ZoneId, ZonedDateTime}
+</span>22 <span style=''>import java.net.{URL, URLEncoder}
+</span>23 <span style=''>import java.time._
 </span>24 <span style=''>import java.util.UUID
 </span>25 <span style=''>import javax.inject.Inject
 </span>26 <span style=''>
-</span>27 <span style=''>import com.google.auth.oauth2.ServiceAccountCredentials
-</span>28 <span style=''>import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
-</span>29 <span style=''>import com.google.common.io.Files
+</span>27 <span style=''>import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
+</span>28 <span style=''>import com.google.common.io.Files
+</span>29 <span style=''>import info.smart.models.owc100._
 </span>30 <span style=''>import models.ErrorResult
-</span>31 <span style=''>import models.owc.{HttpLinkOffering, OwcEntry, OwcLink, OwcOperation, OwcProperties}
-</span>32 <span style=''>import play.api.Configuration
-</span>33 <span style=''>import play.api.cache.CacheApi
-</span>34 <span style=''>import play.api.libs.Files.TemporaryFile
-</span>35 <span style=''>import play.api.libs.json.Json
-</span>36 <span style=''>import play.api.libs.ws.WSClient
-</span>37 <span style=''>import play.api.mvc._
-</span>38 <span style=''>import services.{GoogleServicesDAO, OwcCollectionsService}
-</span>39 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
-</span>40 <span style=''>
-</span>41 <span style=''>import scala.concurrent.ExecutionContext
-</span>42 <span style=''>
-</span>43 <span style=''>/**
-</span>44 <span style=''>  *
-</span>45 <span style=''>  * @param config
-</span>46 <span style=''>  * @param cacheApi
-</span>47 <span style=''>  * @param passwordHashing
-</span>48 <span style=''>  * @param wsClient
-</span>49 <span style=''>  * @param context
-</span>50 <span style=''>  * @param googleService
-</span>51 <span style=''>  * @param collectionsService
-</span>52 <span style=''>  */
-</span>53 <span style=''>class FilesController @Inject()(config: Configuration,
-</span>54 <span style=''>                                cacheApi: CacheApi,
-</span>55 <span style=''>                                val passwordHashing: PasswordHashing,
-</span>56 <span style=''>                                wsClient: WSClient,
-</span>57 <span style=''>                                implicit val context: ExecutionContext,
-</span>58 <span style=''>                                googleService: GoogleServicesDAO,
-</span>59 <span style=''>                                collectionsService: OwcCollectionsService
-</span>60 <span style=''>                               )
-</span>61 <span style=''>  extends Controller with ClassnameLogger with Security {
-</span>62 <span style=''>
-</span>63 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")</span><span style=''>
-</span>64 <span style=''>  lazy private val googleClientSecret: String = </span><span style='background: #F0ADAD'>configuration.getString("google.client.secret")
-</span>65 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse("client_secret.json")</span><span style=''>
-</span>66 <span style=''>  lazy private val googleStorageBucket: String = </span><span style='background: #F0ADAD'>configuration.getString("google.storage.bucket")
-</span>67 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse("smart-backup")</span><span style=''>
-</span>68 <span style=''>  lazy private val googleProjectId: String = </span><span style='background: #F0ADAD'>configuration.getString("google.project.id")
-</span>69 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse("dynamic-cove-129211")</span><span style=''>
-</span>70 <span style=''>  lazy private val uploadDataPath: String = </span><span style='background: #F0ADAD'>configuration.getString("smart.upload.datapath")
-</span>71 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse("/tmp")</span><span style=''>
-</span>72 <span style=''>  val cache: play.api.cache.CacheApi = </span><span style='background: #AEF1AE'>cacheApi</span><span style=''>
-</span>73 <span style=''>  val configuration: play.api.Configuration = </span><span style='background: #AEF1AE'>config</span><span style=''>
-</span>74 <span style=''>
-</span>75 <span style=''>  /**
-</span>76 <span style=''>    *
-</span>77 <span style=''>    * @param filename
-</span>78 <span style=''>    * @param contentType
-</span>79 <span style=''>    * @param email
-</span>80 <span style=''>    * @param filelink
-</span>81 <span style=''>    * @return
-</span>82 <span style=''>    */
-</span>83 <span style=''>  def fileMetadata(filename: String, contentType: Option[String], email: String, filelink: String): OwcEntry = {
-</span>84 <span style=''>
-</span>85 <span style=''>    val propsUuid = </span><span style='background: #F0ADAD'>UUID.randomUUID()</span><span style=''>
-</span>86 <span style=''>    val updatedTime = </span><span style='background: #F0ADAD'>ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())</span><span style=''>
-</span>87 <span style=''>
-</span>88 <span style=''>    val httpGetOps = </span><span style='background: #F0ADAD'>OwcOperation(UUID.randomUUID(),
-</span>89 <span style=''></span><span style='background: #F0ADAD'>      "GetFile",
-</span>90 <span style=''></span><span style='background: #F0ADAD'>      "GET",
-</span>91 <span style=''></span><span style='background: #F0ADAD'>      contentType.getOrElse("application/octet-stream"),
-</span>92 <span style=''></span><span style='background: #F0ADAD'>      filelink,
-</span>93 <span style=''></span><span style='background: #F0ADAD'>      None, None)</span><span style=''>
-</span>94 <span style=''>
-</span>95 <span style=''>    val httpLinkOffering = </span><span style='background: #F0ADAD'>HttpLinkOffering(
-</span>96 <span style=''></span><span style='background: #F0ADAD'>      UUID.randomUUID(),
-</span>97 <span style=''></span><span style='background: #F0ADAD'>      "http://www.opengis.net/spec/owc-geojson/1.0/req/http-link",
-</span>98 <span style=''></span><span style='background: #F0ADAD'>      List(httpGetOps),
-</span>99 <span style=''></span><span style='background: #F0ADAD'>      List()
-</span>100 <span style=''></span><span style='background: #F0ADAD'>    )</span><span style=''>
-</span>101 <span style=''>
-</span>102 <span style=''>    val link1 = </span><span style='background: #F0ADAD'>OwcLink(UUID.randomUUID(), "self", Some("application/json"),
-</span>103 <span style=''></span><span style='background: #F0ADAD'>      s"http://portal.smart-project.info/context/entry/${propsUuid.toString}", None)</span><span style=''>
-</span>104 <span style=''>
-</span>105 <span style=''>    val useLimitation = </span><span style='background: #F0ADAD'>s"IP limitation: Please inquire with $email"</span><span style=''>
-</span>106 <span style=''>
-</span>107 <span style=''>    val entryProps = </span><span style='background: #F0ADAD'>OwcProperties(
-</span>108 <span style=''></span><span style='background: #F0ADAD'>      propsUuid,
-</span>109 <span style=''></span><span style='background: #F0ADAD'>      "en",
-</span>110 <span style=''></span><span style='background: #F0ADAD'>      filename,
-</span>111 <span style=''></span><span style='background: #F0ADAD'>      Some(s"$filename uploaded to $filelink via GW Hub by $email"),
-</span>112 <span style=''></span><span style='background: #F0ADAD'>      Some(updatedTime),
-</span>113 <span style=''></span><span style='background: #F0ADAD'>      None,
-</span>114 <span style=''></span><span style='background: #F0ADAD'>      Some(useLimitation),
-</span>115 <span style=''></span><span style='background: #F0ADAD'>      List(),
-</span>116 <span style=''></span><span style='background: #F0ADAD'>      List(),
-</span>117 <span style=''></span><span style='background: #F0ADAD'>      None,
-</span>118 <span style=''></span><span style='background: #F0ADAD'>      Some("GNS Science"),
-</span>119 <span style=''></span><span style='background: #F0ADAD'>      List(),
-</span>120 <span style=''></span><span style='background: #F0ADAD'>      List(link1)
-</span>121 <span style=''></span><span style='background: #F0ADAD'>    )</span><span style=''>
-</span>122 <span style=''>    val owcEntry = </span><span style='background: #F0ADAD'>OwcEntry(s"http://portal.smart-project.info/context/${propsUuid.toString}",
-</span>123 <span style=''></span><span style='background: #F0ADAD'>      None, entryProps, List(httpLinkOffering))</span><span style=''>
-</span>124 <span style=''>
-</span>125 <span style=''>    owcEntry
-</span>126 <span style=''>  }
-</span>127 <span style=''>
-</span>128 <span style=''>  /**
-</span>129 <span style=''>    *
-</span>130 <span style=''>    * @return
-</span>131 <span style=''>    */
-</span>132 <span style=''>  def uploadMultipartForm: Action[MultipartFormData[TemporaryFile]] = </span><span style='background: #F0ADAD'>HasToken(parse.multipartFormData) {
-</span>133 <span style=''></span><span style='background: #F0ADAD'>    token =>
-</span>134 <span style=''></span><span style='background: #F0ADAD'>      authUser =>
-</span>135 <span style=''></span><span style='background: #F0ADAD'>        implicit request =>
-</span>136 <span style=''></span><span style='background: #F0ADAD'>
-</span>137 <span style=''></span><span style='background: #F0ADAD'>          request.body.file("file").map { theFile =>
-</span>138 <span style=''></span><span style='background: #F0ADAD'>            import java.io.File
-</span>139 <span style=''></span><span style='background: #F0ADAD'>            val filename = theFile.filename
-</span>140 <span style=''></span><span style='background: #F0ADAD'>            val contentType = theFile.contentType
-</span>141 <span style=''></span><span style='background: #F0ADAD'>            val tmpFile = new File(s"$uploadDataPath/$filename")
-</span>142 <span style=''></span><span style='background: #F0ADAD'>            theFile.ref.moveTo(tmpFile)
-</span>143 <span style=''></span><span style='background: #F0ADAD'>
-</span>144 <span style=''></span><span style='background: #F0ADAD'>            // Google Java upload stuff
-</span>145 <span style=''></span><span style='background: #F0ADAD'>            import scala.collection.JavaConverters._
-</span>146 <span style=''></span><span style='background: #F0ADAD'>
-</span>147 <span style=''></span><span style='background: #F0ADAD'>//            val serviceAccountCredentials = ServiceAccountCredentials.fromStream(new FileInputStream(googleClientSecret))
-</span>148 <span style=''></span><span style='background: #F0ADAD'>//            val authenticatedStorageOptions = StorageOptions.newBuilder().setProjectId(googleProjectId)
-</span>149 <span style=''></span><span style='background: #F0ADAD'>//              .setCredentials(serviceAccountCredentials).build()
-</span>150 <span style=''></span><span style='background: #F0ADAD'>
-</span>151 <span style=''></span><span style='background: #F0ADAD'>            // val storage: Storage = authenticatedStorageOptions.getService()
-</span>152 <span style=''></span><span style='background: #F0ADAD'>            val storage: Storage = StorageOptions.getDefaultInstance().getService()
-</span>153 <span style=''></span><span style='background: #F0ADAD'>            // val noCredentials = NoCredentials.getInstance()
-</span>154 <span style=''></span><span style='background: #F0ADAD'>
-</span>155 <span style=''></span><span style='background: #F0ADAD'>            // Modify access list to allow all users with link to read file
-</span>156 <span style=''></span><span style='background: #F0ADAD'>            val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)
-</span>157 <span style=''></span><span style='background: #F0ADAD'>            val acls: java.util.List[Acl] = List(roAcl).asJava
-</span>158 <span style=''></span><span style='background: #F0ADAD'>
-</span>159 <span style=''></span><span style='background: #F0ADAD'>            // the inputstream is closed by default, so we don't need to close it here
-</span>160 <span style=''></span><span style='background: #F0ADAD'>            val blob: Blob = storage.create(BlobInfo.newBuilder(googleStorageBucket, filename).setAcl(acls).build(),
-</span>161 <span style=''></span><span style='background: #F0ADAD'>              Files.asByteSource(tmpFile).openStream())
-</span>162 <span style=''></span><span style='background: #F0ADAD'>
-</span>163 <span style=''></span><span style='background: #F0ADAD'>            // return the public download link
-</span>164 <span style=''></span><span style='background: #F0ADAD'>            val owcEntry = fileMetadata(filename, contentType, authUser, blob.getMediaLink())
-</span>165 <span style=''></span><span style='background: #F0ADAD'>            val insertOk = collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser)
-</span>166 <span style=''></span><span style='background: #F0ADAD'>
-</span>167 <span style=''></span><span style='background: #F0ADAD'>            if (insertOk) {
-</span>168 <span style=''></span><span style='background: #F0ADAD'>              logger.debug(s"file upload $filename to ${blob.getMediaLink}")
-</span>169 <span style=''></span><span style='background: #F0ADAD'>              //FIXME SR do we also want to have a general "return" object? Status is always in the respone so it does not need to be in here
-</span>170 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> blob.getMediaLink(), "entry" -> owcEntry.toJson))
-</span>171 <span style=''></span><span style='background: #F0ADAD'>            } else {
-</span>172 <span style=''></span><span style='background: #F0ADAD'>              logger.error("file metadata insert failed.")
-</span>173 <span style=''></span><span style='background: #F0ADAD'>              val error = ErrorResult("File metadata insert failed.", None)
-</span>174 <span style=''></span><span style='background: #F0ADAD'>              BadRequest(Json.toJson(error)).as(JSON)
-</span>175 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>176 <span style=''></span><span style='background: #F0ADAD'>          }.getOrElse {
-</span>177 <span style=''></span><span style='background: #F0ADAD'>            logger.error("file upload failed")
-</span>178 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult("File upload failed.", None)
-</span>179 <span style=''></span><span style='background: #F0ADAD'>            BadRequest(Json.toJson(error)).as(JSON)
-</span>180 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>181 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>182 <span style=''>
-</span>183 <span style=''>  /*  def uploadDirect = Action(parseOm2Measurements.temporaryFile) { request =>
-</span>184 <span style=''>      request.body.moveTo(new File("/tmp/uploaded.bin"))
-</span>185 <span style=''>      Ok("File uploaded")
-</span>186 <span style=''>    }*/
+</span>31 <span style=''>import models.db.SessionHolder
+</span>32 <span style=''>import models.users.UserDAO
+</span>33 <span style=''>import play.api.Configuration
+</span>34 <span style=''>import play.api.cache.CacheApi
+</span>35 <span style=''>import play.api.libs.Files.TemporaryFile
+</span>36 <span style=''>import play.api.libs.json.Json
+</span>37 <span style=''>import play.api.libs.ws.WSClient
+</span>38 <span style=''>import play.api.mvc._
+</span>39 <span style=''>import services.{GoogleServicesDAO, OwcCollectionsService}
+</span>40 <span style=''>import uk.gov.hmrc.emailaddress.EmailAddress
+</span>41 <span style=''>import utils.StringUtils.OptionConverters
+</span>42 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>43 <span style=''>
+</span>44 <span style=''>import scala.concurrent.ExecutionContext
+</span>45 <span style=''>import scala.util.Try
+</span>46 <span style=''>
+</span>47 <span style=''>/**
+</span>48 <span style=''>  * 
+</span>49 <span style=''>  * @param config
+</span>50 <span style=''>  * @param cacheApi
+</span>51 <span style=''>  * @param passwordHashing
+</span>52 <span style=''>  * @param wsClient
+</span>53 <span style=''>  * @param context
+</span>54 <span style=''>  * @param googleService
+</span>55 <span style=''>  * @param sessionHolder
+</span>56 <span style=''>  * @param collectionsService
+</span>57 <span style=''>  */
+</span>58 <span style=''>class FilesController @Inject()(config: Configuration,
+</span>59 <span style=''>                                cacheApi: CacheApi,
+</span>60 <span style=''>                                val passwordHashing: PasswordHashing,
+</span>61 <span style=''>                                wsClient: WSClient,
+</span>62 <span style=''>                                implicit val context: ExecutionContext,
+</span>63 <span style=''>                                googleService: GoogleServicesDAO,
+</span>64 <span style=''>                                sessionHolder: SessionHolder,
+</span>65 <span style=''>                                collectionsService: OwcCollectionsService
+</span>66 <span style=''>                               )
+</span>67 <span style=''>  extends Controller with ClassnameLogger with Security {
+</span>68 <span style=''>
+</span>69 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
+</span>70 <span style=''>  lazy private val googleClientSecret: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;google.client.secret&quot;)
+</span>71 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse(&quot;client_secret.json&quot;)</span><span style=''>
+</span>72 <span style=''>  lazy private val googleStorageBucket: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;google.storage.bucket&quot;)
+</span>73 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse(&quot;smart-backup&quot;)</span><span style=''>
+</span>74 <span style=''>  lazy private val googleProjectId: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;google.project.id&quot;)
+</span>75 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse(&quot;dynamic-cove-129211&quot;)</span><span style=''>
+</span>76 <span style=''>  lazy private val uploadDataPath: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;smart.upload.datapath&quot;)
+</span>77 <span style=''></span><span style='background: #F0ADAD'>    .getOrElse(&quot;/tmp&quot;)</span><span style=''>
+</span>78 <span style=''>  val cache: play.api.cache.CacheApi = </span><span style='background: #AEF1AE'>cacheApi</span><span style=''>
+</span>79 <span style=''>  val configuration: play.api.Configuration = </span><span style='background: #AEF1AE'>config</span><span style=''>
+</span>80 <span style=''>
+</span>81 <span style=''>  /**
+</span>82 <span style=''>    *
+</span>83 <span style=''>    * @param filename
+</span>84 <span style=''>    * @param contentType
+</span>85 <span style=''>    * @param accountSubject
+</span>86 <span style=''>    * @param filelink
+</span>87 <span style=''>    * @param fileSize
+</span>88 <span style=''>    * @return
+</span>89 <span style=''>    */
+</span>90 <span style=''>  def fileMetadata(filename: String, contentType: Option[String], accountSubject: String, filelink: String, fileSize: Option[Int]): OwcResource = {
+</span>91 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaConnection { implicit connection =&gt;
+</span>92 <span style=''></span><span style='background: #F0ADAD'>      val propsUuid = UUID.randomUUID()
+</span>93 <span style=''></span><span style='background: #F0ADAD'>      val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+</span>94 <span style=''></span><span style='background: #F0ADAD'>      val user = UserDAO.findByAccountSubject(accountSubject)
+</span>95 <span style=''></span><span style='background: #F0ADAD'>      val email = user.map(u =&gt; EmailAddress(u.email))
+</span>96 <span style=''></span><span style='background: #F0ADAD'>      val owcAuthor = user.map(u =&gt; OwcAuthor(name = s&quot;${u.firstname} ${u.lastname}&quot;.toOption(), email = email, uri = None))
+</span>97 <span style=''></span><span style='background: #F0ADAD'>      val baseLink = new URL(s&quot;http://portal.smart-project.info/context/resource/${URLEncoder.encode(propsUuid.toString, &quot;UTF-8&quot;)}&quot;)
+</span>98 <span style=''></span><span style='background: #F0ADAD'>
+</span>99 <span style=''></span><span style='background: #F0ADAD'>      val viaLink = OwcLink(href = baseLink,
+</span>100 <span style=''></span><span style='background: #F0ADAD'>        mimeType = Some(&quot;application/json&quot;),
+</span>101 <span style=''></span><span style='background: #F0ADAD'>        lang = None,
+</span>102 <span style=''></span><span style='background: #F0ADAD'>        title = None,
+</span>103 <span style=''></span><span style='background: #F0ADAD'>        length = None,
+</span>104 <span style=''></span><span style='background: #F0ADAD'>        rel = &quot;via&quot;)
+</span>105 <span style=''></span><span style='background: #F0ADAD'>
+</span>106 <span style=''></span><span style='background: #F0ADAD'>      val dataLink = OwcLink(href = new URL(filelink),
+</span>107 <span style=''></span><span style='background: #F0ADAD'>        mimeType = if (contentType.isDefined) contentType else Some(&quot;application/octet-stream&quot;),
+</span>108 <span style=''></span><span style='background: #F0ADAD'>        lang = None,
+</span>109 <span style=''></span><span style='background: #F0ADAD'>        title = Some(filename),
+</span>110 <span style=''></span><span style='background: #F0ADAD'>        length = fileSize,
+</span>111 <span style=''></span><span style='background: #F0ADAD'>        rel = &quot;enclosure&quot;)
+</span>112 <span style=''></span><span style='background: #F0ADAD'>
+</span>113 <span style=''></span><span style='background: #F0ADAD'>      OwcResource(
+</span>114 <span style=''></span><span style='background: #F0ADAD'>        id = baseLink,
+</span>115 <span style=''></span><span style='background: #F0ADAD'>        geospatialExtent = None,
+</span>116 <span style=''></span><span style='background: #F0ADAD'>        title = filename,
+</span>117 <span style=''></span><span style='background: #F0ADAD'>        subtitle = Some(s&quot;$filename uploaded to $filelink via GW Hub by $email&quot;),
+</span>118 <span style=''></span><span style='background: #F0ADAD'>        updateDate = updatedTime,
+</span>119 <span style=''></span><span style='background: #F0ADAD'>        author = if (owcAuthor.isDefined) List(owcAuthor.get) else List(),
+</span>120 <span style=''></span><span style='background: #F0ADAD'>        publisher = Some(&quot;GNS Science&quot;),
+</span>121 <span style=''></span><span style='background: #F0ADAD'>        rights = Some(s&quot;IP limitation: Please inquire with $email&quot;),
+</span>122 <span style=''></span><span style='background: #F0ADAD'>        temporalExtent = None,
+</span>123 <span style=''></span><span style='background: #F0ADAD'>        contentDescription = List(), // links.alternates[] and rel=alternate
+</span>124 <span style=''></span><span style='background: #F0ADAD'>        preview = List(), // aka links.previews[] and rel=icon (atom)
+</span>125 <span style=''></span><span style='background: #F0ADAD'>        contentByRef = List(dataLink), // aka links.data[] and rel=enclosure (atom)
+</span>126 <span style=''></span><span style='background: #F0ADAD'>        resourceMetadata = List(viaLink), // aka links.via[] &amp; rel=via
+</span>127 <span style=''></span><span style='background: #F0ADAD'>        offering = List(),
+</span>128 <span style=''></span><span style='background: #F0ADAD'>        minScaleDenominator = None,
+</span>129 <span style=''></span><span style='background: #F0ADAD'>        maxScaleDenominator = None,
+</span>130 <span style=''></span><span style='background: #F0ADAD'>        active = None,
+</span>131 <span style=''></span><span style='background: #F0ADAD'>        keyword = List(),
+</span>132 <span style=''></span><span style='background: #F0ADAD'>        folder = None)
+</span>133 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>134 <span style=''>  }
+</span>135 <span style=''>
+</span>136 <span style=''>  /**
+</span>137 <span style=''>    *
+</span>138 <span style=''>    * @return
+</span>139 <span style=''>    */
+</span>140 <span style=''>  def uploadMultipartForm: Action[MultipartFormData[TemporaryFile]] = </span><span style='background: #F0ADAD'>HasToken(parse.multipartFormData) {
+</span>141 <span style=''></span><span style='background: #F0ADAD'>    token =&gt;
+</span>142 <span style=''></span><span style='background: #F0ADAD'>      authUser =&gt;
+</span>143 <span style=''></span><span style='background: #F0ADAD'>        implicit request =&gt;
+</span>144 <span style=''></span><span style='background: #F0ADAD'>
+</span>145 <span style=''></span><span style='background: #F0ADAD'>          request.body.file(&quot;file&quot;).map { theFile =&gt;
+</span>146 <span style=''></span><span style='background: #F0ADAD'>            import java.io.File
+</span>147 <span style=''></span><span style='background: #F0ADAD'>            val filename = theFile.filename
+</span>148 <span style=''></span><span style='background: #F0ADAD'>            val contentType = theFile.contentType
+</span>149 <span style=''></span><span style='background: #F0ADAD'>            val tmpFile = new File(s&quot;$uploadDataPath/$filename&quot;)
+</span>150 <span style=''></span><span style='background: #F0ADAD'>            val handle = theFile.ref.moveTo(tmpFile)
+</span>151 <span style=''></span><span style='background: #F0ADAD'>            val kilobytes = handle.length / 1024
+</span>152 <span style=''></span><span style='background: #F0ADAD'>
+</span>153 <span style=''></span><span style='background: #F0ADAD'>            // Google Java upload stuff
+</span>154 <span style=''></span><span style='background: #F0ADAD'>            import scala.collection.JavaConverters._
+</span>155 <span style=''></span><span style='background: #F0ADAD'>
+</span>156 <span style=''></span><span style='background: #F0ADAD'>            // val storage: Storage = authenticatedStorageOptions.getService()
+</span>157 <span style=''></span><span style='background: #F0ADAD'>            val storage: Storage = StorageOptions.getDefaultInstance().getService()
+</span>158 <span style=''></span><span style='background: #F0ADAD'>            // val noCredentials = NoCredentials.getInstance()
+</span>159 <span style=''></span><span style='background: #F0ADAD'>
+</span>160 <span style=''></span><span style='background: #F0ADAD'>            // Modify access list to allow all users with link to read file
+</span>161 <span style=''></span><span style='background: #F0ADAD'>            val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)
+</span>162 <span style=''></span><span style='background: #F0ADAD'>            val acls: java.util.List[Acl] = List(roAcl).asJava
+</span>163 <span style=''></span><span style='background: #F0ADAD'>
+</span>164 <span style=''></span><span style='background: #F0ADAD'>            // the inputstream is closed by default, so we don't need to close it here
+</span>165 <span style=''></span><span style='background: #F0ADAD'>            val blob: Blob = storage.create(BlobInfo.newBuilder(googleStorageBucket, filename).setAcl(acls).build(),
+</span>166 <span style=''></span><span style='background: #F0ADAD'>              Files.asByteSource(tmpFile).openStream())
+</span>167 <span style=''></span><span style='background: #F0ADAD'>
+</span>168 <span style=''></span><span style='background: #F0ADAD'>            // return the public download link
+</span>169 <span style=''></span><span style='background: #F0ADAD'>            val owcResource = fileMetadata(filename, contentType, authUser, blob.getMediaLink(), Try(kilobytes.toInt).toOption)
+</span>170 <span style=''></span><span style='background: #F0ADAD'>            val insertOk = collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser)
+</span>171 <span style=''></span><span style='background: #F0ADAD'>
+</span>172 <span style=''></span><span style='background: #F0ADAD'>            if (insertOk) {
+</span>173 <span style=''></span><span style='background: #F0ADAD'>              logger.debug(s&quot;file upload $filename to ${blob.getMediaLink}&quot;)
+</span>174 <span style=''></span><span style='background: #F0ADAD'>              //FIXME SR do we also want to have a general &quot;return&quot; object? Status is always in the respone so it does not need to be in here
+</span>175 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;message&quot; -&gt; s&quot;file uploaded $filename.&quot;, &quot;file&quot; -&gt; blob.getMediaLink(), &quot;entry&quot; -&gt; owcResource.toJson))
+</span>176 <span style=''></span><span style='background: #F0ADAD'>            } else {
+</span>177 <span style=''></span><span style='background: #F0ADAD'>              logger.error(&quot;file metadata insert failed.&quot;)
+</span>178 <span style=''></span><span style='background: #F0ADAD'>              val error = ErrorResult(&quot;File metadata insert failed.&quot;, None)
+</span>179 <span style=''></span><span style='background: #F0ADAD'>              BadRequest(Json.toJson(error)).as(JSON)
+</span>180 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>181 <span style=''></span><span style='background: #F0ADAD'>          }.getOrElse {
+</span>182 <span style=''></span><span style='background: #F0ADAD'>            logger.error(&quot;file upload failed&quot;)
+</span>183 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(&quot;File upload failed.&quot;, None)
+</span>184 <span style=''></span><span style='background: #F0ADAD'>            BadRequest(Json.toJson(error)).as(JSON)
+</span>185 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>186 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
 </span>187 <span style=''>
-</span>188 <span style=''>
-</span>189 <span style=''>}
+</span>188 <span style=''>  /*  def uploadDirect = Action(parseOm2Measurements.temporaryFile) { request =&gt;
+</span>189 <span style=''>      request.body.moveTo(new File(&quot;/tmp/uploaded.bin&quot;))
+</span>190 <span style=''>      Ok(&quot;File uploaded&quot;)
+</span>191 <span style=''>    }*/
+</span>192 <span style=''>
+</span>193 <span style=''>
+</span>194 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -224,15 +229,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          63
+          69
         </td>
         <td>
-          552
+          631
         </td>
         <td>
-          2386
+          2516
           -
-          2460
+          2590
         </td>
         <td>
           Apply
@@ -245,15 +250,15 @@
         </td>
       </tr><tr>
         <td>
-          65
+          71
         </td>
         <td>
-          553
+          632
         </td>
         <td>
-          2509
+          2639
           -
-          2593
+          2723
         </td>
         <td>
           Apply
@@ -266,15 +271,15 @@
         </td>
       </tr><tr>
         <td>
-          67
+          73
         </td>
         <td>
-          554
+          633
         </td>
         <td>
-          2643
+          2773
           -
-          2722
+          2852
         </td>
         <td>
           Apply
@@ -287,15 +292,15 @@
         </td>
       </tr><tr>
         <td>
-          69
+          75
         </td>
         <td>
-          555
+          634
         </td>
         <td>
-          2768
+          2898
           -
-          2850
+          2980
         </td>
         <td>
           Apply
@@ -308,15 +313,15 @@
         </td>
       </tr><tr>
         <td>
-          71
+          77
         </td>
         <td>
-          556
+          635
         </td>
         <td>
-          2895
+          3025
           -
-          2966
+          3096
         </td>
         <td>
           Apply
@@ -329,15 +334,15 @@
         </td>
       </tr><tr>
         <td>
-          72
+          78
         </td>
         <td>
-          557
+          636
         </td>
         <td>
-          3006
+          3136
           -
-          3014
+          3144
         </td>
         <td>
           Select
@@ -350,15 +355,15 @@
         </td>
       </tr><tr>
         <td>
-          73
+          79
         </td>
         <td>
-          558
+          637
         </td>
         <td>
-          3061
+          3191
           -
-          3067
+          3197
         </td>
         <td>
           Select
@@ -371,267 +376,346 @@
         </td>
       </tr><tr>
         <td>
-          85
+          91
         </td>
         <td>
-          559
-        </td>
-        <td>
-          3324
-          -
-          3341
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.randomUUID
-        </td>
-        <td style="background: #F0ADAD">
-          java.util.UUID.randomUUID()
-        </td>
-      </tr><tr>
-        <td>
-          86
-        </td>
-        <td>
-          561
-        </td>
-        <td>
-          3364
-          -
-          3425
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZonedDateTime.withZoneSameInstant
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.systemDefault())
-        </td>
-      </tr><tr>
-        <td>
-          86
-        </td>
-        <td>
-          560
-        </td>
-        <td>
-          3402
-          -
-          3424
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZoneId.systemDefault
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZoneId.systemDefault()
-        </td>
-      </tr><tr>
-        <td>
-          88
-        </td>
-        <td>
-          568
-        </td>
-        <td>
-          3448
-          -
-          3600
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.owc.OwcOperation.apply
-        </td>
-        <td style="background: #F0ADAD">
-          models.owc.OwcOperation.apply(java.util.UUID.randomUUID(), &quot;GetFile&quot;, &quot;GET&quot;, contentType.getOrElse[String](&quot;application/octet-stream&quot;), filelink, scala.None, scala.None)
-        </td>
-      </tr><tr>
-        <td>
-          88
-        </td>
-        <td>
-          562
-        </td>
-        <td>
-          3461
-          -
-          3478
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.randomUUID
-        </td>
-        <td style="background: #F0ADAD">
-          java.util.UUID.randomUUID()
-        </td>
-      </tr><tr>
-        <td>
-          89
-        </td>
-        <td>
-          563
-        </td>
-        <td>
-          3486
-          -
-          3495
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;GetFile&quot;
-        </td>
-      </tr><tr>
-        <td>
-          90
-        </td>
-        <td>
-          564
+          699
         </td>
         <td>
           3503
           -
-          3508
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;GET&quot;
-        </td>
-      </tr><tr>
-        <td>
-          91
-        </td>
-        <td>
-          565
-        </td>
-        <td>
-          3516
-          -
-          3565
+          5388
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.Option.getOrElse
+          models.db.SessionHolder.viaConnection
         </td>
         <td style="background: #F0ADAD">
-          contentType.getOrElse[String](&quot;application/octet-stream&quot;)
+          FilesController.this.sessionHolder.viaConnection[info.smart.models.owc100.OwcResource](((implicit connection: java.sql.Connection) =&gt; {
+  val propsUuid: java.util.UUID = java.util.UUID.randomUUID();
+  val updatedTime: java.time.OffsetDateTime = java.time.OffsetDateTime.now(java.time.ZoneId.of(FilesController.this.appTimeZone));
+  val user: Option[models.users.User] = models.users.UserDAO.findByAccountSubject(accountSubject)(connection);
+  val email: Option[uk.gov.hmrc.emailaddress.EmailAddress] = user.map[uk.gov.hmrc.emailaddress.EmailAddress](((u: models.users.User) =&gt; uk.gov.hmrc.emailaddress.EmailAddress.apply(emailaddress.this.StringValue.stringValueToString(u.email))));
+  val owcAuthor: Option[info.smart.models.owc100.OwcAuthor] = user.map[info.smart.models.owc100.OwcAuthor](((u: models.users.User) =&gt; info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(scala.StringContext.apply(&quot;&quot;, &quot; &quot;, &quot;&quot;).s(u.firstname, u.lastname)).toOption(), email, scala.None, info.smart.models.owc100.OwcAuthor.apply$default$4)));
+  val baseLink: java.net.URL = new java.net.URL(scala.StringContext.apply(&quot;http://portal.smart-project.info/context/resource/&quot;, &quot;&quot;).s(java.net.URLEncoder.encode(propsUuid.toString(), &quot;UTF-8&quot;)));
+  val viaLink: info.smart.models.owc100.OwcLink = info.smart.models.owc100.OwcLink.apply(baseLink, scala.Some.apply[String](&quot;application/json&quot;), scala.None, scala.None, scala.None, &quot;via&quot;, info.smart.models.owc100.OwcLink.apply$default$7);
+  val dataLink: info.smart.models.owc100.OwcLink = info.smart.models.owc100.OwcLink.apply(new java.net.URL(filelink), if (contentType.isDefined)
+    contentType
+  else
+    scala.Some.apply[String](&quot;application/octet-stream&quot;), scala.None, scala.Some.apply[String](filename), fileSize, &quot;enclosure&quot;, info.smart.models.owc100.OwcLink.apply$default$7);
+  {
+    &lt;artifact&gt; val x$1: java.net.URL = baseLink;
+    &lt;artifact&gt; val x$2: None.type = scala.None;
+    &lt;artifact&gt; val x$3: String = filename;
+    &lt;artifact&gt; val x$4: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](scala.StringContext.apply(&quot;&quot;, &quot; uploaded to &quot;, &quot; via GW Hub by &quot;, &quot;&quot;).s(filename, filelink, email));
+    &lt;artifact&gt; val x$5: java.time.OffsetDateTime = updatedTime;
+    &lt;artifact&gt; val x$6: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = if (owcAuthor.isDefined)
+      immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](owcAuthor.get)
+    else
+      immutable.this.Nil;
+    &lt;artifact&gt; val x$7: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](&quot;GNS Science&quot;);
+    &lt;artifact&gt; val x$8: Some[String] @scala.reflect.internal.annotations.uncheckedBounds = scala.Some.apply[String](scala.StringContext.apply(&quot;IP limitation: Please inquire with &quot;, &quot;&quot;).s(email));
+    &lt;artifact&gt; val x$9: None.type = scala.None;
+    &lt;artifact&gt; val x$10: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$11: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$12: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](dataLink);
+    &lt;artifact&gt; val x$13: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink);
+    &lt;artifact&gt; val x$14: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$15: None.type = scala.None;
+    &lt;artifact&gt; val x$16: None.type = scala.None;
+    &lt;artifact&gt; val x$17: None.type = scala.None;
+    &lt;artifact&gt; val x$18: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$19: None.type = scala.None;
+    info.smart.models.owc100.OwcResource.apply(x$1, x$3, x$4, x$5, x$6, x$7, x$8, x$2, x$9, x$10, x$11, x$12, x$14, x$17, x$13, x$18, x$15, x$16, x$19)
+  }
+}))
         </td>
       </tr><tr>
         <td>
-          93
+          92
         </td>
         <td>
-          567
+          638
         </td>
         <td>
+          3578
+          -
           3595
-          -
-          3599
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          scala.None
+          java.util.UUID.randomUUID
         </td>
         <td style="background: #F0ADAD">
-          scala.None
+          java.util.UUID.randomUUID()
         </td>
       </tr><tr>
         <td>
           93
         </td>
         <td>
-          566
+          639
         </td>
         <td>
-          3589
+          3639
           -
-          3593
+          3661
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          scala.None
+          java.time.ZoneId.of
         </td>
         <td style="background: #F0ADAD">
-          scala.None
+          java.time.ZoneId.of(FilesController.this.appTimeZone)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          640
+        </td>
+        <td>
+          3620
+          -
+          3662
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.OffsetDateTime.now
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.OffsetDateTime.now(java.time.ZoneId.of(FilesController.this.appTimeZone))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          641
+        </td>
+        <td>
+          3680
+          -
+          3724
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.findByAccountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.findByAccountSubject(accountSubject)(connection)
         </td>
       </tr><tr>
         <td>
           95
         </td>
         <td>
-          573
+          645
         </td>
         <td>
-          3629
+          3743
           -
-          3781
+          3779
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.owc.HttpLinkOffering.apply
+          scala.Option.map
         </td>
         <td style="background: #F0ADAD">
-          models.owc.HttpLinkOffering.apply(java.util.UUID.randomUUID(), &quot;http://www.opengis.net/spec/owc-geojson/1.0/req/http-link&quot;, immutable.this.List.apply[models.owc.OwcOperation](httpGetOps), immutable.this.Nil)
+          user.map[uk.gov.hmrc.emailaddress.EmailAddress](((u: models.users.User) =&gt; uk.gov.hmrc.emailaddress.EmailAddress.apply(emailaddress.this.StringValue.stringValueToString(u.email))))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          642
+        </td>
+        <td>
+          3770
+          -
+          3777
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          u.email
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          644
+        </td>
+        <td>
+          3757
+          -
+          3778
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          uk.gov.hmrc.emailaddress.EmailAddress.apply
+        </td>
+        <td style="background: #F0ADAD">
+          uk.gov.hmrc.emailaddress.EmailAddress.apply(emailaddress.this.StringValue.stringValueToString(u.email))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          643
+        </td>
+        <td>
+          3770
+          -
+          3777
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          uk.gov.hmrc.emailaddress.StringValue.stringValueToString
+        </td>
+        <td style="background: #F0ADAD">
+          emailaddress.this.StringValue.stringValueToString(u.email)
         </td>
       </tr><tr>
         <td>
           96
         </td>
         <td>
-          569
+          648
         </td>
         <td>
-          3653
+          3816
           -
-          3670
+          3816
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcAuthor.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcAuthor.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          650
+        </td>
+        <td>
+          3802
+          -
+          3904
         </td>
         <td>
           Apply
         </td>
         <td>
-          java.util.UUID.randomUUID
+          scala.Option.map
         </td>
         <td style="background: #F0ADAD">
-          java.util.UUID.randomUUID()
+          user.map[info.smart.models.owc100.OwcAuthor](((u: models.users.User) =&gt; info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(scala.StringContext.apply(&quot;&quot;, &quot; &quot;, &quot;&quot;).s(u.firstname, u.lastname)).toOption(), email, scala.None, info.smart.models.owc100.OwcAuthor.apply$default$4)))
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          647
+        </td>
+        <td>
+          3898
+          -
+          3902
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          646
+        </td>
+        <td>
+          3833
+          -
+          3875
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.StringUtils.OptionConverters.toOption
+        </td>
+        <td style="background: #F0ADAD">
+          utils.StringUtils.OptionConverters(scala.StringContext.apply(&quot;&quot;, &quot; &quot;, &quot;&quot;).s(u.firstname, u.lastname)).toOption()
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          649
+        </td>
+        <td>
+          3816
+          -
+          3903
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcAuthor.apply
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(scala.StringContext.apply(&quot;&quot;, &quot; &quot;, &quot;&quot;).s(u.firstname, u.lastname)).toOption(), email, scala.None, info.smart.models.owc100.OwcAuthor.apply$default$4)
         </td>
       </tr><tr>
         <td>
           97
         </td>
         <td>
-          570
+          654
         </td>
         <td>
-          3678
+          4026
           -
-          3737
+          4033
         </td>
         <td>
           Literal
@@ -640,61 +724,187 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;http://www.opengis.net/spec/owc-geojson/1.0/req/http-link&quot;
+          &quot;UTF-8&quot;
         </td>
       </tr><tr>
         <td>
-          98
+          97
         </td>
         <td>
-          571
+          657
         </td>
         <td>
-          3745
+          3926
           -
-          3761
+          4037
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.collection.immutable.List.apply
+          java.net.URL.&lt;init&gt;
         </td>
         <td style="background: #F0ADAD">
-          immutable.this.List.apply[models.owc.OwcOperation](httpGetOps)
+          new java.net.URL(scala.StringContext.apply(&quot;http://portal.smart-project.info/context/resource/&quot;, &quot;&quot;).s(java.net.URLEncoder.encode(propsUuid.toString(), &quot;UTF-8&quot;)))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          651
+        </td>
+        <td>
+          3936
+          -
+          3987
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;http://portal.smart-project.info/context/resource/&quot;
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          653
+        </td>
+        <td>
+          4006
+          -
+          4024
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.toString
+        </td>
+        <td style="background: #F0ADAD">
+          propsUuid.toString()
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          656
+        </td>
+        <td>
+          3934
+          -
+          4036
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;http://portal.smart-project.info/context/resource/&quot;, &quot;&quot;).s(java.net.URLEncoder.encode(propsUuid.toString(), &quot;UTF-8&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          655
+        </td>
+        <td>
+          3988
+          -
+          4034
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.net.URLEncoder.encode
+        </td>
+        <td style="background: #F0ADAD">
+          java.net.URLEncoder.encode(propsUuid.toString(), &quot;UTF-8&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          652
+        </td>
+        <td>
+          4035
+          -
+          4036
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
         </td>
       </tr><tr>
         <td>
           99
         </td>
         <td>
-          572
+          663
         </td>
         <td>
-          3769
+          4059
           -
-          3775
+          4059
         </td>
         <td>
           Select
         </td>
         <td>
-          scala.collection.immutable.Nil
+          info.smart.models.owc100.OwcLink.apply$default$7
         </td>
         <td style="background: #F0ADAD">
-          immutable.this.Nil
+          info.smart.models.owc100.OwcLink.apply$default$7
         </td>
       </tr><tr>
         <td>
-          102
+          99
         </td>
         <td>
-          576
+          664
         </td>
         <td>
-          3834
+          4059
           -
-          3858
+          4215
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcLink.apply
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcLink.apply(baseLink, scala.Some.apply[String](&quot;application/json&quot;), scala.None, scala.None, scala.None, &quot;via&quot;, info.smart.models.owc100.OwcLink.apply$default$7)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          658
+        </td>
+        <td>
+          4103
+          -
+          4127
         </td>
         <td>
           Apply
@@ -707,120 +917,36 @@
         </td>
       </tr><tr>
         <td>
-          102
+          101
         </td>
         <td>
-          582
+          659
         </td>
         <td>
-          3799
+          4144
           -
-          3944
+          4148
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          models.owc.OwcLink.apply
+          scala.None
         </td>
         <td style="background: #F0ADAD">
-          models.owc.OwcLink.apply(java.util.UUID.randomUUID(), &quot;self&quot;, scala.Some.apply[String](&quot;application/json&quot;), scala.StringContext.apply(&quot;http://portal.smart-project.info/context/entry/&quot;, &quot;&quot;).s(propsUuid.toString()), scala.None)
+          scala.None
         </td>
       </tr><tr>
         <td>
           102
         </td>
         <td>
-          575
+          660
         </td>
         <td>
-          3826
+          4166
           -
-          3832
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;self&quot;
-        </td>
-      </tr><tr>
-        <td>
-          102
-        </td>
-        <td>
-          574
-        </td>
-        <td>
-          3807
-          -
-          3824
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.randomUUID
-        </td>
-        <td style="background: #F0ADAD">
-          java.util.UUID.randomUUID()
-        </td>
-      </tr><tr>
-        <td>
-          103
-        </td>
-        <td>
-          577
-        </td>
-        <td>
-          3868
-          -
-          3916
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;http://portal.smart-project.info/context/entry/&quot;
-        </td>
-      </tr><tr>
-        <td>
-          103
-        </td>
-        <td>
-          579
-        </td>
-        <td>
-          3917
-          -
-          3935
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #F0ADAD">
-          propsUuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          103
-        </td>
-        <td>
-          581
-        </td>
-        <td>
-          3939
-          -
-          3943
+          4170
         </td>
         <td>
           Select
@@ -836,12 +962,33 @@
           103
         </td>
         <td>
-          578
+          661
         </td>
         <td>
-          3936
+          4189
           -
-          3937
+          4193
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          662
+        </td>
+        <td>
+          4209
+          -
+          4214
         </td>
         <td>
           Literal
@@ -850,82 +997,211 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;&quot;
+          &quot;via&quot;
         </td>
       </tr><tr>
         <td>
-          103
+          106
         </td>
         <td>
-          580
+          665
         </td>
         <td>
-          3866
+          4253
           -
-          3937
+          4270
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          java.net.URL.&lt;init&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;http://portal.smart-project.info/context/entry/&quot;, &quot;&quot;).s(propsUuid.toString())
+          new java.net.URL(filelink)
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
-          583
+          674
         </td>
         <td>
-          3970
+          4238
           -
-          4014
+          4475
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          info.smart.models.owc100.OwcLink.apply
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;IP limitation: Please inquire with &quot;, &quot;&quot;).s(email)
+          info.smart.models.owc100.OwcLink.apply(new java.net.URL(filelink), if (contentType.isDefined)
+  contentType
+else
+  scala.Some.apply[String](&quot;application/octet-stream&quot;), scala.None, scala.Some.apply[String](filename), fileSize, &quot;enclosure&quot;, info.smart.models.owc100.OwcLink.apply$default$7)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          673
+        </td>
+        <td>
+          4238
+          -
+          4238
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcLink.apply$default$7
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcLink.apply$default$7
         </td>
       </tr><tr>
         <td>
           107
         </td>
         <td>
-          596
+          669
         </td>
         <td>
-          4037
+          4335
           -
-          4334
+          4367
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](&quot;application/octet-stream&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          666
+        </td>
+        <td>
+          4295
+          -
+          4316
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #F0ADAD">
+          contentType.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          668
+        </td>
+        <td>
+          4335
+          -
+          4367
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.owc.OwcProperties.apply
+          scala.Some.apply
         </td>
         <td style="background: #F0ADAD">
-          models.owc.OwcProperties.apply(propsUuid, &quot;en&quot;, filename, scala.Some.apply[String](scala.StringContext.apply(&quot;&quot;, &quot; uploaded to &quot;, &quot; via GW Hub by &quot;, &quot;&quot;).s(filename, filelink, email)), scala.Some.apply[java.time.ZonedDateTime](updatedTime), scala.None, scala.Some.apply[String](useLimitation), immutable.this.Nil, immutable.this.Nil, scala.None, scala.Some.apply[String](&quot;GNS Science&quot;), immutable.this.Nil, immutable.this.List.apply[models.owc.OwcLink](link1))
+          scala.Some.apply[String](&quot;application/octet-stream&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          667
+        </td>
+        <td>
+          4318
+          -
+          4329
+        </td>
+        <td>
+          Ident
+        </td>
+        <td>
+          controllers.FilesController.contentType
+        </td>
+        <td style="background: #F0ADAD">
+          contentType
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          670
+        </td>
+        <td>
+          4384
+          -
+          4388
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
         </td>
       </tr><tr>
         <td>
           109
         </td>
         <td>
-          584
+          671
         </td>
         <td>
-          4075
+          4406
           -
-          4079
+          4420
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](filename)
+        </td>
+      </tr><tr>
+        <td>
+          111
+        </td>
+        <td>
+          672
+        </td>
+        <td>
+          4463
+          -
+          4474
         </td>
         <td>
           Literal
@@ -934,40 +1210,61 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;en&quot;
+          &quot;enclosure&quot;
         </td>
       </tr><tr>
         <td>
-          111
+          113
         </td>
         <td>
-          585
+          698
         </td>
         <td>
-          4108
+          4483
           -
-          4163
+          5382
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          info.smart.models.owc100.OwcResource.apply
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;&quot;, &quot; uploaded to &quot;, &quot; via GW Hub by &quot;, &quot;&quot;).s(filename, filelink, email)
+          info.smart.models.owc100.OwcResource.apply(x$1, x$3, x$4, x$5, x$6, x$7, x$8, x$2, x$9, x$10, x$11, x$12, x$14, x$17, x$13, x$18, x$15, x$16, x$19)
         </td>
       </tr><tr>
         <td>
-          111
+          115
         </td>
         <td>
-          586
+          675
         </td>
         <td>
-          4103
+          4546
           -
-          4164
+          4550
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          677
+        </td>
+        <td>
+          4597
+          -
+          4658
         </td>
         <td>
           Apply
@@ -980,141 +1277,162 @@
         </td>
       </tr><tr>
         <td>
-          112
-        </td>
-        <td>
-          587
-        </td>
-        <td>
-          4172
-          -
-          4189
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[java.time.ZonedDateTime](updatedTime)
-        </td>
-      </tr><tr>
-        <td>
-          113
-        </td>
-        <td>
-          588
-        </td>
-        <td>
-          4197
-          -
-          4201
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          114
-        </td>
-        <td>
-          589
-        </td>
-        <td>
-          4209
-          -
-          4228
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[String](useLimitation)
-        </td>
-      </tr><tr>
-        <td>
-          115
-        </td>
-        <td>
-          590
-        </td>
-        <td>
-          4236
-          -
-          4242
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.collection.immutable.Nil
-        </td>
-        <td style="background: #F0ADAD">
-          immutable.this.Nil
-        </td>
-      </tr><tr>
-        <td>
-          116
-        </td>
-        <td>
-          591
-        </td>
-        <td>
-          4250
-          -
-          4256
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.collection.immutable.Nil
-        </td>
-        <td style="background: #F0ADAD">
-          immutable.this.Nil
-        </td>
-      </tr><tr>
-        <td>
           117
         </td>
         <td>
-          592
+          676
         </td>
         <td>
-          4264
+          4602
           -
-          4268
+          4657
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot; uploaded to &quot;, &quot; via GW Hub by &quot;, &quot;&quot;).s(filename, filelink, email)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          678
+        </td>
+        <td>
+          4715
+          -
+          4734
         </td>
         <td>
           Select
         </td>
         <td>
-          scala.None
+          scala.Option.isDefined
         </td>
         <td style="background: #F0ADAD">
-          scala.None
+          owcAuthor.isDefined
         </td>
       </tr><tr>
         <td>
-          118
+          119
         </td>
         <td>
-          593
+          681
         </td>
         <td>
-          4276
+          4736
           -
-          4295
+          4755
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.collection.immutable.List.apply
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](owcAuthor.get)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          683
+        </td>
+        <td>
+          4761
+          -
+          4767
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          680
+        </td>
+        <td>
+          4736
+          -
+          4755
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.apply
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](owcAuthor.get)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          682
+        </td>
+        <td>
+          4761
+          -
+          4767
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          679
+        </td>
+        <td>
+          4741
+          -
+          4754
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #F0ADAD">
+          owcAuthor.get
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          684
+        </td>
+        <td>
+          4789
+          -
+          4808
         </td>
         <td>
           Apply
@@ -1127,15 +1445,78 @@
         </td>
       </tr><tr>
         <td>
-          119
+          121
         </td>
         <td>
-          594
+          686
         </td>
         <td>
-          4303
+          4827
           -
-          4309
+          4877
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](scala.StringContext.apply(&quot;IP limitation: Please inquire with &quot;, &quot;&quot;).s(email))
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          685
+        </td>
+        <td>
+          4832
+          -
+          4876
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;IP limitation: Please inquire with &quot;, &quot;&quot;).s(email)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          687
+        </td>
+        <td>
+          4904
+          -
+          4908
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          688
+        </td>
+        <td>
+          4939
+          -
+          4945
         </td>
         <td>
           Select
@@ -1148,15 +1529,36 @@
         </td>
       </tr><tr>
         <td>
-          120
+          124
         </td>
         <td>
-          595
+          689
         </td>
         <td>
-          4317
+          5005
           -
-          4328
+          5011
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          690
+        </td>
+        <td>
+          5080
+          -
+          5094
         </td>
         <td>
           Apply
@@ -1165,124 +1567,19 @@
           scala.collection.immutable.List.apply
         </td>
         <td style="background: #F0ADAD">
-          immutable.this.List.apply[models.owc.OwcLink](link1)
+          immutable.this.List.apply[info.smart.models.owc100.OwcLink](dataLink)
         </td>
       </tr><tr>
         <td>
-          122
+          126
         </td>
         <td>
-          600
+          691
         </td>
         <td>
-          4363
+          5168
           -
-          4428
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;http://portal.smart-project.info/context/&quot;, &quot;&quot;).s(propsUuid.toString())
-        </td>
-      </tr><tr>
-        <td>
-          122
-        </td>
-        <td>
-          603
-        </td>
-        <td>
-          4354
-          -
-          4477
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.owc.OwcEntry.apply
-        </td>
-        <td style="background: #F0ADAD">
-          models.owc.OwcEntry.apply(scala.StringContext.apply(&quot;http://portal.smart-project.info/context/&quot;, &quot;&quot;).s(propsUuid.toString()), scala.None, entryProps, immutable.this.List.apply[models.owc.HttpLinkOffering](httpLinkOffering))
-        </td>
-      </tr><tr>
-        <td>
-          122
-        </td>
-        <td>
-          597
-        </td>
-        <td>
-          4365
-          -
-          4407
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;http://portal.smart-project.info/context/&quot;
-        </td>
-      </tr><tr>
-        <td>
-          122
-        </td>
-        <td>
-          599
-        </td>
-        <td>
-          4408
-          -
-          4426
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.toString
-        </td>
-        <td style="background: #F0ADAD">
-          propsUuid.toString()
-        </td>
-      </tr><tr>
-        <td>
-          122
-        </td>
-        <td>
-          598
-        </td>
-        <td>
-          4427
-          -
-          4428
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;&quot;
-        </td>
-      </tr><tr>
-        <td>
-          123
-        </td>
-        <td>
-          602
-        </td>
-        <td>
-          4454
-          -
-          4476
+          5181
         </td>
         <td>
           Apply
@@ -1291,19 +1588,40 @@
           scala.collection.immutable.List.apply
         </td>
         <td style="background: #F0ADAD">
-          immutable.this.List.apply[models.owc.HttpLinkOffering](httpLinkOffering)
+          immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink)
         </td>
       </tr><tr>
         <td>
-          123
+          127
         </td>
         <td>
-          601
+          692
         </td>
         <td>
-          4436
+          5231
           -
-          4440
+          5237
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          693
+        </td>
+        <td>
+          5269
+          -
+          5273
         </td>
         <td>
           Select
@@ -1316,15 +1634,99 @@
         </td>
       </tr><tr>
         <td>
+          129
+        </td>
+        <td>
+          694
+        </td>
+        <td>
+          5305
+          -
+          5309
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          130
+        </td>
+        <td>
+          695
+        </td>
+        <td>
+          5328
+          -
+          5332
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          696
+        </td>
+        <td>
+          5352
+          -
+          5358
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.Nil
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.Nil
+        </td>
+      </tr><tr>
+        <td>
           132
         </td>
         <td>
-          680
+          697
         </td>
         <td>
-          4600
+          5377
           -
-          7141
+          5381
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          779
+        </td>
+        <td>
+          5497
+          -
+          7845
         </td>
         <td>
           Apply
@@ -1338,18 +1740,19 @@
   val filename: String = theFile.filename;
   val contentType: Option[String] = theFile.contentType;
   val tmpFile: java.io.File = new java.io.File(scala.StringContext.apply(&quot;&quot;, &quot;/&quot;, &quot;&quot;).s(FilesController.this.uploadDataPath, filename));
-  theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2);
+  val handle: java.io.File = theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2);
+  val kilobytes: Long = handle.length()./(1024);
   import scala.collection.JavaConverters._;
   val storage: com.google.cloud.storage.Storage = com.google.cloud.storage.StorageOptions.getDefaultInstance().getService();
   val roAcl: com.google.cloud.storage.Acl = com.google.cloud.storage.Acl.of(com.google.cloud.storage.Acl.User.ofAllUsers(), READER);
   val acls: java.util.List[com.google.cloud.storage.Acl] = scala.collection.JavaConverters.seqAsJavaListConverter[com.google.cloud.storage.Acl](immutable.this.List.apply[com.google.cloud.storage.Acl](roAcl)).asJava;
   val blob: com.google.cloud.storage.Blob = storage.create(com.google.cloud.storage.BlobInfo.newBuilder(FilesController.this.googleStorageBucket, filename).setAcl(acls).build(), com.google.common.io.Files.asByteSource(tmpFile).openStream());
-  val owcEntry: models.owc.OwcEntry = FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink());
-  val insertOk: Boolean = FilesController.this.collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser);
+  val owcResource: info.smart.models.owc100.OwcResource = FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink(), scala.util.Try.apply[Int](kilobytes.toInt).toOption);
+  val insertOk: Boolean = FilesController.this.collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser);
   if (insertOk)
     {
       FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink()));
-      FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+      FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
     }
   else
     {
@@ -1365,15 +1768,15 @@
         </td>
       </tr><tr>
         <td>
-          132
+          140
         </td>
         <td>
-          604
+          700
         </td>
         <td>
-          4609
+          5506
           -
-          4632
+          5529
         </td>
         <td>
           Select
@@ -1386,15 +1789,15 @@
         </td>
       </tr><tr>
         <td>
-          137
+          145
         </td>
         <td>
-          605
+          701
         </td>
         <td>
-          4724
+          5621
           -
-          4730
+          5627
         </td>
         <td>
           Literal
@@ -1407,15 +1810,15 @@
         </td>
       </tr><tr>
         <td>
-          139
+          147
         </td>
         <td>
-          606
+          702
         </td>
         <td>
-          4808
+          5705
           -
-          4824
+          5721
         </td>
         <td>
           Select
@@ -1428,15 +1831,15 @@
         </td>
       </tr><tr>
         <td>
-          140
+          148
         </td>
         <td>
-          607
+          703
         </td>
         <td>
-          4855
+          5752
           -
-          4874
+          5771
         </td>
         <td>
           Select
@@ -1449,15 +1852,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          149
         </td>
         <td>
-          609
+          705
         </td>
         <td>
-          4927
+          5824
           -
-          4929
+          5826
         </td>
         <td>
           Literal
@@ -1470,15 +1873,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          149
         </td>
         <td>
-          612
+          708
         </td>
         <td>
-          4901
+          5798
           -
-          4939
+          5836
         </td>
         <td>
           Apply
@@ -1491,15 +1894,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          149
         </td>
         <td>
-          608
+          704
         </td>
         <td>
-          4912
+          5809
           -
-          4913
+          5810
         </td>
         <td>
           Literal
@@ -1512,15 +1915,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          149
         </td>
         <td>
-          611
+          707
         </td>
         <td>
-          4910
+          5807
           -
-          4938
+          5835
         </td>
         <td>
           Apply
@@ -1533,15 +1936,15 @@
         </td>
       </tr><tr>
         <td>
-          141
+          149
         </td>
         <td>
-          610
+          706
         </td>
         <td>
-          4937
+          5834
           -
-          4938
+          5835
         </td>
         <td>
           Literal
@@ -1554,15 +1957,15 @@
         </td>
       </tr><tr>
         <td>
-          142
+          150
         </td>
         <td>
-          614
+          710
         </td>
         <td>
-          4952
+          5862
           -
-          4979
+          5889
         </td>
         <td>
           Apply
@@ -1575,15 +1978,15 @@
         </td>
       </tr><tr>
         <td>
-          142
+          150
         </td>
         <td>
-          613
+          709
         </td>
         <td>
-          4964
+          5874
           -
-          4964
+          5874
         </td>
         <td>
           Select
@@ -1596,15 +1999,36 @@
         </td>
       </tr><tr>
         <td>
-          152
+          151
         </td>
         <td>
-          615
+          711
         </td>
         <td>
-          5487
+          5918
           -
-          5535
+          5938
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Long./
+        </td>
+        <td style="background: #F0ADAD">
+          handle.length()./(1024)
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          712
+        </td>
+        <td>
+          6148
+          -
+          6196
         </td>
         <td>
           Apply
@@ -1617,36 +2041,15 @@
         </td>
       </tr><tr>
         <td>
-          156
+          161
         </td>
         <td>
-          618
+          714
         </td>
         <td>
-          5700
+          6391
           -
-          5746
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          com.google.cloud.storage.Acl.of
-        </td>
-        <td style="background: #F0ADAD">
-          com.google.cloud.storage.Acl.of(com.google.cloud.storage.Acl.User.ofAllUsers(), READER)
-        </td>
-      </tr><tr>
-        <td>
-          156
-        </td>
-        <td>
-          617
-        </td>
-        <td>
-          5730
-          -
-          5745
+          6406
         </td>
         <td>
           Literal
@@ -1659,15 +2062,15 @@
         </td>
       </tr><tr>
         <td>
-          156
+          161
         </td>
         <td>
-          616
+          713
         </td>
         <td>
-          5707
+          6368
           -
-          5728
+          6389
         </td>
         <td>
           Apply
@@ -1680,15 +2083,36 @@
         </td>
       </tr><tr>
         <td>
-          157
+          161
         </td>
         <td>
-          620
+          715
         </td>
         <td>
-          5791
+          6361
           -
-          5809
+          6407
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.google.cloud.storage.Acl.of
+        </td>
+        <td style="background: #F0ADAD">
+          com.google.cloud.storage.Acl.of(com.google.cloud.storage.Acl.User.ofAllUsers(), READER)
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          717
+        </td>
+        <td>
+          6452
+          -
+          6470
         </td>
         <td>
           Select
@@ -1701,15 +2125,15 @@
         </td>
       </tr><tr>
         <td>
-          157
+          162
         </td>
         <td>
-          619
+          716
         </td>
         <td>
-          5791
+          6452
           -
-          5802
+          6463
         </td>
         <td>
           Apply
@@ -1722,36 +2146,15 @@
         </td>
       </tr><tr>
         <td>
-          160
+          165
         </td>
         <td>
-          621
+          720
         </td>
         <td>
-          5942
+          6588
           -
-          6013
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          com.google.cloud.storage.BlobInfo.Builder.build
-        </td>
-        <td style="background: #F0ADAD">
-          com.google.cloud.storage.BlobInfo.newBuilder(FilesController.this.googleStorageBucket, filename).setAcl(acls).build()
-        </td>
-      </tr><tr>
-        <td>
-          160
-        </td>
-        <td>
-          623
-        </td>
-        <td>
-          5927
-          -
-          6070
+          6731
         </td>
         <td>
           Apply
@@ -1764,15 +2167,36 @@
         </td>
       </tr><tr>
         <td>
-          161
+          165
         </td>
         <td>
-          622
+          718
         </td>
         <td>
-          6029
+          6603
           -
-          6069
+          6674
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.google.cloud.storage.BlobInfo.Builder.build
+        </td>
+        <td style="background: #F0ADAD">
+          com.google.cloud.storage.BlobInfo.newBuilder(FilesController.this.googleStorageBucket, filename).setAcl(acls).build()
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          719
+        </td>
+        <td>
+          6690
+          -
+          6730
         </td>
         <td>
           Apply
@@ -1785,15 +2209,78 @@
         </td>
       </tr><tr>
         <td>
-          164
+          169
         </td>
         <td>
-          624
+          723
         </td>
         <td>
-          6192
+          6877
           -
-          6211
+          6906
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.util.Try.toOption
+        </td>
+        <td style="background: #F0ADAD">
+          scala.util.Try.apply[Int](kilobytes.toInt).toOption
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          722
+        </td>
+        <td>
+          6881
+          -
+          6896
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Long.toInt
+        </td>
+        <td style="background: #F0ADAD">
+          kilobytes.toInt
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          724
+        </td>
+        <td>
+          6810
+          -
+          6907
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.FilesController.fileMetadata
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink(), scala.util.Try.apply[Int](kilobytes.toInt).toOption)
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          721
+        </td>
+        <td>
+          6856
+          -
+          6875
         </td>
         <td>
           Apply
@@ -1806,57 +2293,36 @@
         </td>
       </tr><tr>
         <td>
-          164
+          170
         </td>
         <td>
-          625
+          725
         </td>
         <td>
-          6146
+          6935
           -
-          6212
+          7020
         </td>
         <td>
           Apply
         </td>
         <td>
-          controllers.FilesController.fileMetadata
+          services.OwcCollectionsService.addPlainFileResourceToUserDefaultCollection
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink())
+          FilesController.this.collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser)
         </td>
       </tr><tr>
         <td>
-          165
+          172
         </td>
         <td>
-          626
+          756
         </td>
         <td>
-          6240
+          7048
           -
-          6319
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          services.OwcCollectionsService.addPlainFileEntryToUserDefaultCollection
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser)
-        </td>
-      </tr><tr>
-        <td>
-          167
-        </td>
-        <td>
-          657
-        </td>
-        <td>
-          6347
-          -
-          6727
+          7431
         </td>
         <td>
           Block
@@ -1867,20 +2333,41 @@
         <td style="background: #F0ADAD">
           {
   FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink()));
-  FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
 }
         </td>
       </tr><tr>
         <td>
-          168
+          173
         </td>
         <td>
-          627
+          729
         </td>
         <td>
-          6378
+          7106
           -
-          6391
+          7123
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.google.cloud.storage.BlobInfo.getMediaLink
+        </td>
+        <td style="background: #F0ADAD">
+          blob.getMediaLink()
+        </td>
+      </tr><tr>
+        <td>
+          173
+        </td>
+        <td>
+          726
+        </td>
+        <td>
+          7079
+          -
+          7092
         </td>
         <td>
           Literal
@@ -1893,57 +2380,15 @@
         </td>
       </tr><tr>
         <td>
-          168
+          173
         </td>
         <td>
-          630
+          728
         </td>
         <td>
-          6405
+          7124
           -
-          6422
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          com.google.cloud.storage.BlobInfo.getMediaLink
-        </td>
-        <td style="background: #F0ADAD">
-          blob.getMediaLink()
-        </td>
-      </tr><tr>
-        <td>
-          168
-        </td>
-        <td>
-          632
-        </td>
-        <td>
-          6363
-          -
-          6425
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.debug
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink()))
-        </td>
-      </tr><tr>
-        <td>
-          168
-        </td>
-        <td>
-          629
-        </td>
-        <td>
-          6423
-          -
-          6424
+          7125
         </td>
         <td>
           Literal
@@ -1956,36 +2401,36 @@
         </td>
       </tr><tr>
         <td>
-          168
+          173
         </td>
         <td>
-          631
+          731
         </td>
         <td>
-          6376
+          7064
           -
-          6424
+          7126
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          play.api.LoggerLike.debug
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink())
+          FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink()))
         </td>
       </tr><tr>
         <td>
-          168
+          173
         </td>
         <td>
-          628
+          727
         </td>
         <td>
-          6399
+          7100
           -
-          6404
+          7105
         </td>
         <td>
           Literal
@@ -1998,78 +2443,36 @@
         </td>
       </tr><tr>
         <td>
-          170
+          173
         </td>
         <td>
-          645
+          730
         </td>
         <td>
-          6681
+          7077
           -
-          6681
+          7125
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          play.api.libs.json.DefaultWrites.StringWrites
+          scala.StringContext.s
         </td>
         <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
+          scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink())
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          654
+          738
         </td>
         <td>
-          6584
+          7326
           -
-          6584
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          636
-        </td>
-        <td>
-          6606
-          -
-          6610
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          639
-        </td>
-        <td>
-          6625
-          -
-          6652
+          7353
         </td>
         <td>
           Apply
@@ -2082,15 +2485,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          648
+          747
         </td>
         <td>
-          6685
+          7386
           -
-          6692
+          7393
         </td>
         <td>
           Literal
@@ -2103,36 +2506,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          633
+          741
         </td>
         <td>
-          6594
+          7313
           -
-          6602
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          642
-        </td>
-        <td>
-          6612
-          -
-          6652
+          7353
         </td>
         <td>
           Apply
@@ -2145,15 +2527,36 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          651
+          732
         </td>
         <td>
-          6696
+          7295
           -
-          6711
+          7303
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          750
+        </td>
+        <td>
+          7397
+          -
+          7415
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2162,19 +2565,19 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites)
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites)
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          641
+          735
         </td>
         <td>
-          6625
+          7307
           -
-          6652
+          7311
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2183,61 +2586,19 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          650
+          744
         </td>
         <td>
-          6705
+          7382
           -
-          6705
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.JsValueWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.JsValueWrites
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          653
-        </td>
-        <td>
-          6585
-          -
-          6712
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.Json.obj
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites)))
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          635
-        </td>
-        <td>
-          6606
-          -
-          6606
+          7382
         </td>
         <td>
           Select
@@ -2250,15 +2611,57 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          644
+          753
         </td>
         <td>
-          6664
+          7285
           -
-          6683
+          7285
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          752
+        </td>
+        <td>
+          7286
+          -
+          7416
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          743
+        </td>
+        <td>
+          7365
+          -
+          7384
         </td>
         <td>
           Apply
@@ -2271,15 +2674,36 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          638
+          755
         </td>
         <td>
-          6612
+          7283
           -
-          6621
+          7417
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          737
+        </td>
+        <td>
+          7313
+          -
+          7322
         </td>
         <td>
           Literal
@@ -2292,15 +2716,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          647
+          746
         </td>
         <td>
-          6654
+          7355
           -
-          6683
+          7384
         </td>
         <td>
           Apply
@@ -2313,36 +2737,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          656
+          740
         </td>
         <td>
-          6582
+          7326
           -
-          6713
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          646
-        </td>
-        <td>
-          6664
-          -
-          6683
+          7353
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2351,40 +2754,40 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          655
+          749
         </td>
         <td>
-          6584
+          7409
           -
-          6584
+          7409
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
+          play.api.libs.json.DefaultWrites.JsValueWrites
         </td>
         <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+          json.this.Writes.JsValueWrites
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          640
+          734
         </td>
         <td>
-          6625
+          7307
           -
-          6625
+          7307
         </td>
         <td>
           Select
@@ -2397,57 +2800,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          649
+          733
         </td>
         <td>
-          6696
+          7307
           -
-          6711
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.owc.OwcEntry.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          owcEntry.toJson
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          652
-        </td>
-        <td>
-          6685
-          -
-          6711
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites))
-        </td>
-      </tr><tr>
-        <td>
-          170
-        </td>
-        <td>
-          634
-        </td>
-        <td>
-          6606
-          -
-          6610
+          7311
         </td>
         <td>
           Literal
@@ -2460,15 +2821,15 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          643
+          742
         </td>
         <td>
-          6654
+          7355
           -
-          6660
+          7361
         </td>
         <td>
           Literal
@@ -2481,15 +2842,78 @@
         </td>
       </tr><tr>
         <td>
-          170
+          175
         </td>
         <td>
-          637
+          751
         </td>
         <td>
-          6594
+          7386
           -
-          6610
+          7415
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          745
+        </td>
+        <td>
+          7365
+          -
+          7384
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          754
+        </td>
+        <td>
+          7285
+          -
+          7285
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          736
+        </td>
+        <td>
+          7295
+          -
+          7311
         </td>
         <td>
           Apply
@@ -2502,15 +2926,57 @@
         </td>
       </tr><tr>
         <td>
-          171
+          175
         </td>
         <td>
-          668
+          739
         </td>
         <td>
-          6733
+          7326
           -
-          6937
+          7326
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          748
+        </td>
+        <td>
+          7397
+          -
+          7415
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcResource.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          owcResource.toJson
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          767
+        </td>
+        <td>
+          7437
+          -
+          7641
         </td>
         <td>
           Block
@@ -2527,15 +2993,15 @@
         </td>
       </tr><tr>
         <td>
-          172
+          177
         </td>
         <td>
-          658
+          757
         </td>
         <td>
-          6749
+          7453
           -
-          6793
+          7497
         </td>
         <td>
           Apply
@@ -2548,15 +3014,15 @@
         </td>
       </tr><tr>
         <td>
-          173
+          178
         </td>
         <td>
-          660
+          759
         </td>
         <td>
-          6864
+          7568
           -
-          6868
+          7572
         </td>
         <td>
           Select
@@ -2569,15 +3035,15 @@
         </td>
       </tr><tr>
         <td>
-          173
+          178
         </td>
         <td>
-          659
+          758
         </td>
         <td>
-          6832
+          7536
           -
-          6862
+          7566
         </td>
         <td>
           Literal
@@ -2590,15 +3056,15 @@
         </td>
       </tr><tr>
         <td>
-          173
+          178
         </td>
         <td>
-          661
+          760
         </td>
         <td>
-          6820
+          7524
           -
-          6869
+          7573
         </td>
         <td>
           Apply
@@ -2611,36 +3077,15 @@
         </td>
       </tr><tr>
         <td>
-          174
+          179
         </td>
         <td>
-          663
+          765
         </td>
         <td>
-          6895
+          7622
           -
-          6913
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          174
-        </td>
-        <td>
-          666
-        </td>
-        <td>
-          6918
-          -
-          6922
+          7626
         </td>
         <td>
           Select
@@ -2653,15 +3098,36 @@
         </td>
       </tr><tr>
         <td>
-          174
+          179
         </td>
         <td>
-          662
+          762
         </td>
         <td>
-          6906
+          7599
           -
-          6906
+          7617
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          761
+        </td>
+        <td>
+          7610
+          -
+          7610
         </td>
         <td>
           Select
@@ -2674,15 +3140,15 @@
         </td>
       </tr><tr>
         <td>
-          174
+          179
         </td>
         <td>
-          665
+          764
         </td>
         <td>
-          6894
+          7598
           -
-          6894
+          7598
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2695,36 +3161,15 @@
         </td>
       </tr><tr>
         <td>
-          174
+          179
         </td>
         <td>
-          664
+          766
         </td>
         <td>
-          6894
+          7588
           -
-          6894
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          174
-        </td>
-        <td>
-          667
-        </td>
-        <td>
-          6884
-          -
-          6923
+          7627
         </td>
         <td>
           Apply
@@ -2737,15 +3182,36 @@
         </td>
       </tr><tr>
         <td>
-          176
+          179
         </td>
         <td>
-          679
+          763
         </td>
         <td>
-          4706
+          7598
           -
-          7137
+          7598
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          778
+        </td>
+        <td>
+          5603
+          -
+          7841
         </td>
         <td>
           Apply
@@ -2759,18 +3225,19 @@
   val filename: String = theFile.filename;
   val contentType: Option[String] = theFile.contentType;
   val tmpFile: java.io.File = new java.io.File(scala.StringContext.apply(&quot;&quot;, &quot;/&quot;, &quot;&quot;).s(FilesController.this.uploadDataPath, filename));
-  theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2);
+  val handle: java.io.File = theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2);
+  val kilobytes: Long = handle.length()./(1024);
   import scala.collection.JavaConverters._;
   val storage: com.google.cloud.storage.Storage = com.google.cloud.storage.StorageOptions.getDefaultInstance().getService();
   val roAcl: com.google.cloud.storage.Acl = com.google.cloud.storage.Acl.of(com.google.cloud.storage.Acl.User.ofAllUsers(), READER);
   val acls: java.util.List[com.google.cloud.storage.Acl] = scala.collection.JavaConverters.seqAsJavaListConverter[com.google.cloud.storage.Acl](immutable.this.List.apply[com.google.cloud.storage.Acl](roAcl)).asJava;
   val blob: com.google.cloud.storage.Blob = storage.create(com.google.cloud.storage.BlobInfo.newBuilder(FilesController.this.googleStorageBucket, filename).setAcl(acls).build(), com.google.common.io.Files.asByteSource(tmpFile).openStream());
-  val owcEntry: models.owc.OwcEntry = FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink());
-  val insertOk: Boolean = FilesController.this.collectionsService.addPlainFileEntryToUserDefaultCollection(owcEntry, authUser);
+  val owcResource: info.smart.models.owc100.OwcResource = FilesController.this.fileMetadata(filename, contentType, authUser, blob.getMediaLink(), scala.util.Try.apply[Int](kilobytes.toInt).toOption);
+  val insertOk: Boolean = FilesController.this.collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser);
   if (insertOk)
     {
       FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot;&quot;).s(filename, blob.getMediaLink()));
-      FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcEntry.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+      FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](blob.getMediaLink())(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
     }
   else
     {
@@ -2786,15 +3253,15 @@
         </td>
       </tr><tr>
         <td>
-          177
+          182
         </td>
         <td>
-          669
+          768
         </td>
         <td>
-          6974
+          7678
           -
-          7008
+          7712
         </td>
         <td>
           Apply
@@ -2807,15 +3274,15 @@
         </td>
       </tr><tr>
         <td>
-          178
+          183
         </td>
         <td>
-          672
+          771
         </td>
         <td>
-          7033
+          7737
           -
-          7073
+          7777
         </td>
         <td>
           Apply
@@ -2828,15 +3295,15 @@
         </td>
       </tr><tr>
         <td>
-          178
+          183
         </td>
         <td>
-          671
+          770
         </td>
         <td>
-          7068
+          7772
           -
-          7072
+          7776
         </td>
         <td>
           Select
@@ -2849,15 +3316,15 @@
         </td>
       </tr><tr>
         <td>
-          178
+          183
         </td>
         <td>
-          670
+          769
         </td>
         <td>
-          7045
+          7749
           -
-          7066
+          7770
         </td>
         <td>
           Literal
@@ -2870,36 +3337,15 @@
         </td>
       </tr><tr>
         <td>
-          179
+          184
         </td>
         <td>
-          678
+          774
         </td>
         <td>
-          7086
+          7800
           -
-          7125
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
-          179
-        </td>
-        <td>
-          675
-        </td>
-        <td>
-          7096
-          -
-          7096
+          7800
         </td>
         <td>
           Select
@@ -2912,36 +3358,36 @@
         </td>
       </tr><tr>
         <td>
-          179
+          184
         </td>
         <td>
-          677
+          777
         </td>
         <td>
-          7120
+          7790
           -
-          7124
+          7829
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          play.api.http.ContentTypes.JSON
+          play.api.mvc.Result.as
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.JSON
+          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
         </td>
       </tr><tr>
         <td>
-          179
+          184
         </td>
         <td>
-          674
+          773
         </td>
         <td>
-          7097
+          7801
           -
-          7115
+          7819
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2954,36 +3400,36 @@
         </td>
       </tr><tr>
         <td>
-          179
+          184
         </td>
         <td>
-          673
+          776
         </td>
         <td>
-          7108
+          7824
           -
-          7108
+          7828
         </td>
         <td>
           Select
         </td>
         <td>
-          models.ErrorResult.writes
+          play.api.http.ContentTypes.JSON
         </td>
         <td style="background: #F0ADAD">
-          models.this.ErrorResult.writes
+          FilesController.this.JSON
         </td>
       </tr><tr>
         <td>
-          179
+          184
         </td>
         <td>
-          676
+          775
         </td>
         <td>
-          7096
+          7800
           -
-          7096
+          7800
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2993,6 +3439,27 @@
         </td>
         <td style="background: #F0ADAD">
           http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          772
+        </td>
+        <td>
+          7812
+          -
+          7812
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
         </td>
       </tr>
     </table>

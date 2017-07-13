@@ -238,7 +238,7 @@ object OwcContextDAO extends ClassnameLogger {
   def findOwcContextsByUserAndType(user: User, rightsRelationType: String)(implicit connection: Connection): Seq[OwcContext] = {
     SQL(
       s"""select $tableOwcContexts.*
-         | FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
+         | FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
          | WHERE $tableUserHasOwcContextRights.users_accountsubject = {account_subject}
          | AND $tableUserHasOwcContextRights.rights_relation_type = {rights_relation_type} """.stripMargin).on(
       'account_subject -> user.accountSubject,

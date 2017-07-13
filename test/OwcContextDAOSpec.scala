@@ -52,6 +52,7 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
   private lazy val owcIngesterResource1 = this.getClass().getResource("owc100/ingester1.owc.geojson")
   private lazy val owcIngesterResource2 = this.getClass().getResource("owc100/ingester_badgeom.owc.geojson")
   private lazy val owcIngesterResource3 = this.getClass().getResource("owc100/ingester_long.owc.geojson")
+  private lazy val owcIngesterResource4 = this.getClass().getResource("owc100/ingester_new_scores.owc.geojson")
   private lazy val owcResourceDefaultCollectionWithFiles = this.getClass().getResource("owc100/DefaultCollectionWithFiles100.json")
 
   val jsonTestCollection1 = scala.io.Source.fromURL(owcContextResource1).getLines.mkString
@@ -60,6 +61,7 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
   val jsonIngesterCollection1 = scala.io.Source.fromURL(owcIngesterResource1).getLines.mkString
   val jsonIngesterCollection2 = scala.io.Source.fromURL(owcIngesterResource2).getLines.mkString
   val jsonIngesterCollection3 = scala.io.Source.fromURL(owcIngesterResource3).getLines.mkString
+  val jsonIngesterCollection4 = scala.io.Source.fromURL(owcIngesterResource4).getLines.mkString
   val jsonDefaultFilesCollection = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
 
   "OwcContextDAO " can {
@@ -353,6 +355,9 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
       Json.parse(jsonIngesterCollection3).validate[OwcContext].isSuccess mustBe true
       val owcDoc3 = Json.parse(jsonIngesterCollection3).validate[OwcContext].get
 
+      Json.parse(jsonIngesterCollection4).validate[OwcContext].isSuccess mustBe true
+      val owcDoc4 = Json.parse(jsonIngesterCollection4).validate[OwcContext].get
+
       val passwordHashing = new PasswordHashing(app.configuration)
       val cryptPass = passwordHashing.createHash("testpass123")
 
@@ -379,12 +384,12 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           val owcFromDb1 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc1.id, testUser1).get
           owcFromDb1.resource.size mustEqual 2
 
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1)  mustBe defined
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1) mustBe defined
           val owcFromDb2 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1).get
           // https://github.com/ZGIS/smart-owc-geojson/issues/8
           // owcFromDb2.resource.size mustEqual 1
 
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1)  mustBe defined
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1) mustBe defined
           val owcFromDb3 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1).get
           owcFromDb3.resource.size mustEqual 21
 
@@ -401,42 +406,54 @@ class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter 
           OwcContentDAO.getAllOwcContents.size mustEqual 0
 
         }
+
+        sessionHolder.viaTransaction { implicit connection =>
+          OwcContextDAO.createCustomOwcContext(owcDoc4, testUser1) mustBe defined
+        }
+
+        sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findOwcContextByIdAndUser(owcDoc4.id, testUser1) mustBe defined
+          val owcFromDb4 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc4.id, testUser1).get
+          owcFromDb4.resource.size mustEqual 19
+          OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 1
+        }
       }
     }
 
-    /** ************
-      * TBD overwork
-      * *************/
-
     "find users own uploaded files" in {
-      (pending)
-
       withTestDatabase { database =>
-
-        implicit val connection = database.getConnection()
-        //        val sessionHolder = new SessionHolder(database)
-        //        sessionHolder.viaConnection { implicit connection =>
-        //
-        //        }
-
-        val demodata = new DemoData
-        val defaultCollection = Json.parse(jsonDefaultFilesCollection).validate[OwcContext].get
 
         // TODO SR this should be injected probably
         val passwordHashing = new PasswordHashing(app.configuration)
+        val cryptPass = passwordHashing.createHash("testpass123")
 
-        val testUser = demodata.testUser3(passwordHashing.createHash("testpass123"))
-        UserDAO.createUser(testUser) mustEqual Some(testUser)
-        OwcContextDAO.createUsersDefaultOwcContext(defaultCollection, testUser)
-        //
-        //        val ownFiles = OwcContextDAO.findOwcPropertiesForOwcAuthorOwnFiles(testUser.email)
-        //        ownFiles.length mustEqual 3
-        //
-        //        ownFiles.map(ufp => ufp.owcProperties.title).sorted mustEqual
-        //          ("gksee-2016-09-01_09_30_01.989.jpg"::
-        //          "gksee-2016-08-31_15_00_05.615.jpg"::
-        //          "gksee-2016-08-30_11_55_02.411.jpg"::
-        //          Nil).sorted
+        val testUser1 = demodata.testUser1(cryptPass)
+        val defaultCollection = Json.parse(jsonDefaultFilesCollection).validate[OwcContext].get
+
+        withTestDatabase { database =>
+          val sessionHolder = new SessionHolder(database)
+
+          sessionHolder.viaTransaction { implicit connection =>
+            UserDAO.createUser(testUser1) must contain(testUser1)
+          }
+
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.createUsersDefaultOwcContext(defaultCollection, testUser1) mustBe defined
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.findUserDefaultOwcContext(testUser1) mustBe defined
+            val owcFromDb1 = OwcContextDAO.findUserDefaultOwcContext(testUser1).get
+            owcFromDb1.resource.size mustEqual 2
+
+            val owcDataLinks = owcFromDb1.resource.filter(o => o.contentByRef.nonEmpty).flatMap(o => o.contentByRef)
+
+            owcDataLinks.length mustEqual 2
+
+            owcDataLinks.map(ufp => ufp.title.get).sorted mustEqual ("gksee-2016-09-01_09_30_01.989.jpg" ::
+              "gksee-2016-08-31_15_00_05.615.jpg" :: Nil).sorted
+          }
+        }
       }
     }
   }

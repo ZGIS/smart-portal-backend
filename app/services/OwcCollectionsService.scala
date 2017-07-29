@@ -137,7 +137,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     *
     * @param user
     */
-  def createUserDefaultCollection(user: User): Unit = {
+  def createUserDefaultCollection(user: User): Option[OwcContext] = {
 
     val propsUuid = UUID.randomUUID()
     val profileLink = OwcProfile.CORE.value
@@ -165,8 +165,14 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     val ok = sessionHolder.viaTransaction(implicit connection =>
       OwcContextDAO.createUsersDefaultOwcContext(defaultOwcDoc, user))
     ok match {
-      case Some(theDoc) => logger.info(s"created default collection for user ${user.firstname} ${user.lastname}")
-      case _ => logger.error("Something failed miserably")
+      case Some(theDoc) => {
+        logger.info(s"created default collection for user ${user.firstname} ${user.lastname}")
+        Some(theDoc)
+      }
+      case _ => {
+        logger.error("Something failed miserably")
+        None
+      }
     }
   }
 

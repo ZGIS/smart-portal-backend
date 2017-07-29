@@ -21,6 +21,7 @@ package controllers
 
 import java.io.FileReader
 import java.time.{ZoneId, ZonedDateTime}
+import java.util.UUID
 import javax.inject._
 
 import com.google.api.client.googleapis.auth.oauth2._
@@ -175,16 +176,24 @@ class UserController @Inject()(config: Configuration,
 
             UserDAO.updateNoPass(updateUser).fold {
               logger.error("User update error.")
+              // Redirect("/#/register")
               // flash error message?
-              // BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
-              Redirect("/#/register")
+              val error = ErrorResult("Error while updating user registration", None)
+              InternalServerError(Json.toJson(error)).as(JSON)
             } { user =>
               val emailWentOut = emailService.sendConfirmationEmail(user.email, "Your GW HUB account is now active", user.firstname)
               // all good here, creating default collection (Unit)
-              collectionsService.createUserDefaultCollection(user)
+              val userOwcDoc = collectionsService.createUserDefaultCollection(user)
               // maybe should also do the full login thing here? how does that relate with the alternative Google Oauth thing
-              logger.info(s"Registered user ${user.accountSubject} confirmed email ${user.email}. Email went out $emailWentOut")
-              Redirect("/#/login")
+              userOwcDoc.fold {
+                logger.error("Couldn't create user default collection.")
+                val error = ErrorResult("Error while creatin user default collection.", None)
+                InternalServerError(Json.toJson(error)).as(JSON)
+              } { owcDoc =>
+                logger.info(s"Registered user ${user.accountSubject} confirmed email ${user.email}. " +
+                  s"Email went out $emailWentOut. User Collection ${owcDoc.id.toString}")
+                Redirect("/#/login")
+              }
             }
           }
         }
@@ -557,46 +566,62 @@ class UserController @Inject()(config: Configuration,
             emailVerified && EmailAddress.isValid(email)) {
 
             val emailAddress = EmailAddress(email)
-            sessionHolder.viaTransaction { implicit connection =>
-              UserDAO.findUserByEmailAddress(emailAddress).fold {
-                // well, must be a new user coming through from Google
-                val regLinkId = java.util.UUID.randomUUID().toString()
-                val cryptPass = passwordHashing.createHash(regLinkId)
+            // viaConnection lookup email block
+            val firstUserLookup = sessionHolder.viaConnection { implicit connection =>
+              UserDAO.findUserByEmailAddress(emailAddress)
+            }
 
-                val newUser = User(emailAddress,
-                  s"google:${userId}",
-                  givenName.getOrElse(name.getOrElse(emailAddress.mailbox.value)),
-                  familyName.getOrElse(""),
-                  cryptPass,
-                  s"${StatusToken.ACTIVE}:REGCONFIRMED",
-                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+            firstUserLookup.fold {
+              // 'error, no user': well, must be a new user coming through from Google
+              val cryptPass = passwordHashing.createHash(UUID.randomUUID().toString)
 
-                UserDAO.createUser(newUser).fold {
-                  logger.error("User create error.")
-                  val error = ErrorResult("Error while creating user", None)
+              val newUser = User(emailAddress,
+                s"google:${userId}",
+                givenName.getOrElse(name.getOrElse(emailAddress.mailbox.value)),
+                familyName.getOrElse(""),
+                cryptPass,
+                s"${StatusToken.ACTIVE}:REGCONFIRMED",
+                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+              val createUserCall = sessionHolder.viaConnection { implicit connection =>
+                UserDAO.createUser(newUser)
+              }
+
+              createUserCall.fold {
+                logger.error("User create error.")
+                val error = ErrorResult("Error while creating user", None)
+                InternalServerError(Json.toJson(error)).as(JSON)
+              } { createdUser =>
+                val emailWentOut = emailService.sendConfirmationEmail(createdUser.email, "Your GW HUB account is now active", createdUser.firstname)
+                // all good here, creating default collection (Unit)
+                val userOwcDocTransaction = sessionHolder.viaTransaction { implicit connection =>
+                  collectionsService.createUserDefaultCollection(createdUser)
+                }
+
+                userOwcDocTransaction.fold {
+                  logger.error(s"Couldn't create user default collection for ${createdUser.accountSubject}.")
+                  val error = ErrorResult("Error while creating user default collection.", None)
                   InternalServerError(Json.toJson(error)).as(JSON)
-                } { user =>
-                  val emailWentOut = emailService.sendConfirmationEmail(newUser.email, "Your GW HUB account is now active", newUser.firstname)
-                  // all good here, creating default collection (Unit)
-                  collectionsService.createUserDefaultCollection(newUser)
-
-                  logger.info(s"New user registered. Email went out $emailWentOut")
+                } { owcDoc =>
+                  logger.info(s"New user registered ${createdUser.accountSubject}. Email went out $emailWentOut. " +
+                    s"User Collection ${owcDoc.id.toString}")
                   val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                   // logger.debug(s"Logging in email from $uaIdentifier")
-                  val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-                  cache.set(token, user.email.value)
-                  Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs()))
+                  val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
+                  cache.set(token, createdUser.email.value)
+                  Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> createdUser.email.value, "userprofile" -> createdUser.asProfileJs()))
                     .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
                 }
-              } { user =>
-                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                // logger.debug(s"Logging in email from $uaIdentifier")
-                val token = passwordHashing.createSessionCookie(user.email.value, uaIdentifier)
-                cache.set(token, user.email.value)
-                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs()))
-                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
               }
+            } { existingUser =>
+              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+              // logger.debug(s"Logging in email from $uaIdentifier")
+              val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
+              cache.set(token, existingUser.email.value)
+              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> existingUser.email.value, "userprofile" -> existingUser.asProfileJs()))
+                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
             }
+
           } else {
             logger.error("Invalid accesstype requested")
             val error = ErrorResult("Invalid accestype requested", None)

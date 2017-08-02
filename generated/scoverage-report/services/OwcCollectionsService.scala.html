@@ -254,146 +254,176 @@
 </span>230 <span style=''></span><span style='background: #F0ADAD'>      length = None,
 </span>231 <span style=''></span><span style='background: #F0ADAD'>      rel = &quot;via&quot;)</span><span style=''>
 </span>232 <span style=''>
-</span>233 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
-</span>234 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).exists {
-</span>235 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
-</span>236 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.findUserDefaultOwcContext(user).exists {
-</span>237 <span style=''></span><span style='background: #F0ADAD'>            owcDoc =&gt; {
-</span>238 <span style=''></span><span style='background: #F0ADAD'>
-</span>239 <span style=''></span><span style='background: #F0ADAD'>              val owcResource = OwcResource(
-</span>240 <span style=''></span><span style='background: #F0ADAD'>                id = baseLink,
-</span>241 <span style=''></span><span style='background: #F0ADAD'>                geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
-</span>242 <span style=''></span><span style='background: #F0ADAD'>                title = mdMetadata.title,
-</span>243 <span style=''></span><span style='background: #F0ADAD'>                subtitle = mdMetadata.abstrakt.toOption(),
-</span>244 <span style=''></span><span style='background: #F0ADAD'>                updateDate = updatedTime,
-</span>245 <span style=''></span><span style='background: #F0ADAD'>                author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
-</span>246 <span style=''></span><span style='background: #F0ADAD'>                  email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
-</span>247 <span style=''></span><span style='background: #F0ADAD'>                  uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
-</span>248 <span style=''></span><span style='background: #F0ADAD'>                publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
-</span>249 <span style=''></span><span style='background: #F0ADAD'>                rights = mdMetadata.distribution.useLimitation.toOption(),
-</span>250 <span style=''></span><span style='background: #F0ADAD'>                temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
-</span>251 <span style=''></span><span style='background: #F0ADAD'>
-</span>252 <span style=''></span><span style='background: #F0ADAD'>                // links.alternates[] and rel=alternate
-</span>253 <span style=''></span><span style='background: #F0ADAD'>                contentDescription = List(),
-</span>254 <span style=''></span><span style='background: #F0ADAD'>
-</span>255 <span style=''></span><span style='background: #F0ADAD'>                // aka links.previews[] and rel=icon (atom)
-</span>256 <span style=''></span><span style='background: #F0ADAD'>                preview = List(),
-</span>257 <span style=''></span><span style='background: #F0ADAD'>
-</span>258 <span style=''></span><span style='background: #F0ADAD'>                // aka links.data[] and rel=enclosure (atom)
-</span>259 <span style=''></span><span style='background: #F0ADAD'>                contentByRef = List(),
-</span>260 <span style=''></span><span style='background: #F0ADAD'>
-</span>261 <span style=''></span><span style='background: #F0ADAD'>                // aka links.via[] &amp; rel=via
-</span>262 <span style=''></span><span style='background: #F0ADAD'>                resourceMetadata = List(viaLink, cswLink),
-</span>263 <span style=''></span><span style='background: #F0ADAD'>                offering = List(cswOffering),
-</span>264 <span style=''></span><span style='background: #F0ADAD'>                minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
-</span>265 <span style=''></span><span style='background: #F0ADAD'>                maxScaleDenominator = None,
-</span>266 <span style=''></span><span style='background: #F0ADAD'>                active = None,
-</span>267 <span style=''></span><span style='background: #F0ADAD'>                keyword = mdMetadata.keywords.map(w =&gt; OwcCategory(term = w, scheme = None, label = None)),
-</span>268 <span style=''></span><span style='background: #F0ADAD'>                folder = None)
-</span>269 <span style=''></span><span style='background: #F0ADAD'>
-</span>270 <span style=''></span><span style='background: #F0ADAD'>              val entries = owcDoc.resource ++ Seq(owcResource)
-</span>271 <span style=''></span><span style='background: #F0ADAD'>              val newDoc = owcDoc.copy(resource = entries)
-</span>272 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
-</span>273 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>274 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>275 <span style=''></span><span style='background: #F0ADAD'>      })</span><span style=''>
-</span>276 <span style=''>  }
-</span>277 <span style=''>
-</span>278 <span style=''>  /**
-</span>279 <span style=''>    *
-</span>280 <span style=''>    * @param owcResource
-</span>281 <span style=''>    * @param authUser
-</span>282 <span style=''>    * @return
-</span>283 <span style=''>    */
-</span>284 <span style=''>  def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
-</span>285 <span style=''>
-</span>286 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
-</span>287 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).exists {
-</span>288 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
-</span>289 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.findUserDefaultOwcContext(user).exists {
-</span>290 <span style=''></span><span style='background: #F0ADAD'>            owcDoc =&gt; {
-</span>291 <span style=''></span><span style='background: #F0ADAD'>              val entries = owcDoc.resource ++ Seq(owcResource)
-</span>292 <span style=''></span><span style='background: #F0ADAD'>              val newDoc = owcDoc.copy(resource = entries)
-</span>293 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
-</span>294 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>295 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>296 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>297 <span style=''></span><span style='background: #F0ADAD'>    )</span><span style=''>
-</span>298 <span style=''>  }
-</span>299 <span style=''>
-</span>300 <span style=''>  /**
-</span>301 <span style=''>    *
-</span>302 <span style=''>    * @param owcContext
-</span>303 <span style=''>    * @param authUser
-</span>304 <span style=''>    * @return
-</span>305 <span style=''>    */
-</span>306 <span style=''>  def insertCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
-</span>307 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
-</span>308 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).map(
-</span>309 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
-</span>310 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)</span><span style=''>
-</span>311 <span style=''>  }
-</span>312 <span style=''>
-</span>313 <span style=''>  /**
-</span>314 <span style=''>    *
-</span>315 <span style=''>    * @param owcContext
-</span>316 <span style=''>    * @param authUser
-</span>317 <span style=''>    * @return
-</span>318 <span style=''>    */
-</span>319 <span style=''>  def updateCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
-</span>320 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
-</span>321 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).map(
-</span>322 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
-</span>323 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)</span><span style=''>
-</span>324 <span style=''>  }
-</span>325 <span style=''>
-</span>326 <span style=''>  /**
-</span>327 <span style=''>    *
-</span>328 <span style=''>    * @param owcContext
-</span>329 <span style=''>    * @param authUser
-</span>330 <span style=''>    * @return
-</span>331 <span style=''>    */
-</span>332 <span style=''>  def deleteCollection(owcContext: OwcContext, authUser: String): Boolean = {
-</span>333 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaConnection(implicit connection =&gt;
-</span>334 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).exists {
-</span>335 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
-</span>336 <span style=''></span><span style='background: #F0ADAD'>          val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
-</span>337 <span style=''></span><span style='background: #F0ADAD'>          hasOwcDoc.fold {
-</span>338 <span style=''></span><span style='background: #F0ADAD'>            false
-</span>339 <span style=''></span><span style='background: #F0ADAD'>          } {
-</span>340 <span style=''></span><span style='background: #F0ADAD'>            theDoc =&gt; {
-</span>341 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.deleteOwcContext(owcContext, user)
-</span>342 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>343 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>344 <span style=''></span><span style='background: #F0ADAD'>      })</span><span style=''>
-</span>345 <span style=''>  }
-</span>346 <span style=''>
-</span>347 <span style=''>  /**
-</span>348 <span style=''>    * returns an Option[EmailAddress] object if parsing is successful, for those mdMetadata email joint arrays
-</span>349 <span style=''>    *
-</span>350 <span style=''>    * @param emailString the string that might comprise of or contain an email address
-</span>351 <span style=''>    * @return Option[EmailAddress]
-</span>352 <span style=''>    */
-</span>353 <span style=''>  def parseEmailStringtoEmailAddress(emailString: String): Option[EmailAddress] = {
-</span>354 <span style=''>
-</span>355 <span style=''>    if (</span><span style='background: #F0ADAD'>EmailAddress.isValid(emailString)</span><span style=''>) {
-</span>356 <span style=''>      </span><span style='background: #F0ADAD'>Some(EmailAddress(emailString))</span><span style=''>
-</span>357 <span style=''>    } else {
-</span>358 <span style=''>      </span><span style='background: #F0ADAD'>if (emailString.contains(&quot;,&quot;)) {
-</span>359 <span style=''></span><span style='background: #F0ADAD'>        val commaFree = emailString.split(&quot;,&quot;).head.trim
-</span>360 <span style=''></span><span style='background: #F0ADAD'>
-</span>361 <span style=''></span><span style='background: #F0ADAD'>        Try {
-</span>362 <span style=''></span><span style='background: #F0ADAD'>          EmailAddress(commaFree)
-</span>363 <span style=''></span><span style='background: #F0ADAD'>        } match {
-</span>364 <span style=''></span><span style='background: #F0ADAD'>          case Success(e) =&gt; Some(e)
-</span>365 <span style=''></span><span style='background: #F0ADAD'>          case _ =&gt; None
-</span>366 <span style=''></span><span style='background: #F0ADAD'>        }
-</span>367 <span style=''></span><span style='background: #F0ADAD'>      } else {
-</span>368 <span style=''></span><span style='background: #F0ADAD'>        None
-</span>369 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style=''>
-</span>370 <span style=''>    }
-</span>371 <span style=''>  }
-</span>372 <span style=''>}
+</span>233 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>sessionHolder.viaConnection { implicit connection =&gt;
+</span>234 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
+</span>235 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>236 <span style=''>
+</span>237 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold {
+</span>238 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
+</span>239 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't access users collection&quot;)
+</span>240 <span style=''></span><span style='background: #F0ADAD'>      false
+</span>241 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>242 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>243 <span style=''></span><span style='background: #F0ADAD'>        val collectionLookup = sessionHolder.viaConnection { implicit connection =&gt;
+</span>244 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.findUserDefaultOwcContext(user)
+</span>245 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>246 <span style=''></span><span style='background: #F0ADAD'>        collectionLookup.fold {
+</span>247 <span style=''></span><span style='background: #F0ADAD'>          // collection not found, then can't insert, should probably also not happen usually
+</span>248 <span style=''></span><span style='background: #F0ADAD'>          logger.error(&quot;Collection not found, can't access users collection&quot;)
+</span>249 <span style=''></span><span style='background: #F0ADAD'>          false
+</span>250 <span style=''></span><span style='background: #F0ADAD'>        } {
+</span>251 <span style=''></span><span style='background: #F0ADAD'>          owcDoc =&gt;
+</span>252 <span style=''></span><span style='background: #F0ADAD'>
+</span>253 <span style=''></span><span style='background: #F0ADAD'>            val owcResource = OwcResource(
+</span>254 <span style=''></span><span style='background: #F0ADAD'>              id = baseLink,
+</span>255 <span style=''></span><span style='background: #F0ADAD'>              geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
+</span>256 <span style=''></span><span style='background: #F0ADAD'>              title = mdMetadata.title,
+</span>257 <span style=''></span><span style='background: #F0ADAD'>              subtitle = mdMetadata.abstrakt.toOption(),
+</span>258 <span style=''></span><span style='background: #F0ADAD'>              updateDate = updatedTime,
+</span>259 <span style=''></span><span style='background: #F0ADAD'>              author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
+</span>260 <span style=''></span><span style='background: #F0ADAD'>                email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
+</span>261 <span style=''></span><span style='background: #F0ADAD'>                uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
+</span>262 <span style=''></span><span style='background: #F0ADAD'>              publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
+</span>263 <span style=''></span><span style='background: #F0ADAD'>              rights = mdMetadata.distribution.useLimitation.toOption(),
+</span>264 <span style=''></span><span style='background: #F0ADAD'>              temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
+</span>265 <span style=''></span><span style='background: #F0ADAD'>
+</span>266 <span style=''></span><span style='background: #F0ADAD'>              // links.alternates[] and rel=alternate
+</span>267 <span style=''></span><span style='background: #F0ADAD'>              contentDescription = List(),
+</span>268 <span style=''></span><span style='background: #F0ADAD'>
+</span>269 <span style=''></span><span style='background: #F0ADAD'>              // aka links.previews[] and rel=icon (atom)
+</span>270 <span style=''></span><span style='background: #F0ADAD'>              preview = List(),
+</span>271 <span style=''></span><span style='background: #F0ADAD'>
+</span>272 <span style=''></span><span style='background: #F0ADAD'>              // aka links.data[] and rel=enclosure (atom)
+</span>273 <span style=''></span><span style='background: #F0ADAD'>              contentByRef = List(),
+</span>274 <span style=''></span><span style='background: #F0ADAD'>
+</span>275 <span style=''></span><span style='background: #F0ADAD'>              // aka links.via[] &amp; rel=via
+</span>276 <span style=''></span><span style='background: #F0ADAD'>              resourceMetadata = List(viaLink, cswLink),
+</span>277 <span style=''></span><span style='background: #F0ADAD'>              offering = List(cswOffering),
+</span>278 <span style=''></span><span style='background: #F0ADAD'>              minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
+</span>279 <span style=''></span><span style='background: #F0ADAD'>              maxScaleDenominator = None,
+</span>280 <span style=''></span><span style='background: #F0ADAD'>              active = None,
+</span>281 <span style=''></span><span style='background: #F0ADAD'>              keyword = mdMetadata.keywords.map(w =&gt; OwcCategory(term = w, scheme = None, label = None)),
+</span>282 <span style=''></span><span style='background: #F0ADAD'>              folder = None)
+</span>283 <span style=''></span><span style='background: #F0ADAD'>
+</span>284 <span style=''></span><span style='background: #F0ADAD'>            val entries = owcDoc.resource ++ Seq(owcResource)
+</span>285 <span style=''></span><span style='background: #F0ADAD'>            val newDoc = owcDoc.copy(resource = entries)
+</span>286 <span style=''></span><span style='background: #F0ADAD'>
+</span>287 <span style=''></span><span style='background: #F0ADAD'>            sessionHolder.viaTransaction { implicit connection =&gt;
+</span>288 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+</span>289 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>290 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>291 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>292 <span style=''>  }
+</span>293 <span style=''>
+</span>294 <span style=''>  /**
+</span>295 <span style=''>    *
+</span>296 <span style=''>    * @param owcResource
+</span>297 <span style=''>    * @param authUser
+</span>298 <span style=''>    * @return
+</span>299 <span style=''>    */
+</span>300 <span style=''>  def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
+</span>301 <span style=''>
+</span>302 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>sessionHolder.viaConnection { implicit connection =&gt;
+</span>303 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
+</span>304 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>305 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold {
+</span>306 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
+</span>307 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't access users collection&quot;)
+</span>308 <span style=''></span><span style='background: #F0ADAD'>      false
+</span>309 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>310 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>311 <span style=''></span><span style='background: #F0ADAD'>        val collectionLookup = sessionHolder.viaConnection { implicit connection =&gt;
+</span>312 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.findUserDefaultOwcContext(user)
+</span>313 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>314 <span style=''></span><span style='background: #F0ADAD'>        collectionLookup.fold {
+</span>315 <span style=''></span><span style='background: #F0ADAD'>          // collection not found, then can't insert, should probably also not happen usually
+</span>316 <span style=''></span><span style='background: #F0ADAD'>          logger.error(&quot;Collection not found, can't access users collection&quot;)
+</span>317 <span style=''></span><span style='background: #F0ADAD'>          false
+</span>318 <span style=''></span><span style='background: #F0ADAD'>        } {
+</span>319 <span style=''></span><span style='background: #F0ADAD'>          owcDoc =&gt;
+</span>320 <span style=''></span><span style='background: #F0ADAD'>            val entries = owcDoc.resource ++ Seq(owcResource)
+</span>321 <span style=''></span><span style='background: #F0ADAD'>            val newDoc = owcDoc.copy(resource = entries)
+</span>322 <span style=''></span><span style='background: #F0ADAD'>
+</span>323 <span style=''></span><span style='background: #F0ADAD'>            sessionHolder.viaTransaction { implicit connection =&gt;
+</span>324 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+</span>325 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>326 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>327 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>328 <span style=''>  }
+</span>329 <span style=''>
+</span>330 <span style=''>  /**
+</span>331 <span style=''>    *
+</span>332 <span style=''>    * @param owcContext
+</span>333 <span style=''>    * @param authUser
+</span>334 <span style=''>    * @return
+</span>335 <span style=''>    */
+</span>336 <span style=''>  def insertCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
+</span>337 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
+</span>338 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).map(
+</span>339 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
+</span>340 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)</span><span style=''>
+</span>341 <span style=''>  }
+</span>342 <span style=''>
+</span>343 <span style=''>  /**
+</span>344 <span style=''>    *
+</span>345 <span style=''>    * @param owcContext
+</span>346 <span style=''>    * @param authUser
+</span>347 <span style=''>    * @return
+</span>348 <span style=''>    */
+</span>349 <span style=''>  def updateCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
+</span>350 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaTransaction(implicit connection =&gt;
+</span>351 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).map(
+</span>352 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
+</span>353 <span style=''></span><span style='background: #F0ADAD'>          OwcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)</span><span style=''>
+</span>354 <span style=''>  }
+</span>355 <span style=''>
+</span>356 <span style=''>  /**
+</span>357 <span style=''>    *
+</span>358 <span style=''>    * @param owcContext
+</span>359 <span style=''>    * @param authUser
+</span>360 <span style=''>    * @return
+</span>361 <span style=''>    */
+</span>362 <span style=''>  def deleteCollection(owcContext: OwcContext, authUser: String): Boolean = {
+</span>363 <span style=''>    </span><span style='background: #F0ADAD'>sessionHolder.viaConnection(implicit connection =&gt;
+</span>364 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser).exists {
+</span>365 <span style=''></span><span style='background: #F0ADAD'>        user =&gt;
+</span>366 <span style=''></span><span style='background: #F0ADAD'>          val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
+</span>367 <span style=''></span><span style='background: #F0ADAD'>          hasOwcDoc.fold {
+</span>368 <span style=''></span><span style='background: #F0ADAD'>            false
+</span>369 <span style=''></span><span style='background: #F0ADAD'>          } {
+</span>370 <span style=''></span><span style='background: #F0ADAD'>            theDoc =&gt; {
+</span>371 <span style=''></span><span style='background: #F0ADAD'>              OwcContextDAO.deleteOwcContext(owcContext, user)
+</span>372 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>373 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>374 <span style=''></span><span style='background: #F0ADAD'>      })</span><span style=''>
+</span>375 <span style=''>  }
+</span>376 <span style=''>
+</span>377 <span style=''>  /**
+</span>378 <span style=''>    * returns an Option[EmailAddress] object if parsing is successful, for those mdMetadata email joint arrays
+</span>379 <span style=''>    *
+</span>380 <span style=''>    * @param emailString the string that might comprise of or contain an email address
+</span>381 <span style=''>    * @return Option[EmailAddress]
+</span>382 <span style=''>    */
+</span>383 <span style=''>  def parseEmailStringtoEmailAddress(emailString: String): Option[EmailAddress] = {
+</span>384 <span style=''>
+</span>385 <span style=''>    if (</span><span style='background: #F0ADAD'>EmailAddress.isValid(emailString)</span><span style=''>) {
+</span>386 <span style=''>      </span><span style='background: #F0ADAD'>Some(EmailAddress(emailString))</span><span style=''>
+</span>387 <span style=''>    } else {
+</span>388 <span style=''>      </span><span style='background: #F0ADAD'>if (emailString.contains(&quot;,&quot;)) {
+</span>389 <span style=''></span><span style='background: #F0ADAD'>        val commaFree = emailString.split(&quot;,&quot;).head.trim
+</span>390 <span style=''></span><span style='background: #F0ADAD'>
+</span>391 <span style=''></span><span style='background: #F0ADAD'>        Try {
+</span>392 <span style=''></span><span style='background: #F0ADAD'>          EmailAddress(commaFree)
+</span>393 <span style=''></span><span style='background: #F0ADAD'>        } match {
+</span>394 <span style=''></span><span style='background: #F0ADAD'>          case Success(e) =&gt; Some(e)
+</span>395 <span style=''></span><span style='background: #F0ADAD'>          case _ =&gt; None
+</span>396 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>397 <span style=''></span><span style='background: #F0ADAD'>      } else {
+</span>398 <span style=''></span><span style='background: #F0ADAD'>        None
+</span>399 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style=''>
+</span>400 <span style=''>    }
+</span>401 <span style=''>  }
+</span>402 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -3525,207 +3555,322 @@
           233
         </td>
         <td>
-          7516
+          7459
         </td>
         <td>
-          8221
+          8238
           -
-          10287
+          8344
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.db.SessionHolder.viaTransaction
+          models.db.SessionHolder.viaConnection
         </td>
         <td style="background: #F0ADAD">
-          OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection).exists(((user: models.users.User) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val owcResource: info.smart.models.owc100.OwcResource = {
-    &lt;artifact&gt; val x$6: java.net.URL = baseLink;
-    &lt;artifact&gt; val x$7: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption;
-    &lt;artifact&gt; val x$8: String = mdMetadata.title;
-    &lt;artifact&gt; val x$9: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.abstrakt).toOption();
-    &lt;artifact&gt; val x$10: java.time.OffsetDateTime = updatedTime;
-    &lt;artifact&gt; val x$11: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4));
-    &lt;artifact&gt; val x$12: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.pointOfContact).toOption();
-    &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.distribution.useLimitation).toOption();
-    &lt;artifact&gt; val x$14: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent));
-    &lt;artifact&gt; val x$15: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$16: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$17: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$18: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink, cswLink);
-    &lt;artifact&gt; val x$19: List[info.smart.models.owc100.OwcOffering] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcOffering](cswOffering);
-    &lt;artifact&gt; val x$20: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption;
-    &lt;artifact&gt; val x$21: None.type = scala.None;
-    &lt;artifact&gt; val x$22: None.type = scala.None;
-    &lt;artifact&gt; val x$23: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = mdMetadata.keywords.map[info.smart.models.owc100.OwcCategory, List[info.smart.models.owc100.OwcCategory]](((w: String) =&gt; info.smart.models.owc100.OwcCategory.apply(w, scala.None, scala.None, info.smart.models.owc100.OwcCategory.apply$default$4)))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]);
-    &lt;artifact&gt; val x$24: None.type = scala.None;
-    info.smart.models.owc100.OwcResource.apply(x$6, x$8, x$9, x$10, x$11, x$12, x$13, x$7, x$14, x$15, x$16, x$17, x$19, x$22, x$18, x$23, x$20, x$21, x$24)
-  };
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$25: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$26: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$27: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$28: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$29: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$30: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$31: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$32: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$33: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$34: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$35: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$36: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$37: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$38: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$39: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$40: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$26, x$27, x$28, x$29, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37, x$38, x$39, x$40, x$25)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
-}))))))
+          OwcCollectionsService.this.sessionHolder.viaConnection[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection)))
         </td>
       </tr><tr>
         <td>
           234
         </td>
         <td>
-          7515
+          7458
         </td>
         <td>
-          8279
+          8297
           -
-          10286
+          8338
         </td>
         <td>
-          Apply
+          ApplyToImplicitArgs
         </td>
         <td>
-          scala.Option.exists
+          models.users.UserDAO.findUserByEmailAsString
         </td>
         <td style="background: #F0ADAD">
-          models.users.UserDAO.findUserByEmailAsString(authUser)(connection).exists(((user: models.users.User) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val owcResource: info.smart.models.owc100.OwcResource = {
-    &lt;artifact&gt; val x$6: java.net.URL = baseLink;
-    &lt;artifact&gt; val x$7: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption;
-    &lt;artifact&gt; val x$8: String = mdMetadata.title;
-    &lt;artifact&gt; val x$9: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.abstrakt).toOption();
-    &lt;artifact&gt; val x$10: java.time.OffsetDateTime = updatedTime;
-    &lt;artifact&gt; val x$11: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4));
-    &lt;artifact&gt; val x$12: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.pointOfContact).toOption();
-    &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.distribution.useLimitation).toOption();
-    &lt;artifact&gt; val x$14: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent));
-    &lt;artifact&gt; val x$15: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$16: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$17: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$18: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink, cswLink);
-    &lt;artifact&gt; val x$19: List[info.smart.models.owc100.OwcOffering] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcOffering](cswOffering);
-    &lt;artifact&gt; val x$20: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption;
-    &lt;artifact&gt; val x$21: None.type = scala.None;
-    &lt;artifact&gt; val x$22: None.type = scala.None;
-    &lt;artifact&gt; val x$23: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = mdMetadata.keywords.map[info.smart.models.owc100.OwcCategory, List[info.smart.models.owc100.OwcCategory]](((w: String) =&gt; info.smart.models.owc100.OwcCategory.apply(w, scala.None, scala.None, info.smart.models.owc100.OwcCategory.apply$default$4)))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]);
-    &lt;artifact&gt; val x$24: None.type = scala.None;
-    info.smart.models.owc100.OwcResource.apply(x$6, x$8, x$9, x$10, x$11, x$12, x$13, x$7, x$14, x$15, x$16, x$17, x$19, x$22, x$18, x$23, x$20, x$21, x$24)
-  };
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$25: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$26: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$27: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$28: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$29: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$30: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$31: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$32: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$33: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$34: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$35: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$36: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$37: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$38: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$39: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$40: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$26, x$27, x$28, x$29, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37, x$38, x$39, x$40, x$25)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
-}))))
-        </td>
-      </tr><tr>
-        <td>
-          236
-        </td>
-        <td>
-          7514
-        </td>
-        <td>
-          8356
-          -
-          10278
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.exists
-        </td>
-        <td style="background: #F0ADAD">
-          models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val owcResource: info.smart.models.owc100.OwcResource = {
-    &lt;artifact&gt; val x$6: java.net.URL = baseLink;
-    &lt;artifact&gt; val x$7: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption;
-    &lt;artifact&gt; val x$8: String = mdMetadata.title;
-    &lt;artifact&gt; val x$9: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.abstrakt).toOption();
-    &lt;artifact&gt; val x$10: java.time.OffsetDateTime = updatedTime;
-    &lt;artifact&gt; val x$11: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4));
-    &lt;artifact&gt; val x$12: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.pointOfContact).toOption();
-    &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.distribution.useLimitation).toOption();
-    &lt;artifact&gt; val x$14: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent));
-    &lt;artifact&gt; val x$15: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$16: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$17: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
-    &lt;artifact&gt; val x$18: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink, cswLink);
-    &lt;artifact&gt; val x$19: List[info.smart.models.owc100.OwcOffering] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcOffering](cswOffering);
-    &lt;artifact&gt; val x$20: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption;
-    &lt;artifact&gt; val x$21: None.type = scala.None;
-    &lt;artifact&gt; val x$22: None.type = scala.None;
-    &lt;artifact&gt; val x$23: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = mdMetadata.keywords.map[info.smart.models.owc100.OwcCategory, List[info.smart.models.owc100.OwcCategory]](((w: String) =&gt; info.smart.models.owc100.OwcCategory.apply(w, scala.None, scala.None, info.smart.models.owc100.OwcCategory.apply$default$4)))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]);
-    &lt;artifact&gt; val x$24: None.type = scala.None;
-    info.smart.models.owc100.OwcResource.apply(x$6, x$8, x$9, x$10, x$11, x$12, x$13, x$7, x$14, x$15, x$16, x$17, x$19, x$22, x$18, x$23, x$20, x$21, x$24)
-  };
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$25: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$26: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$27: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$28: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$29: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$30: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$31: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$32: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$33: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$34: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$35: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$36: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$37: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$38: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$39: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$40: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$26, x$27, x$28, x$29, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37, x$38, x$39, x$40, x$25)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
-}))
+          models.users.UserDAO.findUserByEmailAsString(authUser)(connection)
         </td>
       </tr><tr>
         <td>
           239
         </td>
         <td>
-          7493
+          7460
         </td>
         <td>
-          8468
+          8442
           -
-          10059
+          8503
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.logger.error(&quot;User not found, can\'t access users collection&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          240
+        </td>
+        <td>
+          7461
+        </td>
+        <td>
+          8510
+          -
+          8515
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          241
+        </td>
+        <td>
+          7524
+        </td>
+        <td>
+          8350
+          -
+          10798
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          userLookup.fold[Boolean]({
+  OwcCollectionsService.this.logger.error(&quot;User not found, can\'t access users collection&quot;);
+  false
+})(((user: models.users.User) =&gt; {
+  val collectionLookup: Option[info.smart.models.owc100.OwcContext] = OwcCollectionsService.this.sessionHolder.viaConnection[Option[info.smart.models.owc100.OwcContext]](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)));
+  collectionLookup.fold[Boolean]({
+    OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;);
+    false
+  })(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
+    val owcResource: info.smart.models.owc100.OwcResource = {
+      &lt;artifact&gt; val x$6: java.net.URL = baseLink;
+      &lt;artifact&gt; val x$7: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption;
+      &lt;artifact&gt; val x$8: String = mdMetadata.title;
+      &lt;artifact&gt; val x$9: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.abstrakt).toOption();
+      &lt;artifact&gt; val x$10: java.time.OffsetDateTime = updatedTime;
+      &lt;artifact&gt; val x$11: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4));
+      &lt;artifact&gt; val x$12: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.pointOfContact).toOption();
+      &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.distribution.useLimitation).toOption();
+      &lt;artifact&gt; val x$14: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent));
+      &lt;artifact&gt; val x$15: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+      &lt;artifact&gt; val x$16: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+      &lt;artifact&gt; val x$17: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+      &lt;artifact&gt; val x$18: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink, cswLink);
+      &lt;artifact&gt; val x$19: List[info.smart.models.owc100.OwcOffering] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcOffering](cswOffering);
+      &lt;artifact&gt; val x$20: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption;
+      &lt;artifact&gt; val x$21: None.type = scala.None;
+      &lt;artifact&gt; val x$22: None.type = scala.None;
+      &lt;artifact&gt; val x$23: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = mdMetadata.keywords.map[info.smart.models.owc100.OwcCategory, List[info.smart.models.owc100.OwcCategory]](((w: String) =&gt; info.smart.models.owc100.OwcCategory.apply(w, scala.None, scala.None, info.smart.models.owc100.OwcCategory.apply$default$4)))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]);
+      &lt;artifact&gt; val x$24: None.type = scala.None;
+      info.smart.models.owc100.OwcResource.apply(x$6, x$8, x$9, x$10, x$11, x$12, x$13, x$7, x$14, x$15, x$16, x$17, x$19, x$22, x$18, x$23, x$20, x$21, x$24)
+    };
+    val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
+    val newDoc: info.smart.models.owc100.OwcContext = {
+      &lt;artifact&gt; val x$25: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
+      &lt;artifact&gt; val x$26: java.net.URL = owcDoc.copy$default$1;
+      &lt;artifact&gt; val x$27: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
+      &lt;artifact&gt; val x$28: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
+      &lt;artifact&gt; val x$29: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
+      &lt;artifact&gt; val x$30: String = owcDoc.copy$default$5;
+      &lt;artifact&gt; val x$31: String = owcDoc.copy$default$6;
+      &lt;artifact&gt; val x$32: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
+      &lt;artifact&gt; val x$33: java.time.OffsetDateTime = owcDoc.copy$default$8;
+      &lt;artifact&gt; val x$34: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
+      &lt;artifact&gt; val x$35: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
+      &lt;artifact&gt; val x$36: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
+      &lt;artifact&gt; val x$37: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
+      &lt;artifact&gt; val x$38: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
+      &lt;artifact&gt; val x$39: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
+      &lt;artifact&gt; val x$40: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
+      owcDoc.copy(x$26, x$27, x$28, x$29, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37, x$38, x$39, x$40, x$25)
+    };
+    OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
+  }))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          243
+        </td>
+        <td>
+          7463
+        </td>
+        <td>
+          8569
+          -
+          8687
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.SessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.sessionHolder.viaConnection[Option[info.smart.models.owc100.OwcContext]](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          244
+        </td>
+        <td>
+          7462
+        </td>
+        <td>
+          8632
+          -
+          8677
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContextDAO.findUserDefaultOwcContext
+        </td>
+        <td style="background: #F0ADAD">
+          models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          7464
+        </td>
+        <td>
+          8824
+          -
+          8891
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          249
+        </td>
+        <td>
+          7465
+        </td>
+        <td>
+          8902
+          -
+          8907
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          250
+        </td>
+        <td>
+          7523
+        </td>
+        <td>
+          8696
+          -
+          10792
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          collectionLookup.fold[Boolean]({
+  OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;);
+  false
+})(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
+  val owcResource: info.smart.models.owc100.OwcResource = {
+    &lt;artifact&gt; val x$6: java.net.URL = baseLink;
+    &lt;artifact&gt; val x$7: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption;
+    &lt;artifact&gt; val x$8: String = mdMetadata.title;
+    &lt;artifact&gt; val x$9: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.abstrakt).toOption();
+    &lt;artifact&gt; val x$10: java.time.OffsetDateTime = updatedTime;
+    &lt;artifact&gt; val x$11: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4));
+    &lt;artifact&gt; val x$12: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.pointOfContact).toOption();
+    &lt;artifact&gt; val x$13: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = utils.StringUtils.OptionConverters(mdMetadata.distribution.useLimitation).toOption();
+    &lt;artifact&gt; val x$14: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent));
+    &lt;artifact&gt; val x$15: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$16: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$17: List[Nothing] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.Nil;
+    &lt;artifact&gt; val x$18: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcLink](viaLink, cswLink);
+    &lt;artifact&gt; val x$19: List[info.smart.models.owc100.OwcOffering] @scala.reflect.internal.annotations.uncheckedBounds = immutable.this.List.apply[info.smart.models.owc100.OwcOffering](cswOffering);
+    &lt;artifact&gt; val x$20: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption;
+    &lt;artifact&gt; val x$21: None.type = scala.None;
+    &lt;artifact&gt; val x$22: None.type = scala.None;
+    &lt;artifact&gt; val x$23: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = mdMetadata.keywords.map[info.smart.models.owc100.OwcCategory, List[info.smart.models.owc100.OwcCategory]](((w: String) =&gt; info.smart.models.owc100.OwcCategory.apply(w, scala.None, scala.None, info.smart.models.owc100.OwcCategory.apply$default$4)))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]);
+    &lt;artifact&gt; val x$24: None.type = scala.None;
+    info.smart.models.owc100.OwcResource.apply(x$6, x$8, x$9, x$10, x$11, x$12, x$13, x$7, x$14, x$15, x$16, x$17, x$19, x$22, x$18, x$23, x$20, x$21, x$24)
+  };
+  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
+  val newDoc: info.smart.models.owc100.OwcContext = {
+    &lt;artifact&gt; val x$25: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
+    &lt;artifact&gt; val x$26: java.net.URL = owcDoc.copy$default$1;
+    &lt;artifact&gt; val x$27: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
+    &lt;artifact&gt; val x$28: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
+    &lt;artifact&gt; val x$29: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
+    &lt;artifact&gt; val x$30: String = owcDoc.copy$default$5;
+    &lt;artifact&gt; val x$31: String = owcDoc.copy$default$6;
+    &lt;artifact&gt; val x$32: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
+    &lt;artifact&gt; val x$33: java.time.OffsetDateTime = owcDoc.copy$default$8;
+    &lt;artifact&gt; val x$34: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
+    &lt;artifact&gt; val x$35: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
+    &lt;artifact&gt; val x$36: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
+    &lt;artifact&gt; val x$37: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
+    &lt;artifact&gt; val x$38: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
+    &lt;artifact&gt; val x$39: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
+    &lt;artifact&gt; val x$40: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
+    owcDoc.copy(x$26, x$27, x$28, x$29, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37, x$38, x$39, x$40, x$25)
+  };
+  OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          7501
+        </td>
+        <td>
+          8971
+          -
+          10512
         </td>
         <td>
           Apply
@@ -3738,36 +3883,15 @@
         </td>
       </tr><tr>
         <td>
-          241
+          255
         </td>
         <td>
-          7458
+          7467
         </td>
         <td>
-          8573
+          9046
           -
-          8611
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.gmd.MdMetadataExtent.mapExtentCoordinates
-        </td>
-        <td style="background: #F0ADAD">
-          mdMetadata.extent.mapExtentCoordinates
-        </td>
-      </tr><tr>
-        <td>
-          241
-        </td>
-        <td>
-          7459
-        </td>
-        <td>
-          8547
-          -
-          8621
+          9120
         </td>
         <td>
           Select
@@ -3780,15 +3904,36 @@
         </td>
       </tr><tr>
         <td>
-          242
+          255
         </td>
         <td>
-          7460
+          7466
         </td>
         <td>
-          8647
+          9072
           -
-          8663
+          9110
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadataExtent.mapExtentCoordinates
+        </td>
+        <td style="background: #F0ADAD">
+          mdMetadata.extent.mapExtentCoordinates
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          7468
+        </td>
+        <td>
+          9144
+          -
+          9160
         </td>
         <td>
           Select
@@ -3801,15 +3946,15 @@
         </td>
       </tr><tr>
         <td>
-          243
+          257
         </td>
         <td>
-          7461
+          7469
         </td>
         <td>
-          8692
+          9187
           -
-          8722
+          9217
         </td>
         <td>
           Apply
@@ -3822,57 +3967,15 @@
         </td>
       </tr><tr>
         <td>
-          245
+          259
         </td>
         <td>
-          7470
+          7476
         </td>
         <td>
-          8791
+          9287
           -
-          9043
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.collection.immutable.List.apply
-        </td>
-        <td style="background: #F0ADAD">
-          immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4))
-        </td>
-      </tr><tr>
-        <td>
-          245
-        </td>
-        <td>
-          7469
-        </td>
-        <td>
-          8796
-          -
-          9042
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          info.smart.models.owc100.OwcAuthor.apply
-        </td>
-        <td style="background: #F0ADAD">
-          info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4)
-        </td>
-      </tr><tr>
-        <td>
-          245
-        </td>
-        <td>
-          7468
-        </td>
-        <td>
-          8796
-          -
-          8796
+          9287
         </td>
         <td>
           Select
@@ -3885,15 +3988,15 @@
         </td>
       </tr><tr>
         <td>
-          245
+          259
         </td>
         <td>
-          7462
+          7470
         </td>
         <td>
-          8813
+          9304
           -
-          8866
+          9357
         </td>
         <td>
           Apply
@@ -3906,15 +4009,57 @@
         </td>
       </tr><tr>
         <td>
-          246
+          259
         </td>
         <td>
-          7464
+          7478
         </td>
         <td>
-          8894
+          9282
           -
-          8959
+          9530
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.apply
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.List.apply[info.smart.models.owc100.OwcAuthor](info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4))
+        </td>
+      </tr><tr>
+        <td>
+          259
+        </td>
+        <td>
+          7477
+        </td>
+        <td>
+          9287
+          -
+          9529
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcAuthor.apply
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcAuthor.apply(utils.StringUtils.OptionConverters(mdMetadata.responsibleParty.individualName).toOption(), OwcCollectionsService.this.parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email), scala.Some.apply[java.net.URL](new java.net.URL(mdMetadata.responsibleParty.orgWebLinkage)), info.smart.models.owc100.OwcAuthor.apply$default$4)
+        </td>
+      </tr><tr>
+        <td>
+          260
+        </td>
+        <td>
+          7472
+        </td>
+        <td>
+          9383
+          -
+          9448
         </td>
         <td>
           Apply
@@ -3927,15 +4072,15 @@
         </td>
       </tr><tr>
         <td>
-          246
+          260
         </td>
         <td>
-          7463
+          7471
         </td>
         <td>
-          8925
+          9414
           -
-          8958
+          9447
         </td>
         <td>
           Select
@@ -3948,15 +4093,15 @@
         </td>
       </tr><tr>
         <td>
-          247
+          261
         </td>
         <td>
-          7467
+          7475
         </td>
         <td>
-          8985
+          9472
           -
-          9041
+          9528
         </td>
         <td>
           Apply
@@ -3969,15 +4114,15 @@
         </td>
       </tr><tr>
         <td>
-          247
+          261
         </td>
         <td>
-          7466
+          7474
         </td>
         <td>
-          8990
+          9477
           -
-          9040
+          9527
         </td>
         <td>
           Apply
@@ -3990,15 +4135,15 @@
         </td>
       </tr><tr>
         <td>
-          247
+          261
         </td>
         <td>
-          7465
+          7473
         </td>
         <td>
-          8998
+          9485
           -
-          9039
+          9526
         </td>
         <td>
           Select
@@ -4011,15 +4156,15 @@
         </td>
       </tr><tr>
         <td>
-          248
+          262
         </td>
         <td>
-          7471
+          7479
         </td>
         <td>
-          9073
+          9558
           -
-          9126
+          9611
         </td>
         <td>
           Apply
@@ -4032,15 +4177,15 @@
         </td>
       </tr><tr>
         <td>
-          249
+          263
         </td>
         <td>
-          7472
+          7480
         </td>
         <td>
-          9153
+          9636
           -
-          9201
+          9684
         </td>
         <td>
           Apply
@@ -4053,57 +4198,15 @@
         </td>
       </tr><tr>
         <td>
-          250
+          264
         </td>
         <td>
-          7475
+          7481
         </td>
         <td>
-          9236
+          9763
           -
-          9316
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          utils.GeoDateParserUtils.parseOffsetDateString
-        </td>
-        <td style="background: #F0ADAD">
-          utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent))
-        </td>
-      </tr><tr>
-        <td>
-          250
-        </td>
-        <td>
-          7474
-        </td>
-        <td>
-          9277
-          -
-          9315
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[String](mdMetadata.extent.temporalExtent)
-        </td>
-      </tr><tr>
-        <td>
-          250
-        </td>
-        <td>
-          7473
-        </td>
-        <td>
-          9282
-          -
-          9314
+          9795
         </td>
         <td>
           Select
@@ -4116,15 +4219,57 @@
         </td>
       </tr><tr>
         <td>
-          253
+          264
         </td>
         <td>
-          7476
+          7483
         </td>
         <td>
-          9412
+          9717
           -
-          9418
+          9797
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.GeoDateParserUtils.parseOffsetDateString
+        </td>
+        <td style="background: #F0ADAD">
+          utils.GeoDateParserUtils.parseOffsetDateString(scala.Some.apply[String](mdMetadata.extent.temporalExtent))
+        </td>
+      </tr><tr>
+        <td>
+          264
+        </td>
+        <td>
+          7482
+        </td>
+        <td>
+          9758
+          -
+          9796
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](mdMetadata.extent.temporalExtent)
+        </td>
+      </tr><tr>
+        <td>
+          267
+        </td>
+        <td>
+          7484
+        </td>
+        <td>
+          9889
+          -
+          9895
         </td>
         <td>
           Select
@@ -4137,15 +4282,15 @@
         </td>
       </tr><tr>
         <td>
-          256
+          270
         </td>
         <td>
-          7477
+          7485
         </td>
         <td>
-          9507
+          9980
           -
-          9513
+          9986
         </td>
         <td>
           Select
@@ -4158,15 +4303,15 @@
         </td>
       </tr><tr>
         <td>
-          259
+          273
         </td>
         <td>
-          7478
+          7486
         </td>
         <td>
-          9608
+          10077
           -
-          9614
+          10083
         </td>
         <td>
           Select
@@ -4179,15 +4324,15 @@
         </td>
       </tr><tr>
         <td>
-          262
+          276
         </td>
         <td>
-          7479
+          7487
         </td>
         <td>
-          9697
+          10162
           -
-          9719
+          10184
         </td>
         <td>
           Apply
@@ -4200,15 +4345,15 @@
         </td>
       </tr><tr>
         <td>
-          263
+          277
         </td>
         <td>
-          7480
+          7488
         </td>
         <td>
-          9748
+          10211
           -
-          9765
+          10228
         </td>
         <td>
           Apply
@@ -4221,57 +4366,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          278
         </td>
         <td>
-          7481
+          7490
         </td>
         <td>
-          9809
+          10270
           -
-          9825
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.gmd.MdMetadata.scale
-        </td>
-        <td style="background: #F0ADAD">
-          mdMetadata.scale
-        </td>
-      </tr><tr>
-        <td>
-          264
-        </td>
-        <td>
-          7483
-        </td>
-        <td>
-          9805
-          -
-          9844
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.util.Try.toOption
-        </td>
-        <td style="background: #F0ADAD">
-          scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption
-        </td>
-      </tr><tr>
-        <td>
-          264
-        </td>
-        <td>
-          7482
-        </td>
-        <td>
-          9809
-          -
-          9834
+          10295
         </td>
         <td>
           Select
@@ -4284,141 +4387,120 @@
         </td>
       </tr><tr>
         <td>
-          265
-        </td>
-        <td>
-          7484
-        </td>
-        <td>
-          9884
-          -
-          9888
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          266
-        </td>
-        <td>
-          7485
-        </td>
-        <td>
-          9915
-          -
-          9919
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          267
-        </td>
-        <td>
-          7488
-        </td>
-        <td>
-          9976
-          -
-          9976
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcCategory.apply$default$4
-        </td>
-        <td style="background: #F0ADAD">
-          info.smart.models.owc100.OwcCategory.apply$default$4
-        </td>
-      </tr><tr>
-        <td>
-          267
-        </td>
-        <td>
-          7487
-        </td>
-        <td>
-          10021
-          -
-          10025
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          267
-        </td>
-        <td>
-          7490
-        </td>
-        <td>
-          9970
-          -
-          9970
-        </td>
-        <td>
-          TypeApply
-        </td>
-        <td>
-          scala.collection.immutable.List.canBuildFrom
-        </td>
-        <td style="background: #F0ADAD">
-          immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]
-        </td>
-      </tr><tr>
-        <td>
-          267
-        </td>
-        <td>
-          7486
-        </td>
-        <td>
-          10007
-          -
-          10011
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          267
+          278
         </td>
         <td>
           7489
         </td>
         <td>
-          9976
+          10270
           -
-          10026
+          10286
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.gmd.MdMetadata.scale
+        </td>
+        <td style="background: #F0ADAD">
+          mdMetadata.scale
+        </td>
+      </tr><tr>
+        <td>
+          278
+        </td>
+        <td>
+          7491
+        </td>
+        <td>
+          10266
+          -
+          10305
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.util.Try.toOption
+        </td>
+        <td style="background: #F0ADAD">
+          scala.util.Try.apply[Double](scala.this.Predef.augmentString(mdMetadata.scale).toDouble).toOption
+        </td>
+      </tr><tr>
+        <td>
+          279
+        </td>
+        <td>
+          7492
+        </td>
+        <td>
+          10343
+          -
+          10347
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          280
+        </td>
+        <td>
+          7493
+        </td>
+        <td>
+          10372
+          -
+          10376
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          281
+        </td>
+        <td>
+          7494
+        </td>
+        <td>
+          10462
+          -
+          10466
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          281
+        </td>
+        <td>
+          7497
+        </td>
+        <td>
+          10431
+          -
+          10481
         </td>
         <td>
           Apply
@@ -4431,15 +4513,36 @@
         </td>
       </tr><tr>
         <td>
-          267
+          281
         </td>
         <td>
-          7491
+          7496
         </td>
         <td>
-          9947
+          10431
           -
-          10027
+          10431
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcCategory.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          info.smart.models.owc100.OwcCategory.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          281
+        </td>
+        <td>
+          7499
+        </td>
+        <td>
+          10402
+          -
+          10482
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4452,15 +4555,15 @@
         </td>
       </tr><tr>
         <td>
-          268
+          281
         </td>
         <td>
-          7492
+          7495
         </td>
         <td>
-          10054
+          10476
           -
-          10058
+          10480
         </td>
         <td>
           Select
@@ -4473,57 +4576,57 @@
         </td>
       </tr><tr>
         <td>
-          270
+          281
         </td>
         <td>
-          7494
+          7498
         </td>
         <td>
-          10108
+          10425
           -
-          10124
+          10425
         </td>
         <td>
-          Apply
+          TypeApply
         </td>
         <td>
-          scala.collection.generic.GenericCompanion.apply
+          scala.collection.immutable.List.canBuildFrom
         </td>
         <td style="background: #F0ADAD">
-          collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource)
+          immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcCategory]
         </td>
       </tr><tr>
         <td>
-          270
+          282
         </td>
         <td>
-          7496
+          7500
         </td>
         <td>
-          10089
+          10507
           -
-          10124
+          10511
         </td>
         <td>
-          ApplyToImplicitArgs
+          Select
         </td>
         <td>
-          scala.collection.immutable.List.++
+          scala.None
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource])
+          scala.None
         </td>
       </tr><tr>
         <td>
-          270
+          284
         </td>
         <td>
-          7495
+          7503
         </td>
         <td>
-          10105
+          10556
           -
-          10105
+          10556
         </td>
         <td>
           TypeApply
@@ -4536,15 +4639,204 @@
         </td>
       </tr><tr>
         <td>
-          271
+          284
+        </td>
+        <td>
+          7502
+        </td>
+        <td>
+          10559
+          -
+          10575
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.apply
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource)
+        </td>
+      </tr><tr>
+        <td>
+          284
+        </td>
+        <td>
+          7504
+        </td>
+        <td>
+          10540
+          -
+          10575
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.immutable.List.++
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource])
+        </td>
+      </tr><tr>
+        <td>
+          285
         </td>
         <td>
           7512
         </td>
         <td>
-          10152
+          10608
           -
-          10183
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$8
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$8
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7515
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$11
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$11
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7506
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$2
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7514
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$10
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$10
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7505
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$1
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$1
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7517
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$13
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$13
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7508
+        </td>
+        <td>
+          10608
+          -
+          10608
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$4
+        </td>
+      </tr><tr>
+        <td>
+          285
+        </td>
+        <td>
+          7520
+        </td>
+        <td>
+          10601
+          -
+          10632
         </td>
         <td>
           Apply
@@ -4557,15 +4849,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7503
+          7511
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
@@ -4578,141 +4870,15 @@
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7506
+          7519
         </td>
         <td>
-          10159
+          10608
           -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$10
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$10
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7497
-        </td>
-        <td>
-          10159
-          -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$1
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$1
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7505
-        </td>
-        <td>
-          10159
-          -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$9
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$9
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7499
-        </td>
-        <td>
-          10159
-          -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$3
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$3
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7508
-        </td>
-        <td>
-          10159
-          -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$12
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$12
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7502
-        </td>
-        <td>
-          10159
-          -
-          10159
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$6
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$6
-        </td>
-      </tr><tr>
-        <td>
-          271
-        </td>
-        <td>
-          7511
-        </td>
-        <td>
-          10159
-          -
-          10159
+          10608
         </td>
         <td>
           Select
@@ -4725,99 +4891,99 @@
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
           7510
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$14
+          info.smart.models.owc100.OwcContext.copy$default$6
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$14
+          owcDoc.copy$default$6
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7504
+          7513
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$8
+          info.smart.models.owc100.OwcContext.copy$default$9
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$8
+          owcDoc.copy$default$9
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
           7507
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$11
+          info.smart.models.owc100.OwcContext.copy$default$3
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$11
+          owcDoc.copy$default$3
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7498
+          7516
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$2
+          info.smart.models.owc100.OwcContext.copy$default$12
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$2
+          owcDoc.copy$default$12
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7501
+          7509
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
@@ -4830,57 +4996,57 @@
         </td>
       </tr><tr>
         <td>
-          271
+          285
         </td>
         <td>
-          7509
+          7518
         </td>
         <td>
-          10159
+          10608
           -
-          10159
+          10608
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$13
+          info.smart.models.owc100.OwcContext.copy$default$14
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$13
+          owcDoc.copy$default$14
         </td>
       </tr><tr>
         <td>
-          271
+          287
         </td>
         <td>
-          7500
+          7522
         </td>
         <td>
-          10159
+          10646
           -
-          10159
+          10782
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$4
+          models.db.SessionHolder.viaTransaction
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$4
+          OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
         </td>
       </tr><tr>
         <td>
-          272
+          288
         </td>
         <td>
-          7513
+          7521
         </td>
         <td>
-          10198
+          10714
           -
-          10252
+          10768
         </td>
         <td>
           Select
@@ -4893,165 +5059,281 @@
         </td>
       </tr><tr>
         <td>
-          286
+          302
         </td>
         <td>
-          7539
+          7526
         </td>
         <td>
-          10485
+          11013
           -
-          10930
+          11119
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.db.SessionHolder.viaTransaction
+          models.db.SessionHolder.viaConnection
         </td>
         <td style="background: #F0ADAD">
-          OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection).exists(((user: models.users.User) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$41: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$42: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$43: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$44: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$45: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$46: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$47: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$49: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$50: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$52: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$53: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$55: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$56: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
-}))))))
+          OwcCollectionsService.this.sessionHolder.viaConnection[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection)))
         </td>
       </tr><tr>
         <td>
-          287
+          303
         </td>
         <td>
-          7538
+          7525
         </td>
         <td>
-          10543
+          11072
           -
-          10924
+          11113
         </td>
         <td>
-          Apply
+          ApplyToImplicitArgs
         </td>
         <td>
-          scala.Option.exists
+          models.users.UserDAO.findUserByEmailAsString
         </td>
         <td style="background: #F0ADAD">
-          models.users.UserDAO.findUserByEmailAsString(authUser)(connection).exists(((user: models.users.User) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$41: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$42: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$43: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$44: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$45: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$46: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$47: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$49: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$50: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$52: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$53: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$55: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$56: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
-}))))
+          models.users.UserDAO.findUserByEmailAsString(authUser)(connection)
         </td>
       </tr><tr>
         <td>
-          289
+          307
         </td>
         <td>
-          7537
+          7527
         </td>
         <td>
-          10620
+          11216
           -
-          10916
+          11277
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.Option.exists
+          play.api.LoggerLike.error
         </td>
         <td style="background: #F0ADAD">
-          models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection).exists(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
-  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
-  val newDoc: info.smart.models.owc100.OwcContext = {
-    &lt;artifact&gt; val x$41: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
-    &lt;artifact&gt; val x$42: java.net.URL = owcDoc.copy$default$1;
-    &lt;artifact&gt; val x$43: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
-    &lt;artifact&gt; val x$44: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
-    &lt;artifact&gt; val x$45: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
-    &lt;artifact&gt; val x$46: String = owcDoc.copy$default$5;
-    &lt;artifact&gt; val x$47: String = owcDoc.copy$default$6;
-    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
-    &lt;artifact&gt; val x$49: java.time.OffsetDateTime = owcDoc.copy$default$8;
-    &lt;artifact&gt; val x$50: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
-    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
-    &lt;artifact&gt; val x$52: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
-    &lt;artifact&gt; val x$53: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
-    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
-    &lt;artifact&gt; val x$55: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
-    &lt;artifact&gt; val x$56: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
-    owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
-  };
-  models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined
+          OwcCollectionsService.this.logger.error(&quot;User not found, can\'t access users collection&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          308
+        </td>
+        <td>
+          7528
+        </td>
+        <td>
+          11284
+          -
+          11289
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          309
+        </td>
+        <td>
+          7555
+        </td>
+        <td>
+          11124
+          -
+          11998
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          userLookup.fold[Boolean]({
+  OwcCollectionsService.this.logger.error(&quot;User not found, can\'t access users collection&quot;);
+  false
+})(((user: models.users.User) =&gt; {
+  val collectionLookup: Option[info.smart.models.owc100.OwcContext] = OwcCollectionsService.this.sessionHolder.viaConnection[Option[info.smart.models.owc100.OwcContext]](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)));
+  collectionLookup.fold[Boolean]({
+    OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;);
+    false
+  })(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
+    val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
+    val newDoc: info.smart.models.owc100.OwcContext = {
+      &lt;artifact&gt; val x$41: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
+      &lt;artifact&gt; val x$42: java.net.URL = owcDoc.copy$default$1;
+      &lt;artifact&gt; val x$43: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
+      &lt;artifact&gt; val x$44: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
+      &lt;artifact&gt; val x$45: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
+      &lt;artifact&gt; val x$46: String = owcDoc.copy$default$5;
+      &lt;artifact&gt; val x$47: String = owcDoc.copy$default$6;
+      &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
+      &lt;artifact&gt; val x$49: java.time.OffsetDateTime = owcDoc.copy$default$8;
+      &lt;artifact&gt; val x$50: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
+      &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
+      &lt;artifact&gt; val x$52: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
+      &lt;artifact&gt; val x$53: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
+      &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
+      &lt;artifact&gt; val x$55: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
+      &lt;artifact&gt; val x$56: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
+      owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
+    };
+    OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
+  }))
 }))
         </td>
       </tr><tr>
         <td>
-          291
+          311
         </td>
         <td>
-          7517
+          7530
         </td>
         <td>
-          10746
+          11343
           -
-          10762
+          11461
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.collection.generic.GenericCompanion.apply
+          models.db.SessionHolder.viaConnection
         </td>
         <td style="background: #F0ADAD">
-          collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource)
+          OwcCollectionsService.this.sessionHolder.viaConnection[Option[info.smart.models.owc100.OwcContext]](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)))
         </td>
       </tr><tr>
         <td>
-          291
+          312
         </td>
         <td>
-          7519
+          7529
         </td>
         <td>
-          10727
+          11406
           -
-          10762
+          11451
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContextDAO.findUserDefaultOwcContext
+        </td>
+        <td style="background: #F0ADAD">
+          models.owc.OwcContextDAO.findUserDefaultOwcContext(user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          316
+        </td>
+        <td>
+          7531
+        </td>
+        <td>
+          11598
+          -
+          11665
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          317
+        </td>
+        <td>
+          7532
+        </td>
+        <td>
+          11676
+          -
+          11681
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          7554
+        </td>
+        <td>
+          11470
+          -
+          11992
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          collectionLookup.fold[Boolean]({
+  OwcCollectionsService.this.logger.error(&quot;Collection not found, can\'t access users collection&quot;);
+  false
+})(((owcDoc: info.smart.models.owc100.OwcContext) =&gt; {
+  val entries: List[info.smart.models.owc100.OwcResource] = owcDoc.resource.++[info.smart.models.owc100.OwcResource, List[info.smart.models.owc100.OwcResource]](collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource))(immutable.this.List.canBuildFrom[info.smart.models.owc100.OwcResource]);
+  val newDoc: info.smart.models.owc100.OwcContext = {
+    &lt;artifact&gt; val x$41: List[info.smart.models.owc100.OwcResource] @scala.reflect.internal.annotations.uncheckedBounds = entries;
+    &lt;artifact&gt; val x$42: java.net.URL = owcDoc.copy$default$1;
+    &lt;artifact&gt; val x$43: Option[org.locationtech.spatial4j.shape.Rectangle] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$2;
+    &lt;artifact&gt; val x$44: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$3;
+    &lt;artifact&gt; val x$45: List[info.smart.models.owc100.OwcLink] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$4;
+    &lt;artifact&gt; val x$46: String = owcDoc.copy$default$5;
+    &lt;artifact&gt; val x$47: String = owcDoc.copy$default$6;
+    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$7;
+    &lt;artifact&gt; val x$49: java.time.OffsetDateTime = owcDoc.copy$default$8;
+    &lt;artifact&gt; val x$50: List[info.smart.models.owc100.OwcAuthor] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$9;
+    &lt;artifact&gt; val x$51: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$10;
+    &lt;artifact&gt; val x$52: Option[info.smart.models.owc100.OwcCreatorApplication] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$11;
+    &lt;artifact&gt; val x$53: Option[info.smart.models.owc100.OwcCreatorDisplay] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$12;
+    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$13;
+    &lt;artifact&gt; val x$55: Option[List[java.time.OffsetDateTime]] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$14;
+    &lt;artifact&gt; val x$56: List[info.smart.models.owc100.OwcCategory] @scala.reflect.internal.annotations.uncheckedBounds = owcDoc.copy$default$15;
+    owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
+  };
+  OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          320
+        </td>
+        <td>
+          7535
+        </td>
+        <td>
+          11740
+          -
+          11775
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5064,15 +5346,15 @@
         </td>
       </tr><tr>
         <td>
-          291
+          320
         </td>
         <td>
-          7518
+          7534
         </td>
         <td>
-          10743
+          11756
           -
-          10743
+          11756
         </td>
         <td>
           TypeApply
@@ -5085,99 +5367,36 @@
         </td>
       </tr><tr>
         <td>
-          292
+          320
         </td>
         <td>
-          7530
+          7533
         </td>
         <td>
-          10797
+          11759
           -
-          10797
+          11775
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$11
+          scala.collection.generic.GenericCompanion.apply
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$11
+          collection.this.Seq.apply[info.smart.models.owc100.OwcResource](owcResource)
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7521
+          7548
         </td>
         <td>
-          10797
+          11808
           -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$2
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$2
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7524
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$5
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$5
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7523
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$4
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$4
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7532
-        </td>
-        <td>
-          10797
-          -
-          10797
+          11808
         </td>
         <td>
           Select
@@ -5190,141 +5409,36 @@
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7526
+          7539
         </td>
         <td>
-          10797
+          11808
           -
-          10797
+          11808
         </td>
         <td>
           Select
         </td>
         <td>
-          info.smart.models.owc100.OwcContext.copy$default$7
+          info.smart.models.owc100.OwcContext.copy$default$4
         </td>
         <td style="background: #F0ADAD">
-          owcDoc.copy$default$7
+          owcDoc.copy$default$4
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7535
+          7547
         </td>
         <td>
-          10790
+          11808
           -
-          10821
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7520
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$1
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$1
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7529
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$10
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$10
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7528
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$9
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$9
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7522
-        </td>
-        <td>
-          10797
-          -
-          10797
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcContext.copy$default$3
-        </td>
-        <td style="background: #F0ADAD">
-          owcDoc.copy$default$3
-        </td>
-      </tr><tr>
-        <td>
-          292
-        </td>
-        <td>
-          7531
-        </td>
-        <td>
-          10797
-          -
-          10797
+          11808
         </td>
         <td>
           Select
@@ -5337,15 +5451,15 @@
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7525
+          7541
         </td>
         <td>
-          10797
+          11808
           -
-          10797
+          11808
         </td>
         <td>
           Select
@@ -5358,15 +5472,15 @@
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7534
+          7550
         </td>
         <td>
-          10797
+          11808
           -
-          10797
+          11808
         </td>
         <td>
           Select
@@ -5379,15 +5493,99 @@
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7533
+          7544
         </td>
         <td>
-          10797
+          11808
           -
-          10797
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$9
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$9
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7538
+        </td>
+        <td>
+          11808
+          -
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$3
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7546
+        </td>
+        <td>
+          11808
+          -
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$11
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$11
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7537
+        </td>
+        <td>
+          11808
+          -
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$2
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7549
+        </td>
+        <td>
+          11808
+          -
+          11808
         </td>
         <td>
           Select
@@ -5400,15 +5598,36 @@
         </td>
       </tr><tr>
         <td>
-          292
+          321
         </td>
         <td>
-          7527
+          7540
         </td>
         <td>
-          10797
+          11808
           -
-          10797
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$5
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7543
+        </td>
+        <td>
+          11808
+          -
+          11808
         </td>
         <td>
           Select
@@ -5421,15 +5640,120 @@
         </td>
       </tr><tr>
         <td>
-          293
+          321
+        </td>
+        <td>
+          7551
+        </td>
+        <td>
+          11801
+          -
+          11832
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy(x$42, x$43, x$44, x$45, x$46, x$47, x$48, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$41)
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7542
+        </td>
+        <td>
+          11808
+          -
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$7
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$7
+        </td>
+      </tr><tr>
+        <td>
+          321
         </td>
         <td>
           7536
         </td>
         <td>
-          10836
+          11808
           -
-          10890
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$1
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$1
+        </td>
+      </tr><tr>
+        <td>
+          321
+        </td>
+        <td>
+          7545
+        </td>
+        <td>
+          11808
+          -
+          11808
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContext.copy$default$10
+        </td>
+        <td style="background: #F0ADAD">
+          owcDoc.copy$default$10
+        </td>
+      </tr><tr>
+        <td>
+          323
+        </td>
+        <td>
+          7553
+        </td>
+        <td>
+          11846
+          -
+          11982
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.SessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.sessionHolder.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.owc.OwcContextDAO.updateOwcContext(newDoc, user)(connection).isDefined))
+        </td>
+      </tr><tr>
+        <td>
+          324
+        </td>
+        <td>
+          7552
+        </td>
+        <td>
+          11914
+          -
+          11968
         </td>
         <td>
           Select
@@ -5442,15 +5766,15 @@
         </td>
       </tr><tr>
         <td>
-          308
+          338
         </td>
         <td>
-          7541
+          7557
         </td>
         <td>
-          11166
+          12234
           -
-          11294
+          12362
         </td>
         <td>
           Apply
@@ -5463,15 +5787,15 @@
         </td>
       </tr><tr>
         <td>
-          310
+          340
         </td>
         <td>
-          7540
+          7556
         </td>
         <td>
-          11239
+          12307
           -
-          11293
+          12361
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5484,15 +5808,15 @@
         </td>
       </tr><tr>
         <td>
-          310
+          340
         </td>
         <td>
-          7543
+          7559
         </td>
         <td>
-          11108
+          12176
           -
-          11311
+          12379
         </td>
         <td>
           Apply
@@ -5505,15 +5829,15 @@
         </td>
       </tr><tr>
         <td>
-          310
+          340
         </td>
         <td>
-          7542
+          7558
         </td>
         <td>
-          11306
+          12374
           -
-          11310
+          12378
         </td>
         <td>
           Select
@@ -5526,15 +5850,15 @@
         </td>
       </tr><tr>
         <td>
-          321
+          351
         </td>
         <td>
-          7545
+          7561
         </td>
         <td>
-          11547
+          12615
           -
-          11669
+          12737
         </td>
         <td>
           Apply
@@ -5547,57 +5871,15 @@
         </td>
       </tr><tr>
         <td>
-          323
+          353
         </td>
         <td>
-          7547
+          7562
         </td>
         <td>
-          11489
+          12749
           -
-          11686
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          OwcCollectionsService.this.sessionHolder.viaTransaction[Option[Option[info.smart.models.owc100.OwcContext]]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection).map[Option[info.smart.models.owc100.OwcContext]](((user: models.users.User) =&gt; models.owc.OwcContextDAO.updateOwcContext(owcContext, user)(connection))))).getOrElse[Option[info.smart.models.owc100.OwcContext]](scala.None)
-        </td>
-      </tr><tr>
-        <td>
-          323
-        </td>
-        <td>
-          7544
-        </td>
-        <td>
-          11620
-          -
-          11668
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.owc.OwcContextDAO.updateOwcContext
-        </td>
-        <td style="background: #F0ADAD">
-          models.owc.OwcContextDAO.updateOwcContext(owcContext, user)(connection)
-        </td>
-      </tr><tr>
-        <td>
-          323
-        </td>
-        <td>
-          7546
-        </td>
-        <td>
-          11681
-          -
-          11685
+          12753
         </td>
         <td>
           Select
@@ -5610,15 +5892,57 @@
         </td>
       </tr><tr>
         <td>
-          333
+          353
         </td>
         <td>
-          7553
+          7560
         </td>
         <td>
-          11853
+          12688
           -
-          12253
+          12736
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContextDAO.updateOwcContext
+        </td>
+        <td style="background: #F0ADAD">
+          models.owc.OwcContextDAO.updateOwcContext(owcContext, user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          353
+        </td>
+        <td>
+          7563
+        </td>
+        <td>
+          12557
+          -
+          12754
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCollectionsService.this.sessionHolder.viaTransaction[Option[Option[info.smart.models.owc100.OwcContext]]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(authUser)(connection).map[Option[info.smart.models.owc100.OwcContext]](((user: models.users.User) =&gt; models.owc.OwcContextDAO.updateOwcContext(owcContext, user)(connection))))).getOrElse[Option[info.smart.models.owc100.OwcContext]](scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          363
+        </td>
+        <td>
+          7569
+        </td>
+        <td>
+          12921
+          -
+          13321
         </td>
         <td>
           Apply
@@ -5634,15 +5958,15 @@
         </td>
       </tr><tr>
         <td>
-          334
+          364
         </td>
         <td>
-          7552
+          7568
         </td>
         <td>
-          11910
+          12978
           -
-          12252
+          13320
         </td>
         <td>
           Apply
@@ -5658,15 +5982,15 @@
         </td>
       </tr><tr>
         <td>
-          336
+          366
         </td>
         <td>
-          7548
+          7564
         </td>
         <td>
-          12003
+          13071
           -
-          12072
+          13140
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5679,15 +6003,15 @@
         </td>
       </tr><tr>
         <td>
-          338
+          368
         </td>
         <td>
-          7549
+          7565
         </td>
         <td>
-          12112
+          13180
           -
-          12117
+          13185
         </td>
         <td>
           Literal
@@ -5700,15 +6024,15 @@
         </td>
       </tr><tr>
         <td>
-          339
+          369
         </td>
         <td>
-          7551
+          7567
         </td>
         <td>
-          12083
+          13151
           -
-          12244
+          13312
         </td>
         <td>
           Apply
@@ -5721,15 +6045,15 @@
         </td>
       </tr><tr>
         <td>
-          341
+          371
         </td>
         <td>
-          7550
+          7566
         </td>
         <td>
-          12170
+          13238
           -
-          12218
+          13286
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5742,15 +6066,15 @@
         </td>
       </tr><tr>
         <td>
-          355
+          385
         </td>
         <td>
-          7554
+          7570
         </td>
         <td>
-          12604
+          13672
           -
-          12637
+          13705
         </td>
         <td>
           Apply
@@ -5763,57 +6087,15 @@
         </td>
       </tr><tr>
         <td>
-          356
+          386
         </td>
         <td>
-          7557
+          7571
         </td>
         <td>
-          12647
+          13720
           -
-          12678
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(emailString))
-        </td>
-      </tr><tr>
-        <td>
-          356
-        </td>
-        <td>
-          7556
-        </td>
-        <td>
-          12647
-          -
-          12678
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(emailString))
-        </td>
-      </tr><tr>
-        <td>
-          356
-        </td>
-        <td>
-          7555
-        </td>
-        <td>
-          12652
-          -
-          12677
+          13745
         </td>
         <td>
           Apply
@@ -5826,42 +6108,57 @@
         </td>
       </tr><tr>
         <td>
-          358
+          386
         </td>
         <td>
-          7564
+          7573
         </td>
         <td>
-          12729
+          13715
           -
-          12934
+          13746
         </td>
         <td>
           Block
         </td>
         <td>
-          &lt;nosymbol&gt;
+          scala.Some.apply
         </td>
         <td style="background: #F0ADAD">
-          {
-  val commaFree: String = scala.this.Predef.refArrayOps[String](emailString.split(&quot;,&quot;)).head.trim();
-  scala.util.Try.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(commaFree)) match {
-    case (value: uk.gov.hmrc.emailaddress.EmailAddress)scala.util.Success[uk.gov.hmrc.emailaddress.EmailAddress]((e @ _)) =&gt; scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](e)
-    case _ =&gt; scala.None
-  }
-}
+          scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(emailString))
         </td>
       </tr><tr>
         <td>
-          358
+          386
         </td>
         <td>
-          7558
+          7572
         </td>
         <td>
-          12702
+          13715
           -
-          12727
+          13746
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(emailString))
+        </td>
+      </tr><tr>
+        <td>
+          388
+        </td>
+        <td>
+          7574
+        </td>
+        <td>
+          13770
+          -
+          13795
         </td>
         <td>
           Apply
@@ -5874,15 +6171,15 @@
         </td>
       </tr><tr>
         <td>
-          358
+          388
         </td>
         <td>
-          7567
+          7583
         </td>
         <td>
-          12698
+          13766
           -
-          12962
+          14030
         </td>
         <td>
           If
@@ -5904,15 +6201,42 @@ else
         </td>
       </tr><tr>
         <td>
-          359
+          388
         </td>
         <td>
-          7559
+          7580
         </td>
         <td>
-          12755
+          13797
           -
-          12787
+          14002
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val commaFree: String = scala.this.Predef.refArrayOps[String](emailString.split(&quot;,&quot;)).head.trim();
+  scala.util.Try.apply[uk.gov.hmrc.emailaddress.EmailAddress](uk.gov.hmrc.emailaddress.EmailAddress.apply(commaFree)) match {
+    case (value: uk.gov.hmrc.emailaddress.EmailAddress)scala.util.Success[uk.gov.hmrc.emailaddress.EmailAddress]((e @ _)) =&gt; scala.Some.apply[uk.gov.hmrc.emailaddress.EmailAddress](e)
+    case _ =&gt; scala.None
+  }
+}
+        </td>
+      </tr><tr>
+        <td>
+          389
+        </td>
+        <td>
+          7575
+        </td>
+        <td>
+          13823
+          -
+          13855
         </td>
         <td>
           Apply
@@ -5925,15 +6249,15 @@ else
         </td>
       </tr><tr>
         <td>
-          361
+          391
         </td>
         <td>
-          7561
+          7577
         </td>
         <td>
-          12797
+          13865
           -
-          12846
+          13914
         </td>
         <td>
           Apply
@@ -5946,15 +6270,15 @@ else
         </td>
       </tr><tr>
         <td>
-          362
+          392
         </td>
         <td>
-          7560
+          7576
         </td>
         <td>
-          12813
+          13881
           -
-          12836
+          13904
         </td>
         <td>
           Apply
@@ -5967,15 +6291,15 @@ else
         </td>
       </tr><tr>
         <td>
-          364
+          394
         </td>
         <td>
-          7562
+          7578
         </td>
         <td>
-          12884
+          13952
           -
-          12891
+          13959
         </td>
         <td>
           Apply
@@ -5988,15 +6312,15 @@ else
         </td>
       </tr><tr>
         <td>
-          365
+          395
         </td>
         <td>
-          7563
+          7579
         </td>
         <td>
-          12912
+          13980
           -
-          12916
+          13984
         </td>
         <td>
           Select
@@ -6009,15 +6333,15 @@ else
         </td>
       </tr><tr>
         <td>
-          368
+          398
         </td>
         <td>
-          7566
+          7582
         </td>
         <td>
-          12950
+          14018
           -
-          12954
+          14022
         </td>
         <td>
           Block
@@ -6030,15 +6354,15 @@ else
         </td>
       </tr><tr>
         <td>
-          368
+          398
         </td>
         <td>
-          7565
+          7581
         </td>
         <td>
-          12950
+          14018
           -
-          12954
+          14022
         </td>
         <td>
           Select

@@ -230,49 +230,65 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       length = None,
       rel = "via")
 
-    sessionHolder.viaTransaction(implicit connection =>
-      UserDAO.findUserByEmailAsString(authUser).exists {
-        user =>
-          OwcContextDAO.findUserDefaultOwcContext(user).exists {
-            owcDoc => {
+    val userLookup = sessionHolder.viaConnection { implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser)
+    }
 
-              val owcResource = OwcResource(
-                id = baseLink,
-                geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
-                title = mdMetadata.title,
-                subtitle = mdMetadata.abstrakt.toOption(),
-                updateDate = updatedTime,
-                author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
-                  email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
-                  uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
-                publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
-                rights = mdMetadata.distribution.useLimitation.toOption(),
-                temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
+    userLookup.fold {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't access users collection")
+      false
+    } {
+      user =>
+        val collectionLookup = sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findUserDefaultOwcContext(user)
+        }
+        collectionLookup.fold {
+          // collection not found, then can't insert, should probably also not happen usually
+          logger.error("Collection not found, can't access users collection")
+          false
+        } {
+          owcDoc =>
 
-                // links.alternates[] and rel=alternate
-                contentDescription = List(),
+            val owcResource = OwcResource(
+              id = baseLink,
+              geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
+              title = mdMetadata.title,
+              subtitle = mdMetadata.abstrakt.toOption(),
+              updateDate = updatedTime,
+              author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
+                email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
+                uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
+              publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
+              rights = mdMetadata.distribution.useLimitation.toOption(),
+              temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
 
-                // aka links.previews[] and rel=icon (atom)
-                preview = List(),
+              // links.alternates[] and rel=alternate
+              contentDescription = List(),
 
-                // aka links.data[] and rel=enclosure (atom)
-                contentByRef = List(),
+              // aka links.previews[] and rel=icon (atom)
+              preview = List(),
 
-                // aka links.via[] & rel=via
-                resourceMetadata = List(viaLink, cswLink),
-                offering = List(cswOffering),
-                minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
-                maxScaleDenominator = None,
-                active = None,
-                keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
-                folder = None)
+              // aka links.data[] and rel=enclosure (atom)
+              contentByRef = List(),
 
-              val entries = owcDoc.resource ++ Seq(owcResource)
-              val newDoc = owcDoc.copy(resource = entries)
+              // aka links.via[] & rel=via
+              resourceMetadata = List(viaLink, cswLink),
+              offering = List(cswOffering),
+              minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
+              maxScaleDenominator = None,
+              active = None,
+              keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
+              folder = None)
+
+            val entries = owcDoc.resource ++ Seq(owcResource)
+            val newDoc = owcDoc.copy(resource = entries)
+
+            sessionHolder.viaTransaction { implicit connection =>
               OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
-          }
-      })
+        }
+    }
   }
 
   /**
@@ -283,18 +299,32 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     */
   def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
 
-    sessionHolder.viaTransaction(implicit connection =>
-      UserDAO.findUserByEmailAsString(authUser).exists {
-        user =>
-          OwcContextDAO.findUserDefaultOwcContext(user).exists {
-            owcDoc => {
-              val entries = owcDoc.resource ++ Seq(owcResource)
-              val newDoc = owcDoc.copy(resource = entries)
+    val userLookup = sessionHolder.viaConnection { implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser)
+    }
+    userLookup.fold {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't access users collection")
+      false
+    } {
+      user =>
+        val collectionLookup = sessionHolder.viaConnection { implicit connection =>
+          OwcContextDAO.findUserDefaultOwcContext(user)
+        }
+        collectionLookup.fold {
+          // collection not found, then can't insert, should probably also not happen usually
+          logger.error("Collection not found, can't access users collection")
+          false
+        } {
+          owcDoc =>
+            val entries = owcDoc.resource ++ Seq(owcResource)
+            val newDoc = owcDoc.copy(resource = entries)
+
+            sessionHolder.viaTransaction { implicit connection =>
               OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
-          }
-      }
-    )
+        }
+    }
   }
 
   /**

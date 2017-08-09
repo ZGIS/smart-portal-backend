@@ -61,8 +61,8 @@ CREATE TABLE owc_context_has_owc_resources (
 CREATE TABLE user_has_owc_context_rights (
   users_accountsubject varchar(255) REFERENCES users(accountsubject),
   owc_context_id varchar(2047) REFERENCES owc_contexts(id),
-  rights_relation_type varchar(255),
-  visibility SMALLINT
+  rights_relation_type varchar(255) NOT NULL,
+  visibility SMALLINT NOT NULL
 );
 
 CREATE TABLE owc_authors (
@@ -167,3 +167,4 @@ DROP TABLE owc_resources;
 DROP TABLE owc_contexts;
 
 DROP TABLE users;
+

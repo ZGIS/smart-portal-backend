@@ -27,18 +27,6 @@ import info.smart.models.owc100._
 
 package object owc {
 
-  //  implicit val tableOwcDocumentsHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
-  //  implicit val tableOwcEntriesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
-  //  implicit val tableOwcFeatureTypesHasOwcProperties = "owc_feature_types_has_owc_properties"
-  //  implicit val tableOwcFeatureTypesHasOwcOfferings = "owc_feature_types_as_entry_has_owc_offerings"
-  //  implicit val tableOwcFeatureTypesAsDocumentHasOwcEntries = "owc_feature_types_as_document_has_owc_entries"
-  //  implicit val tableOwcFeatureTypesAsEntryHasOwcOfferings ="owc_feature_types_as_entry_has_owc_offerings"
-  //  implicit val tableOwcPropertiesHasOwcAuthors = "owc_properties_has_owc_authors"
-  //  implicit val tableOwcPropertiesHasOwcAuthorsAsContributors = "owc_properties_has_owc_authors_as_contributors"
-  //  implicit val tableOwcPropertiesHasOwcCategories = "owc_properties_has_owc_categories"
-  //  implicit val tableOwcPropertiesHasOwcLinks = "owc_properties_has_owc_links"
-  //  implicit val tableOwcOfferingsHasOwcOperations = "owc_offerings_has_owc_operations"
-
   val tableOwcContextHasOwcResources = "owc_context_has_owc_resources"
   val tableUserHasOwcContextRights = "user_has_owc_context_rights"
 

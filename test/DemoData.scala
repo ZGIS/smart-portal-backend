@@ -323,7 +323,7 @@ class DemoData {
   val owcContext1 = OwcContext(
     id = new URL("http://portal.smart-project.info/context/smart-sac"),
     areaOfInterest = Some(world),
-    specReference = List(OwcProfile.CORE.value), // aka links.profiles[] & rel=profile
+    specReference = List(OwcProfile.CORE.value.copy(uuid = UUID.randomUUID())), // aka links.profiles[] & rel=profile
     contextMetadata = List(link2.copy(uuid = UUID.randomUUID())), // aka links.via[] & rel=via
     language = "en",
     title = "NZ SAC Recharge Case Study",
@@ -339,6 +339,23 @@ class DemoData {
     resource = List(owcResource1.copy(id = new URL("http://portal.smart-project.info/context/resource/smart-sac_copy")),
       owcResource2.copy(id = new URL("http://portal.smart-project.info/context/resource/smart-sac-demo_copy"))))
 
+  val owcContext2 = OwcContext(
+    id = new URL("http://portal.smart-project.info/context/smart-sac2"),
+    areaOfInterest = Some(world),
+    specReference = List(OwcProfile.CORE.value.copy(uuid = UUID.randomUUID())), // aka links.profiles[] & rel=profile
+    contextMetadata = List(link2.copy(uuid = UUID.randomUUID())), // aka links.via[] & rel=via
+    language = "en",
+    title = "NZ SAC Recharge Case Study 2",
+    subtitle = Some("Some Bla Recharge and more"),
+    updateDate = testTime,
+    author = List(author3.copy(uuid = UUID.randomUUID())),
+    publisher = Some("GNS Science"),
+    creatorApplication = None,
+    creatorDisplay = Some(OwcCreatorDisplay(pixelWidth = Some(1024), pixelHeight = Some(860), mmPerPixel = None)),
+    rights = Some("CC BY SA 4.0 NZ"),
+    timeIntervalOfInterest = None,
+    keyword = List(),
+    resource = List())
 
   def testUser1(cryptPass: String) = User(EmailAddress("test@blubb.com"),
     "local:test@blubb.com",

@@ -26,6 +26,12 @@ import anorm.SqlParser.get
 import anorm.{SQL, ~}
 import utils.ClassnameLogger
 
+/**
+  * UserGroup Users Level object (members and their rights level)
+  * @param usergroups_uuid
+  * @param users_accountsubject
+  * @param userlevel 0 = normal group member, 1 = power-user ? is that enough
+  */
 case class UserGroupUsersLevel(usergroups_uuid: UUID,
                                users_accountsubject: String,
                                userlevel: Int) extends ClassnameLogger {
@@ -75,7 +81,7 @@ object UserGroupUsersLevel extends ClassnameLogger {
     val rowCount = SQL(
       s"""
           update $table_groups_users set
-            userlevel = {userlevel},
+            userlevel = {userlevel}
             where usergroups_uuid = {usergroups_uuid} and users_accountsubject = {users_accountsubject}
         """).on(
       'userlevel -> userGroupUsersLevel.userlevel,
@@ -100,6 +106,7 @@ object UserGroupUsersLevel extends ClassnameLogger {
     * @return
     */
   def deleteUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel)(implicit connection: Connection): Boolean = {
+
     val rowCount = SQL(s"delete from $table_groups_users where usergroups_uuid = {usergroups_uuid} and users_accountsubject = {users_accountsubject}").on(
       'users_accountsubject -> userGroupUsersLevel.users_accountsubject,
       'usergroups_uuid -> userGroupUsersLevel.usergroups_uuid.toString

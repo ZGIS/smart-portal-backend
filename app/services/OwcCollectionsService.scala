@@ -140,7 +140,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
   def createUserDefaultCollection(user: User): Option[OwcContext] = {
 
     val propsUuid = UUID.randomUUID()
-    val profileLink = OwcProfile.CORE.value
+    val profileLink = OwcProfile.CORE.value.copy(uuid = UUID.randomUUID())
 
     val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 

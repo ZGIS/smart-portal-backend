@@ -353,16 +353,19 @@ object OwcResourceDAO extends ClassnameLogger {
     // get current list of UUIDs,
     val current: List[UUID] = currentOwcAuthors.map(_.uuid)
 
-    // get old list of UUIDs,
-    val old: List[UUID] = owcAggregator match {
-      case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.author.map(_.uuid)).getOrElse(List())
-      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.author.map(_.uuid)).getOrElse(List())
-      case _ => throw new InvalidClassException(s"The parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
+    // get old list of OwcAuthor,
+    val oldOwcAuthors: List[OwcAuthor] = owcAggregator match {
+      case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.author).getOrElse(List())
+      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.author).getOrElse(List())
+      case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
+
+    // get old list of UUIDs,
+    val old: List[UUID] = oldOwcAuthors.map(_.uuid)
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = currentOwcAuthors.filter(o => toBeDeleted.contains(o.uuid))
+    val deleted = oldOwcAuthors.filter(o => toBeDeleted.contains(o.uuid))
       .map(OwcAuthorDAO.deleteOwcAuthor(_))
       .count(_ == true) == toBeDeleted.length
 
@@ -405,22 +408,25 @@ object OwcResourceDAO extends ClassnameLogger {
       case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
 
+    // get old list of OwcLinks,
+    val oldOwcLinks: List[OwcLink] = owcAggregator match {
+      case owcAggregator: OwcResource =>
+        findOwcResourceById(owcAggregator.id).map(o => o.contentDescription ++ o.preview ++
+          o.contentByRef ++ o.resourceMetadata).getOrElse(List())
+      case owcAggregator: OwcContext =>
+        OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.specReference ++ o.contextMetadata).getOrElse(List())
+      case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
+    }
+
     // get current list of UUIDs,
     val current: List[UUID] = currentOwcLinks.map(_.uuid)
 
     // get old list of UUIDs,
-    val old: List[UUID] = owcAggregator match {
-      case owcAggregator: OwcResource =>
-        findOwcResourceById(owcAggregator.id).map(o => (o.contentDescription ++ o.preview ++
-          o.contentByRef ++ o.resourceMetadata).map(_.uuid)).getOrElse(List())
-      case owcAggregator: OwcContext =>
-        OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => (o.specReference ++ o.contextMetadata).map(_.uuid)).getOrElse(List())
-      case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
-    }
+    val old: List[UUID] = oldOwcLinks.map(_.uuid)
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = currentOwcLinks.filter(o => toBeDeleted.contains(o.uuid))
+    val deleted = oldOwcLinks.filter(o => toBeDeleted.contains(o.uuid))
       .map(OwcLinkDAO.deleteOwcLink(_))
       .count(_ == true) == toBeDeleted.length
 
@@ -458,14 +464,15 @@ object OwcResourceDAO extends ClassnameLogger {
     val current: List[UUID] = owcResource.offering.map(_.uuid)
 
     // get old list,
-    val old: List[UUID] = findOwcResourceById(owcResource.id)
-      .map(o => o.offering.map(_.uuid)).getOrElse(List())
+    val oldOwcResource = findOwcResourceById(owcResource.id)
+    val old: List[UUID] = oldOwcResource.map(o => o.offering.map(_.uuid)).getOrElse(List())
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = owcResource.offering.filter(o => toBeDeleted.contains(o.uuid))
-      .map(OwcOfferingDAO.deleteOwcOffering(_))
-      .count(_ == true) == toBeDeleted.length
+    val deleted = oldOwcResource.map { owcResource =>
+      owcResource.offering.filter(o => toBeDeleted.contains(o.uuid))
+        .map(OwcOfferingDAO.deleteOwcOffering(_))
+    }.count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
@@ -508,16 +515,19 @@ object OwcResourceDAO extends ClassnameLogger {
     // get current list of UUIDs,
     val current: List[UUID] = currentOwcCategories.map(_.uuid)
 
-    // get old list of UUIDs,
-    val old: List[UUID] = owcAggregator match {
-      case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.keyword.map(_.uuid)).getOrElse(List())
-      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.keyword.map(_.uuid)).getOrElse(List())
+    // get old list of OwcCategory,
+    val oldOwcCategories: List[OwcCategory] = owcAggregator match {
+      case owcAggregator: OwcResource => findOwcResourceById(owcAggregator.id).map(o => o.keyword).getOrElse(List())
+      case owcAggregator: OwcContext => OwcContextDAO.findOwcContextById(owcAggregator.id).map(o => o.keyword).getOrElse(List())
       case _ => throw new InvalidClassException(s"The evidence parameter type ${owcAggregator.getClass.getCanonicalName} not supported here")
     }
 
+    // get old list of UUIDs,
+    val old: List[UUID] = oldOwcCategories.map(_.uuid)
+
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = currentOwcCategories.filter(o => toBeDeleted.contains(o.uuid))
+    val deleted = oldOwcCategories.filter(o => toBeDeleted.contains(o.uuid))
       .map(OwcCategoryDAO.deleteOwcCategory(_))
       .count(_ == true) == toBeDeleted.length
 

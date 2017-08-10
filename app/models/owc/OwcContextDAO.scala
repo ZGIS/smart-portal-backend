@@ -522,25 +522,27 @@ object OwcContextDAO extends ClassnameLogger {
     val current: List[URL] = owcContext.resource.map(_.id)
 
     // get old list,
-    val old: List[URL] = findOwcContextById(owcContext.id)
-      .map(o => o.resource.map(_.id)).getOrElse(List())
+    val oldOwcContext = findOwcContextById(owcContext.id)
+    val old: List[URL] = oldOwcContext.map(o => o.resource.map(_.id)).getOrElse(List())
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = owcContext.resource.filter(o => toBeDeleted.contains(o.id))
-      .map { owcResource =>
-        // delete relation from tableOwcContextHasOwcResources table before finally deleting referenced OwcResource
-        val deletedOwcResourceRelation = SQL(
-          s"""Delete from $tableOwcContextHasOwcResources where
-             |owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".stripMargin).on(
-          'owc_context_id -> owcContext.id.toString,
-          'owc_resource_id -> owcResource.id.toString
-        ).executeUpdate().equals(1)
+    val deleted = oldOwcContext.map { owcContext =>
+      owcContext.resource.filter(o => toBeDeleted.contains(o.id))
+        .map { owcResource =>
+          // delete relation from tableOwcContextHasOwcResources table before finally deleting referenced OwcResource
+          val deletedOwcResourceRelation = SQL(
+            s"""Delete from $tableOwcContextHasOwcResources where
+owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".stripMargin).on(
+            'owc_context_id -> owcContext.id.toString,
+            'owc_resource_id -> owcResource.id.toString
+          ).executeUpdate().equals(1)
 
-        val deletedOwcResource = OwcResourceDAO.deleteOwcResource(owcResource)
+          val deletedOwcResource = OwcResourceDAO.deleteOwcResource(owcResource)
 
-        deletedOwcResource && deletedOwcResourceRelation
-      }.count(_ == true) == toBeDeleted.length
+          deletedOwcResource && deletedOwcResourceRelation
+        }
+    }.count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)

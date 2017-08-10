@@ -192,14 +192,15 @@ object OwcOfferingDAO extends ClassnameLogger {
     val current: List[UUID] = owcOffering.operations.map(_.uuid)
 
     // get old list,
-    val old: List[UUID] = findOwcOfferingByUuid(owcOffering.uuid)
-      .map(o => o.operations.map(_.uuid)).getOrElse(List())
+    val oldOwcOffering = findOwcOfferingByUuid(owcOffering.uuid)
+    val old: List[UUID] = oldOwcOffering.map(o => o.operations.map(_.uuid)).getOrElse(List())
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = owcOffering.operations.filter(o => toBeDeleted.contains(o.uuid))
-      .map(OwcOperationDAO.deleteOwcOperation(_))
-      .count(_ == true) == toBeDeleted.length
+    val deleted = oldOwcOffering.map { owcOffering =>
+      owcOffering.operations.filter(o => toBeDeleted.contains(o.uuid))
+        .map(OwcOperationDAO.deleteOwcOperation(_))
+    }.count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
@@ -234,14 +235,15 @@ object OwcOfferingDAO extends ClassnameLogger {
     val current: List[UUID] = owcOffering.contents.map(_.uuid)
 
     // get old list,
-    val old: List[UUID] = findOwcOfferingByUuid(owcOffering.uuid)
-      .map(o => o.contents.map(_.uuid)).getOrElse(List())
+    val oldOwcOffering = findOwcOfferingByUuid(owcOffering.uuid)
+    val old: List[UUID] = oldOwcOffering.map(o => o.contents.map(_.uuid)).getOrElse(List())
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = owcOffering.contents.filter(o => toBeDeleted.contains(o.uuid))
-      .map(OwcContentDAO.deleteOwcContent(_))
-      .count(_ == true) == toBeDeleted.length
+    val deleted = oldOwcOffering.map { owcOffering =>
+      owcOffering.contents.filter(o => toBeDeleted.contains(o.uuid))
+        .map(OwcContentDAO.deleteOwcContent(_))
+    }.count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
@@ -276,14 +278,15 @@ object OwcOfferingDAO extends ClassnameLogger {
     val current: List[UUID] = owcOffering.styles.map(_.uuid)
 
     // get old list,
-    val old: List[UUID] = findOwcOfferingByUuid(owcOffering.uuid)
-      .map(o => o.styles.map(_.uuid)).getOrElse(List())
+    val oldOwcOffering = findOwcOfferingByUuid(owcOffering.uuid)
+    val old: List[UUID] = oldOwcOffering.map(o => o.styles.map(_.uuid)).getOrElse(List())
 
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
-    val deleted = owcOffering.styles.filter(o => toBeDeleted.contains(o.uuid))
-      .map(OwcStyleSetDAO.deleteOwcStyleSet(_))
-      .count(_ == true) == toBeDeleted.length
+    val deleted = oldOwcOffering.map { owcOffering =>
+      owcOffering.styles.filter(o => toBeDeleted.contains(o.uuid))
+        .map(OwcStyleSetDAO.deleteOwcStyleSet(_))
+    }.count(_ == true) == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)

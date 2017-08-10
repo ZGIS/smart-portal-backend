@@ -75,7 +75,7 @@ object UserGroupContextsVisibility extends ClassnameLogger {
     val rowCount = SQL(
       s"""
           update $table_groups_context set
-            visibility = {visibility},
+            visibility = {visibility}
             where usergroups_uuid = {usergroups_uuid} and owc_context_id = {owc_context_id}
         """).on(
       'visibility -> userGroupContextsVisibility.visibility,

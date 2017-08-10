@@ -19,16 +19,14 @@
 
 package models.users
 
-import java.net.URL
 import java.sql.Connection
 import java.time.ZonedDateTime
 import java.util.UUID
 
 import anorm.SqlParser.get
 import anorm.{RowParser, SQL, ~}
-import info.smart.models.owc100.{OwcAuthor, OwcContext, OwcOperation}
-import models.owc.OwcAuthorDAO.logger
-import models.owc.{OwcContextDAO, tableOwcAuthors}
+import info.smart.models.owc100.OwcContext
+import models.owc.OwcContextDAO
 import utils.ClassnameLogger
 
 case class UserGroup(uuid: UUID,
@@ -143,28 +141,33 @@ object UserGroup extends ClassnameLogger {
     val current: List[String] = userGroup.hasUsersLevel.map(_.users_accountsubject).toList
 
     // get user rules for group old list,
-    val old: List[String] = findUserGroupsById(userGroup.uuid)
-      .map(gl => gl.hasUsersLevel.map(_.users_accountsubject)).getOrElse(List())
+    val oldUserGroup = findUserGroupsById(userGroup.uuid)
+    val old: List[String] = oldUserGroup.map(gl => gl.hasUsersLevel.map(_.users_accountsubject)).getOrElse(List())
 
     // in old but not current -> delete user rules for this account subject (and current usergroup uuid)
     val toBeDeleted = old.diff(current)
-    val deleted = userGroup.hasUsersLevel.filter(gl => toBeDeleted.contains(gl.users_accountsubject))
-      .map { userGroupUsersLevel =>
-        // delete UserGroupUsersLevel relation
-        UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)
-      }.count(_ == true) == toBeDeleted.length
+
+    val deletedCount = oldUserGroup.map { ogl =>
+      ogl.hasUsersLevel.filter(gl => toBeDeleted.contains(gl.users_accountsubject))
+      .map { gl =>
+        UserGroupUsersLevel.deleteUserGroupUsersLevel(gl)
+      }.count(_ == true)}.getOrElse(0)
+
+    val deleted: Boolean = deletedCount == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
+
     val updated = userGroup.hasUsersLevel.filter(gl => toBeUpdated.contains(gl.users_accountsubject))
       .map(gl => UserGroupUsersLevel.updateUserGroupUsersLevel(gl))
       .count(_.isDefined) == toBeUpdated.length
 
     // in current but not in old -> insert
     val toBeInserted = current.diff(old)
+
     val inserted = userGroup.hasUsersLevel.filter(gl => toBeInserted.contains(gl.users_accountsubject))
       .map { userGroupUsersLevel =>
-        // delete UserGroupUsersLevel relation
+        // create UserGroupUsersLevel relation
         UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)
       }
       .count(_.isDefined) == toBeInserted.length
@@ -182,16 +185,18 @@ object UserGroup extends ClassnameLogger {
     val current: List[String] = userGroup.hasOwcContextsVisibility.map(_.owc_context_id).toList
 
     // get user rules for group old list,
-    val old: List[String] = findUserGroupsById(userGroup.uuid)
-      .map(cv => cv.hasOwcContextsVisibility.map(_.owc_context_id)).getOrElse(List())
+    val oldUserGroup = findUserGroupsById(userGroup.uuid)
+    val old: List[String] = oldUserGroup.map(cv => cv.hasOwcContextsVisibility.map(_.owc_context_id)).getOrElse(List())
 
     // in old but not current -> delete user rules for this account subject (and current usergroup uuid)
     val toBeDeleted = old.diff(current)
-    val deleted = userGroup.hasOwcContextsVisibility.filter(cv => toBeDeleted.contains(cv.owc_context_id))
-      .map { userGroupContextsVisibility =>
-        // delete UserGroupContextsVisibility relation
-        UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)
-      }.count(_ == true) == toBeDeleted.length
+    val deletedCount = oldUserGroup.map { ocv =>
+      ocv.hasOwcContextsVisibility.filter(cv => toBeDeleted.contains(cv.owc_context_id))
+        .map { userGroupContextsVisibility =>
+          // delete UserGroupContextsVisibility relation
+          UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)
+        }.count(_ == true)}.getOrElse(0)
+    val deleted: Boolean = deletedCount == toBeDeleted.length
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
@@ -237,13 +242,13 @@ object UserGroup extends ClassnameLogger {
 
       rowCount match {
         case 1 => Some(userGroup)
-        case _ => logger.error("UserGroup couldn't be updated")
+        case _ => logger.error(s"UserGroup couldn't be updated, error $rowCount")
           // we need to think where to place rollback most appropriately
           connection.rollback()
           None
       }
     } else {
-      logger.error("UserGroup couldn't be updated")
+      logger.error("UserGroup couldn't be updated because of failed precondition")
       // we need to think where to place rollback most appropriately
       connection.rollback()
       None

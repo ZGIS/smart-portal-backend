@@ -27,7 +27,7 @@ import play.api.{Application, Configuration}
 /**
   * Test Spec for [[OwcCategoryDAO]] with [[info.smart.models.owc100.OwcCategory]]
   */
-class OwcCategoryDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcCategoryDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

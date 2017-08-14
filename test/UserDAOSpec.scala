@@ -25,17 +25,17 @@ import controllers.{ProfileJs, RegisterJs}
 import models.db.SessionHolder
 import models.users._
 import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import org.scalatestplus.play.OneAppPerTest
 import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.libs.json._
 import play.api.{Application, Configuration}
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.PasswordHashing
-import play.api.libs.json._
 
 /**
   * Test Spec for [[User]] and [[UserDAO]]
   */
-class UserDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class UserDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

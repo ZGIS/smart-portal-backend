@@ -17,16 +17,8 @@
  * limitations under the License.
  */
 
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.PlaySpec
-
-import scala.concurrent.Future
-import org.scalatestplus.play._
 import play.api.mvc._
-import play.api.test._
-import play.api.test.Helpers._
-import utils.ClassnameLogger
 
-class UserControllerSpec extends PlaySpec with GivenWhenThen with Results with ClassnameLogger {
+class UserControllerSpec extends WithDefaultTest with Results {
 
 }

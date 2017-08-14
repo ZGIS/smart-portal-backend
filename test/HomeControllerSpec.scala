@@ -17,11 +17,8 @@
  * limitations under the License.
  */
 
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.PlaySpec
 import play.api.mvc.Results
-import utils.ClassnameLogger
 
-class HomeControllerSpec extends PlaySpec with GivenWhenThen with Results with ClassnameLogger {
+class HomeControllerSpec extends WithDefaultTest with Results {
 
 }

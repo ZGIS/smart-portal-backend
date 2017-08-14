@@ -10,7 +10,7 @@ import play.api.test.Helpers._
  * add your integration spec here.
  * An integration test will fire up a whole play application in a real (or headless) browser
  */
-class IntegrationSpec extends PlaySpec with OneServerPerTest with BeforeAndAfter with WithTestDatabase with OneBrowserPerTest with HtmlUnitFactory {
+class IntegrationSpec extends WithDefaultTest with OneServerPerTest with BeforeAndAfter with WithTestDatabase with OneBrowserPerTest with HtmlUnitFactory {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application =

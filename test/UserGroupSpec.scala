@@ -17,27 +17,23 @@
  * limitations under the License.
  */
 
-import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
-import controllers.{ProfileJs, RegisterJs}
 import models.db.SessionHolder
 import models.owc.OwcContextDAO
 import models.users._
 import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import org.scalatestplus.play.OneAppPerTest
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
-import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.PasswordHashing
-import play.api.libs.json._
 
 /**
   * Test Spec for [[UserGroup]] and [[UserGroupUsersLevel]] and [[UserGroupContextsVisibility]]
   */
-class UserGroupSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class UserGroupSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

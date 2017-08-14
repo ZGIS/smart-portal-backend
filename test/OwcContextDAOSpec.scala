@@ -37,7 +37,7 @@ import utils.PasswordHashing
 /**
   * Test Spec for [[models.owc.OwcContextDAO]] with [[info.smart.models.owc100.OwcContext]]
   */
-class OwcContextDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcContextDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

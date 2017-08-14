@@ -21,8 +21,8 @@ import akka.stream.Materializer
 import com.typesafe.config.ConfigFactory
 import controllers.CollectionsController
 import info.smart.models.owc100.OwcContext
-import org.scalatest.{GivenWhenThen, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import org.scalatest.TestData
+import org.scalatestplus.play.OneAppPerTest
 import org.specs2.mock._
 import play.api.cache.CacheApi
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -31,10 +31,9 @@ import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Configuration}
 import services.{EmailService, OwcCollectionsService}
-import utils.{ClassnameLogger, PasswordHashing}
+import utils.PasswordHashing
 
-class CollectionsControllerSpec extends PlaySpec with OneAppPerTest with
-  GivenWhenThen with Results with ClassnameLogger with Mockito {
+class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with Results with Mockito {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

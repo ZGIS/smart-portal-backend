@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+ * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
  * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
  * Ministry of Business, Innovation and Employment (MBIE)
@@ -8,7 +8,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,15 @@
  * limitations under the License.
  */
 
-class EmailServiceSpec extends WithDefaultTest {
+import com.typesafe.config.ConfigFactory
+import org.scalatest.{BeforeAndAfter, TestData}
+import org.scalatestplus.play.OneAppPerTest
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.{Application, Configuration}
 
+trait WithDefaultTestAppAndDatabase extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+
+  import scala.language.implicitConversions
+  implicit override def newAppForTest(testData: TestData): Application = new
+      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
 }

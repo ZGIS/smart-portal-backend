@@ -18,64 +18,26 @@
  */
 
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfter, Ignore, TestData}
+import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play._
 import play.api.db.evolutions._
-import play.api.db.{Database, Databases}
 import play.api.inject.guice._
 import play.api.libs.json._
 import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Configuration}
-import utils.ClassnameLogger
-import scala.language.implicitConversions
 
-/**
-  *
-  */
-trait WithTestDatabase extends ClassnameLogger {
 
-  /**
-    *
-    * @param block
-    * @tparam T
-    * @return
-    */
-  def withTestDatabase[T](block: Database => T): T = {
-    val config = new Configuration(ConfigFactory.load("application.test.conf"))
-
-    val driver = config.getString("db.default.driver").get
-    val url = config.getString("db.default.url").get
-    val username = config.getString("db.default.username").get
-    val password = config.getString("db.default.password").get
-    val logSql = config.getBoolean("db.default.logSql").get
-
-    logger.info(s"logSql: $logSql")
-
-    Databases.withDatabase(
-      driver = driver,
-      url = url,
-      config = Map(
-        "username" -> username,
-        "password" -> password,
-        "logStatements" -> logSql
-      )
-    ) { database =>
-      Evolutions.withEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/")) {
-        block(database)
-      }
-    }
-  }
-}
 
 /**
   * Add your spec here.
   * You can mock out a whole application including requests, plugins etc.
   * For more information, consult the wiki.
   */
-class ApplicationSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase  {
+class ApplicationSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase  {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
+  import scala.language.implicitConversions
   implicit override def newAppForTest(testData: TestData): Application = new
       GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
 

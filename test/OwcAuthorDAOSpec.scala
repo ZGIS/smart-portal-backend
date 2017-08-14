@@ -20,14 +20,14 @@
 import com.typesafe.config.ConfigFactory
 import models.owc._
 import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import org.scalatestplus.play.OneAppPerTest
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
 
 /**
   * Test Spec for [[OwcAuthorDAO]] with [[info.smart.models.owc100.OwcAuthor]]
   */
-class OwcAuthorDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcAuthorDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

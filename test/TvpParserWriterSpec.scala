@@ -18,12 +18,10 @@
  */
 
 import models.tvp._
-import org.scalatestplus.play.PlaySpec
-import utils.ClassnameLogger
 
 import scala.io.Source
 
-class TvpParserWriterSpec extends PlaySpec with ClassnameLogger {
+class TvpParserWriterSpec extends WithDefaultTest {
 
   private lazy val om2Resource1  = this.getClass().getResource("tvp/sos-om2-one-series.xml")
   private lazy val wml2Resource1 = this.getClass().getResource("tvp/sos-wml2-one-series.xml")

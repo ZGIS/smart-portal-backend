@@ -18,12 +18,11 @@
  */
 
 import models.metadata.ValidValues
-import org.scalatestplus.play.PlaySpec
 
 /**
   * Specification test for {@link ValidValues}
   */
-class ValidValuesSpec extends PlaySpec {
+class ValidValuesSpec extends WithDefaultTest {
 
   "Instantiation " should {
     "succeed on values list + standard value" in {

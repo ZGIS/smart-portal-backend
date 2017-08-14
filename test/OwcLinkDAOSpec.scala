@@ -27,7 +27,7 @@ import play.api.{Application, Configuration}
 /**
   * Test Spec for [[OwcLinkDAO]] with [[info.smart.models.owc100.OwcLink]]
   */
-class OwcLinkDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcLinkDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

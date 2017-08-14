@@ -22,18 +22,16 @@ import java.util.UUID
 
 import com.typesafe.config.ConfigFactory
 import models.gmd._
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.{OneAppPerSuite, PlaySpec}
+import org.scalatestplus.play.OneAppPerSuite
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.{JsValue, Json}
 import play.api.{Application, Configuration}
-import utils.ClassnameLogger
 
 
 /**
   *
   */
-class MdMetadataSpec extends PlaySpec with GivenWhenThen with OneAppPerSuite with ClassnameLogger {
+class MdMetadataSpec extends WithDefaultTest with OneAppPerSuite {
 
   /**
     * custom application config for testing

@@ -18,17 +18,16 @@
  */
 
 import com.typesafe.config.ConfigFactory
-import info.smart.models.owc100._
 import models.owc._
 import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
+import org.scalatestplus.play.OneAppPerTest
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.{Application, Configuration}
 
 /**
   * Test Spec for [[OwcStyleSetDAO]] with [[info.smart.models.owc100.OwcStyleSet]]
   */
-class OwcStyleSetDAOSpec extends PlaySpec with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
+class OwcStyleSetDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
 
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   import scala.language.implicitConversions

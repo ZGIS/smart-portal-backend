@@ -17,11 +17,8 @@
  * limitations under the License.
  */
 
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.PlaySpec
 import play.api.mvc.Results
-import utils.ClassnameLogger
 
-class CswControllerSpec extends PlaySpec with GivenWhenThen with Results with ClassnameLogger {
+class CswControllerSpec extends WithDefaultTest with Results {
 
 }

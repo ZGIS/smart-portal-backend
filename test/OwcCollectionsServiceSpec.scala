@@ -17,9 +17,6 @@
  * limitations under the License.
  */
 
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.PlaySpec
-
-class OwcCollectionsServiceSpec extends PlaySpec with GivenWhenThen {
+class OwcCollectionsServiceSpec extends WithDefaultTest {
 
 }

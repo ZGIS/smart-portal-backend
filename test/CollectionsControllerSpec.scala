@@ -21,8 +21,8 @@ import akka.stream.Materializer
 import com.typesafe.config.ConfigFactory
 import controllers.CollectionsController
 import info.smart.models.owc100.OwcContext
-import org.scalatest.GivenWhenThen
-import org.scalatestplus.play.PlaySpec
+import org.scalatest.{GivenWhenThen, TestData}
+import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
 import org.specs2.mock._
 import play.api.cache.CacheApi
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -33,10 +33,12 @@ import play.api.{Application, Configuration}
 import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
 
-class CollectionsControllerSpec extends PlaySpec with
+class CollectionsControllerSpec extends PlaySpec with OneAppPerTest with
   GivenWhenThen with Results with ClassnameLogger with Mockito {
 
-  val app: Application = new GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
+  import scala.language.implicitConversions
+  implicit override def newAppForTest(testData: TestData): Application = new GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
   implicit lazy val materializer: Materializer = app.materializer
 
   "CollectionsController#getCollections" should {

@@ -17,36 +17,24 @@
  * limitations under the License.
  */
 
-import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play._
 import play.api.db.evolutions._
-import play.api.inject.guice._
 import play.api.libs.json._
 import play.api.test.Helpers._
 import play.api.test._
-import play.api.{Application, Configuration}
-
-
 
 /**
   * Add your spec here.
   * You can mock out a whole application including requests, plugins etc.
   * For more information, consult the wiki.
   */
-class ApplicationSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase  {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class ApplicationSpec extends WithDefaultTestFullAppAndDatabase  {
 
   before {
-    // EMPTY
+    // here can go customisation
   }
 
   after {
-    // EMPTY
+    // here can go customisation
   }
 
   lazy val PROFILENOPASS = """{"email":"alex@example.com","accountSubject":"local:alex@example.com","firstname":"Alex","lastname":"K"}"""
@@ -59,6 +47,8 @@ class ApplicationSpec extends WithDefaultTest with OneAppPerTest with BeforeAndA
       route(app, FakeRequest(GET, "/api/v1/login/gconnect")).map(status(_)) mustBe Some(NOT_FOUND)
     }
 
+    // TODO as used here is currently duplicate of WithTestDatabase trait, instead db application should go
+    // into before/after blocks
     "send 401 on a unauthorized request" in {
       withTestDatabase { database =>
         Evolutions.applyEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/"))

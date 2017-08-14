@@ -20,26 +20,15 @@
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
-import com.typesafe.config.ConfigFactory
 import models.db.SessionHolder
 import models.owc.OwcContextDAO
 import models.users._
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.OneAppPerTest
-import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.{Application, Configuration}
 import utils.PasswordHashing
 
 /**
   * Test Spec for [[UserGroup]] and [[UserGroupUsersLevel]] and [[UserGroupContextsVisibility]]
   */
-class UserGroupSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class UserGroupSpec extends WithDefaultTestFullAppAndDatabase {
 
   "UserGroup" can {
 

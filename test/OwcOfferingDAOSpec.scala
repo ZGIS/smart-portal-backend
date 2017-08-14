@@ -17,25 +17,14 @@
  * limitations under the License.
  */
 
-import com.typesafe.config.ConfigFactory
 import info.smart.models.owc100._
 import models.db.SessionHolder
 import models.owc._
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
-import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.{Application, Configuration}
 
 /**
   * Test Spec for [[OwcOfferingDAO]] with with [[info.smart.models.owc100.OwcOffering]]
   */
-class OwcOfferingDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-  
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class OwcOfferingDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
   "OwcOfferingDAO " can {
 

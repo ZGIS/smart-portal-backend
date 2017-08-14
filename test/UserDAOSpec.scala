@@ -20,28 +20,17 @@
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 
-import com.typesafe.config.ConfigFactory
 import controllers.{ProfileJs, RegisterJs}
 import models.db.SessionHolder
 import models.users._
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.OneAppPerTest
-import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json._
-import play.api.{Application, Configuration}
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.PasswordHashing
 
 /**
   * Test Spec for [[User]] and [[UserDAO]]
   */
-class UserDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class UserDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
   "UserDAO" can {
 

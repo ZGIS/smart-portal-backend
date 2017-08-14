@@ -21,29 +21,18 @@
 import java.net.URL
 
 import anorm.{SQL, SqlParser}
-import com.typesafe.config.ConfigFactory
 import info.smart.models.owc100._
 import models.db.SessionHolder
 import models.owc._
 import models.users.UserDAO
 import org.locationtech.spatial4j.context.SpatialContext
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
-import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json._
-import play.api.{Application, Configuration}
 import utils.PasswordHashing
 
 /**
   * Test Spec for [[models.owc.OwcContextDAO]] with [[info.smart.models.owc100.OwcContext]]
   */
-class OwcContextDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val owcContextResource1 = this.getClass().getResource("owc100/owc1.geojson")

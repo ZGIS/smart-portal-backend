@@ -1,10 +1,8 @@
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfter, TestData}
 import org.scalatestplus.play._
-import play.api.{Application, Configuration}
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.test._
-import play.api.test.Helpers._
+import play.api.{Application, Configuration}
 
 /**
  * add your integration spec here.
@@ -15,8 +13,16 @@ class IntegrationSpec extends WithDefaultTest with OneServerPerTest with BeforeA
   // Override newAppForTest if you need a FakeApplication with other than non-default parameters
   implicit override def newAppForTest(testData: TestData): Application =
       GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build(
-
+        // here can go customisation
       )
+
+  before {
+    // here can go customisation
+  }
+
+  after {
+    // here can go customisation
+  }
 
   "Application" should {
 

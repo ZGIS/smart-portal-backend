@@ -17,29 +17,16 @@
  * limitations under the License.
  */
 
-import java.time.{OffsetDateTime, ZoneId}
-
-import com.typesafe.config.ConfigFactory
 import info.smart.models.owc100.OwcContext
 import models.db.SessionHolder
 import models.owc._
 import org.locationtech.spatial4j.context.SpatialContext
-import org.scalatest.{BeforeAndAfter, TestData}
-import org.scalatestplus.play.{OneAppPerTest, PlaySpec}
-import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
-import play.api.{Application, Configuration}
 
 /**
   * Test Spec for [[models.owc.OwcResourceDAO]] with [[info.smart.models.owc100.OwcResource]]
   */
-class OwcResourceDAOSpec extends WithDefaultTest with OneAppPerTest with BeforeAndAfter with WithTestDatabase {
-
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
-  import scala.language.implicitConversions
-
-  implicit override def newAppForTest(testData: TestData): Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
   private lazy val ctx = SpatialContext.GEO
   private lazy val owcContextResource1 = this.getClass().getResource("owc100/owc1.geojson")

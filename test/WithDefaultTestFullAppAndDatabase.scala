@@ -26,7 +26,8 @@ import play.api.{Application, Configuration}
 /**
   * default traits mixed in that we use everywhere including application with database evolutions for test h2
   */
-trait WithDefaultTestFullAppAndDatabase extends WithDefaultTest with OneAppPerSuite with BeforeAndAfter with WithTestDatabase {
+trait WithDefaultTestFullAppAndDatabase extends WithDefaultTest with OneAppPerSuite
+  with BeforeAndAfter with WithTestDatabase {
 
   /**
     * custom application config for testing OneAppPerTest
@@ -36,8 +37,19 @@ trait WithDefaultTestFullAppAndDatabase extends WithDefaultTest with OneAppPerSu
 //      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
 
   /**
-    * custom application config for testing OneAppPerSuite
+    * our default application config for testing OneAppPerSuite
     */
-  override lazy val app: Application = new
-      GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+  override lazy val app: Application = new GuiceApplicationBuilder()
+    .loadConfig(new Configuration(ConfigFactory.load("application.test.conf")))
+    .build()
+
+  // we still want to evolutions explicitely in the tests because they don't come from the postrgres default evolutions
+  /*
+  use in tests like this
+
+  before {
+    Evolutions.applyEvolutions(database, ClassLoaderEvolutionsReader.forPrefix("testh2db/"))
+  }
+
+   */
 }

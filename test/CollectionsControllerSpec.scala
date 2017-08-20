@@ -18,14 +18,16 @@
  */
 
 import akka.stream.Materializer
+import com.google.inject.AbstractModule
 import com.typesafe.config.ConfigFactory
-import controllers.CollectionsController
+import controllers.{CollectionsController, routes}
 import info.smart.models.owc100.OwcContext
 import org.scalatest.TestData
 import org.scalatestplus.play.OneAppPerTest
 import org.specs2.mock._
 import play.api.cache.CacheApi
 import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.libs.json.Json
 import play.api.mvc._
 import play.api.test.Helpers._
 import play.api.test._
@@ -33,28 +35,52 @@ import play.api.{Application, Configuration}
 import services.{EmailService, OwcCollectionsService}
 import utils.PasswordHashing
 
+
 class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with Results with Mockito {
 
-  // Override newAppForTest if you need a FakeApplication with other than non-default parameters
+  // creating mock instances for underlying required services for this controller
+  private lazy val mockCollectionsService = mock[OwcCollectionsService]
+  private lazy val mockEmailService = mock[EmailService]
+
+  // creating "fake" Guice Module to inject mock service instances into test application, with the required dependencies
+  class FakeModule extends AbstractModule {
+    def configure(): Unit = {
+      bind(classOf[PasswordHashing]).asEagerSingleton()
+      bind(classOf[EmailService]).toInstance(mockEmailService)
+      bind(classOf[OwcCollectionsService]).toInstance(mockCollectionsService)
+    }
+  }
+
+  // Override newAppForTest if you need a FakeApplication with other than non-default parameters, incl. fake guice module
   import scala.language.implicitConversions
-  implicit override def newAppForTest(testData: TestData): Application = new GuiceApplicationBuilder().loadConfig(new Configuration(ConfigFactory.load("application.test.conf"))).build()
+
+  implicit override def newAppForTest(testData: TestData): Application = new GuiceApplicationBuilder()
+    .overrides(new FakeModule)
+    .loadConfig(new Configuration(ConfigFactory.load("application.test.conf")))
+    .build()
+
+  // needed for routes execution on tested controller
   implicit lazy val materializer: Materializer = app.materializer
 
-  "CollectionsController#getCollections" should {
-    "be valid" in {
+  "CollectionsController" should {
+    "getCollections()" in {
 
+      // just to provide stub
       val mockCache = mock[CacheApi]
-      val mockConfiguration = mock[Configuration]
-      val mockCollectionsService = mock[OwcCollectionsService]
-      val mockEmailService = mock[EmailService]
 
+      // configuration is only used to read application.(test).conf keys, and they are all defended with .getOrElse() if not accessible
+      val appConfig = app.configuration
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
       mockCollectionsService.getOwcContextsForUserAndId(None, None) returns Seq[OwcContext]()
+
+      // explicitely instatiating tested controller
       val controller = new CollectionsController(
         cacheApi = mockCache,
-        config = mockConfiguration,
+        config = appConfig,
         emailService = mockEmailService,
         collectionsService = mockCollectionsService,
-        passwordHashing = new PasswordHashing(mockConfiguration)
+        passwordHashing = new PasswordHashing(appConfig)
       )
 
       // val fakeRequest = FakeRequest(POST, "/api/v1/collections", FakeHeaders(), AnyContentAsJson(Json.parse("""[{"id":"1","address":"my address"}]""")))
@@ -62,9 +88,26 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val otherResult = controller.getCollections(None).apply(fakeRequest)
       val result = controller.getCollections(None).apply(FakeRequest())
+
       status(otherResult.run) must be(OK)
       status(result.run) must be(OK)
-      val body = contentAsJson(result.run)
+      val jsbody = contentAsJson(result.run)
+      println(Json.stringify(jsbody))
+      jsbody mustEqual Json.parse("""{"count":0,"collections":[]}""")
+      (jsbody \ "count").toOption mustBe defined
+      (jsbody \ "count").as[Int] mustBe 0
+      (jsbody \ "collections").asOpt[List[OwcContext]] must contain(List())
+
+      // alternative way of calling/testing routes and thus controllers ()without being able to "touch" controller themselves
+      val Some(newResult) = route(app, FakeRequest(routes.CollectionsController.getCollections(None)))
+      status(newResult) must be(OK)
+      contentType(newResult) must contain ("application/json")
+
+      val newBody = contentAsJson(newResult)
+      println(Json.stringify(newBody))
+      contentAsJson(newResult) mustEqual Json.parse("""{"count":0,"collections":[]}""")
+
+      // TODO now should be evaluated if big FakeModule thing, or explicit controller instances
     }
   }
 }

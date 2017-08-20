@@ -95,7 +95,7 @@ class CswController @Inject()(val configuration: Configuration,
     val validValuesOption = metadataService.getValidValuesFor(topic)
     if (validValuesOption.isEmpty) {
       val error = ErrorResult(s"There are no valid values for '${topic}'", None)
-      BadRequest(Json.toJson(error)).as(JSON)
+      BadRequest(Json.toJson(error))
     }
     else {
       Ok(Json.toJson(validValuesOption.get))

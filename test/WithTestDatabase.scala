@@ -19,10 +19,9 @@
 
 import com.typesafe.config.ConfigFactory
 import play.api.Configuration
-import play.api.db.{Database, Databases}
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
-import _root_.utils.ClassnameLogger
-import org.scalatest.BeforeAndAfter
+import play.api.db.{Database, Databases}
+import utils.ClassnameLogger
 
 /**
   *

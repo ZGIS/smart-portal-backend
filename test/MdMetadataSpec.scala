@@ -183,7 +183,7 @@ class MdMetadataSpec extends WithDefaultTest with OneAppPerSuite {
   }
 
   "MdMetadata" should {
-    "parseWml2TvpSeries valid Json document" when {
+    "parse valid Json document" when {
       "all values are set " in {
         val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
 
@@ -259,5 +259,40 @@ class MdMetadataSpec extends WithDefaultTest with OneAppPerSuite {
       val mdMetadata = parsedResource("gmd/MdMetadataFull.json")
       noException should be thrownBy mdMetadata.get.toXml()
     }
+
+    "pass regression" when {
+      "reproduce another parsed document" in {
+        val mdMetadata = parsedResource("gmd/MetadataInsertPayload.json").get
+        val regress = MdMetadata.fromJson(mdMetadata.toJson())
+        regress mustBe defined
+
+        val hash1 = (mdMetadata.title,
+          mdMetadata.abstrakt,
+          mdMetadata.keywords,
+          mdMetadata.smartCategory,
+          mdMetadata.topicCategoryCode,
+          mdMetadata.hierarchyLevelName,
+          mdMetadata.scale,
+          mdMetadata.extent,
+          mdMetadata.citation,
+          mdMetadata.lineageStatement,
+          mdMetadata.distribution).##
+
+        val hash2 = (regress.get.title,
+          regress.get.abstrakt,
+          regress.get.keywords,
+          regress.get.smartCategory,
+          regress.get.topicCategoryCode,
+          regress.get.hierarchyLevelName,
+          regress.get.scale,
+          regress.get.extent,
+          regress.get.citation,
+          regress.get.lineageStatement,
+          regress.get.distribution).##
+
+        hash1 mustEqual hash2
+      }
+    }
+
   }
 }

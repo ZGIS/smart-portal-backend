@@ -62,9 +62,11 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
   // needed for routes execution on tested controller
   implicit lazy val materializer: Materializer = app.materializer
 
-  "CollectionsController" should {
-    "getCollections()" in {
+  "CollectionsController" when {
 
+    "request to getCollections()" in {
+
+      Then("create mock components, particular mocked CollectionsServive")
       // just to provide stub
       val mockCache = mock[CacheApi]
 
@@ -73,6 +75,8 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
       mockCollectionsService.getOwcContextsForUserAndId(None, None) returns Seq[OwcContext]()
+
+      Then("create the Controller with mock components")
 
       // explicitely instatiating tested controller
       val controller = new CollectionsController(
@@ -83,12 +87,15 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
         passwordHashing = new PasswordHashing(appConfig)
       )
 
+      Then("call request on the Controller")
+
       // val fakeRequest = FakeRequest(POST, "/api/v1/collections", FakeHeaders(), AnyContentAsJson(Json.parse("""[{"id":"1","address":"my address"}]""")))
       val fakeRequest = FakeRequest(GET, "/api/v1/collections")
 
       val otherResult = controller.getCollections(None).apply(fakeRequest)
       val result = controller.getCollections(None).apply(FakeRequest())
 
+      Then("response status must be ok and contain zero collections")
       status(otherResult.run) must be(OK)
       status(result.run) must be(OK)
       val jsbody = contentAsJson(result.run)
@@ -98,16 +105,32 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       (jsbody \ "count").as[Int] mustBe 0
       (jsbody \ "collections").asOpt[List[OwcContext]] must contain(List())
 
+      Then("call request on the route of the completely mocked app that provides controller itself")
       // alternative way of calling/testing routes and thus controllers ()without being able to "touch" controller themselves
       val Some(newResult) = route(app, FakeRequest(routes.CollectionsController.getCollections(None)))
       status(newResult) must be(OK)
       contentType(newResult) must contain ("application/json")
 
+      Then("response status must be ok and contain zero collections")
       val newBody = contentAsJson(newResult)
       println(Json.stringify(newBody))
       contentAsJson(newResult) mustEqual Json.parse("""{"count":0,"collections":[]}""")
 
       // TODO now should be evaluated if big FakeModule thing, or explicit controller instances
     }
+
+    /*
+    GET         /api/v1/collections                            controllers.CollectionsController.getCollections(id: Option[String])
+    GET         /api/v1/collections/default                    controllers.CollectionsController.getPersonalDefaultCollection
+    GET         /api/v1/collections/default/files              controllers.CollectionsController.getPersonalFilesFromDefaultCollection
+    POST        /api/v1/collections                            controllers.CollectionsController.insertCollection
+    POST        /api/v1/collections/update                     controllers.CollectionsController.updateCollection
+    GET         /api/v1/collections/delete                     controllers.CollectionsController.deleteCollection(id: String)
+
+    # experimental, entries add, replace, delete from collections
+    POST        /api/v1/collections/entry                      controllers.CollectionsController.addResourceToCollection(collectionid: String)
+    POST        /api/v1/collections/entry/replace              controllers.CollectionsController.replaceResourceInCollection(collectionid: String)
+    GET         /api/v1/collections/entry/delete               controllers.CollectionsController.deleteResourceFromCollection(collectionid: String, resourceid: String)
+    */
   }
 }

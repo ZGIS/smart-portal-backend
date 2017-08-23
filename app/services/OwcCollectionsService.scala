@@ -140,7 +140,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
   def createUserDefaultCollection(user: User): Option[OwcContext] = {
 
     val propsUuid = UUID.randomUUID()
-    val profileLink = OwcProfile.CORE.value.copy(uuid = UUID.randomUUID())
+    val profileLink = OwcProfile.CORE.newOf
 
     val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 
@@ -189,45 +189,33 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
 
     val updatedTime = Try(OffsetDateTime.of(mdMetadata.citation.ciDate, LocalTime.of(12, 0), ZoneOffset.UTC))
       .getOrElse(OffsetDateTime.now(ZoneId.systemDefault()))
-    val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}")
+    val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}_copy_${UUID.randomUUID().toString}")
 
     val cswGetCapaOps = OwcOperation(
       code = "GetCapabilities",
       method = "GET",
       mimeType = Some("application/xml"),
-      requestUrl = new URL(s"$catalogUrl/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities"),
-      request = None,
-      result = None)
+      requestUrl = new URL("https://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities"))
 
     val cswGetRecordOps = OwcOperation(
       code = "GetRecordById",
       method = "GET",
       mimeType = Some("application/xml"),
-      requestUrl = new URL(s"$catalogUrl/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}"),
-      request = None,
-      result = None)
+      requestUrl = new URL(s"https://portal.smart-project.info/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}"))
 
     val cswOffering = OwcOffering(
       code = OwcOfferingType.CSW.code,
-      operations = List(cswGetCapaOps, cswGetRecordOps),
-      styles = List(),
-      contents = List()
+      operations = List(cswGetCapaOps, cswGetRecordOps)
     )
 
     val viaLink = OwcLink(
       href = baseLink,
       mimeType = Some("application/json"),
-      lang = None,
-      title = None,
-      length = None,
       rel = "via")
 
     val cswLink = OwcLink(
       href = cswGetRecordOps.requestUrl,
       mimeType = cswGetRecordOps.mimeType,
-      lang = None,
-      title = None,
-      length = None,
       rel = "via")
 
     val userLookup = sessionHolder.viaConnection { implicit connection =>

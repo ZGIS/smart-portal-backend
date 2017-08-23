@@ -46,7 +46,7 @@ libraryDependencies ++= Seq(
   cache,
   ws,
   filters,
-  "info.smart-project" %% "smart-owc-geojson" % "1.0.3",
+  "info.smart-project" %% "smart-owc-geojson" % "1.1.0",
   "com.sendgrid" % "sendgrid-java"  % "3.1.0",
 
   "com.typesafe.play" %% "anorm" % "2.5.2",
@@ -71,7 +71,8 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream-testkit" % akkaVersion % Test,
 
   "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" % Test,
-  specs2 % Test
+  specs2 % Test,
+  "de.leanovate.play-mockws" %% "play-mockws" % "2.5.1" % Test
 )
 
 resolvers += Resolver.bintrayRepo("hmrc", "releases")

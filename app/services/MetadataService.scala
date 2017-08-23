@@ -25,7 +25,6 @@ import javax.inject.Inject
 import models.metadata.ValidValues
 import play.api.Configuration
 import play.api.data.validation.ValidationError
-import play.api.inject.ApplicationLifecycle
 import play.api.libs.json.Reads
 import utils.ClassnameLogger
 

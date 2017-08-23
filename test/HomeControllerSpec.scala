@@ -17,18 +17,57 @@
  * limitations under the License.
  */
 
+import java.security.InvalidParameterException
+import java.time.{ZoneId, ZonedDateTime}
+
 import akka.stream.Materializer
+import com.google.inject.AbstractModule
+import com.typesafe.config.ConfigFactory
+import mockws.MockWS
+import models.ErrorResult
 import models.db.SessionHolder
+import models.users.{LoginCredentials, StatusToken, User, UserDAO}
 import org.specs2.mock.Mockito
 import play.api.db.Database
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
-import play.api.inject.BindingKey
+import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
-import play.api.mvc.Results
-import play.api.test.FakeRequest
+import play.api.libs.ws.WSClient
+import play.api.mvc.{Action, AnyContentAsJson, Results}
 import play.api.test.Helpers._
+import play.api.test.{FakeHeaders, FakeRequest}
+import play.api.{Application, Configuration}
+import services.{EmailService, OwcCollectionsService}
+import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}
+import utils.PasswordHashing
 
 class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results with Mockito {
+
+  // creating mock instances for underlying required services for this controller
+  private lazy val mockCollectionsService = mock[OwcCollectionsService]
+  private lazy val mockEmailService = mock[EmailService]
+
+  val mockws = MockWS {
+    case (GET, "https://www.google.com/recaptcha/api/siteverify") => Action { Ok(Json.parse("""{ "success": true }""")) }
+  }
+
+  // creating "fake" Guice Module to inject mock service instances into test application, with the required dependencies
+  class FakeModule extends AbstractModule {
+    def configure(): Unit = {
+      bind(classOf[PasswordHashing]).asEagerSingleton()
+      bind(classOf[SessionHolder]).asEagerSingleton()
+      bind(classOf[WSClient]).toInstance(mockws)
+      bind(classOf[EmailService]).toInstance(mockEmailService)
+      bind(classOf[OwcCollectionsService]).toInstance(mockCollectionsService)
+    }
+  }
+
+  // Override newAppForTest if you need a FakeApplication with other than non-default parameters, incl. fake guice module
+  // import scala.language.implicitConversions
+  implicit override lazy val app: Application = new GuiceApplicationBuilder()
+    .overrides(new FakeModule)
+    .loadConfig(new Configuration(ConfigFactory.load("application.test.conf")))
+    .build()
 
   // needed for routes execution on tested controller
   implicit lazy val materializer: Materializer = app.materializer
@@ -37,6 +76,8 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
   lazy val LOGIN = """{"email":"alex@example.com","password":"testpass123"}"""
   lazy val FULLPROFILE = """{"email":"alex@example.com","accountSubject":"local:alex@example.com","firstname":"Alex","lastname":"K","password":"testpass123"}"""
 
+
+  val passwordHashing: PasswordHashing = app.injector.instanceOf[PasswordHashing]
 
   val injectedSessionHolder: SessionHolder = app.injector.instanceOf[SessionHolder]
   val database: Database = injectedSessionHolder.db
@@ -101,6 +142,122 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       status(preflight2) mustBe OK
       headers(preflight2).get("Access-Control-Allow-Credentials").get mustBe "true"
 
+    }
+
+    // GET controllers.HomeController.index
+    "request to index" in {
+      val response = route(app, FakeRequest(GET, "/")).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+    }
+
+    // GET /api/v1/discovery controllers.HomeController.discovery(fields: Option[String])
+    "request to discovery" in {
+      val testRequest1 = FakeRequest(GET, "/api/v1/discovery")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "appName").asOpt[String] mustBe defined
+    }
+
+    // POST /api/v1/login controllers.HomeController.login
+    "request to login" in {
+
+      val testPass = "testpass123"
+      val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
+      val cryptPass = passwordHashing.createHash(testPass)
+
+      val testUser = User(EmailAddress("test2@blubb.com"),
+        "local:test2@blubb.com",
+        "Hans",
+        "Wurst",
+        cryptPass,
+        s"${StatusToken.ACTIVE}:REGCONFIRMED",
+        testTime)
+
+      // create a testuser
+      injectedSessionHolder.viaConnection { implicit connection =>
+        UserDAO.createUser(testUser).getOrElse(throw new InvalidParameterException("couldn't create testuser, this shouldn't happen"))
+      }
+
+      implicit val emailWrite = PlayJsonFormats.emailAddressWrites
+      implicit val loginWrites = Json.writes[LoginCredentials]
+      val testRequest1 = FakeRequest(POST, "/api/v1/login", FakeHeaders(Seq("Content-Type" -> "application/json")),
+        AnyContentAsJson(Json.toJson(LoginCredentials(testUser.email, testPass))))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+    }
+
+    // GET  /api/v1/logout controllers.HomeController.logout
+    // POST /api/v1/logout controllers.HomeController.logout
+    "request to logout" in {
+      val testRequest1 = FakeRequest(GET, "/api/v1/logout")
+      val testRequest2 = FakeRequest(POST, "/api/v1/logout")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be 401 without cookie and token")
+      status(response) must be(UNAUTHORIZED)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      Then("status must be 401 also for POST")
+      val response2 = route(app, testRequest2).get
+      status(response2) must be(UNAUTHORIZED)
+    }
+
+    // GET /api/v1/recaptcha/validate controllers.HomeController.recaptchaValidate(recaptcaChallenge: String)
+    "request to recaptchaValidate" in {
+
+      /*
+      fail is ErrorResult {"message":"User email or password wrong.","details":"[\"invalid-input-response\"]"}
+      recaptcha JSON responses are like
+
+      {
+      "success": true|false,
+      "challenge_ts": timestamp,  // timestamp of the challenge load (ISO format yyyy-MM-dd'T'HH:mm:ssZZ)
+      "hostname": string,         // the hostname of the site where the reCAPTCHA was solved
+      "error-codes": [...]        // optional
+      }
+      */
+
+      val testRequest1 = FakeRequest(GET, "/api/v1/recaptcha/validate?recaptcaChallenge=XCVBHJK")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK (we mock Google Api Ws call)")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+
+      Then("error should be available, but this should be put somewhere else where we ca nmock the WSClient")
+      val errorJs = contentAsJson(response).validate[ErrorResult].asOpt
+      errorJs mustBe defined
+      println(Json.stringify(Json.toJson(errorJs.get)))
     }
   }
 }

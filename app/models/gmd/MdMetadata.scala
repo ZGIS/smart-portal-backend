@@ -102,7 +102,11 @@ trait JsonableCompanion[A] extends ClassnameLogger {
   * @param topicCategoryCode
   * @param hierarchyLevelName
   * @param scale
+  * @param extent
+  * @param citation
   * @param lineageStatement
+  * @param responsibleParty
+  * @param distribution
   */
 case class MdMetadata(fileIdentifier: String,
                       title: String,

@@ -19,4 +19,21 @@
 
 class EmailServiceSpec extends WithDefaultTest {
 
+  /*
+
+  sendRegistrationEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean
+
+  sendConfirmationEmail(emailTo: String, subject: String, usernameTo: String): Boolean
+
+  sendResetPasswordRequestEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean
+
+  sendPasswordUpdateEmail(emailTo: String, subject: String, usernameTo: String): Boolean
+
+  sendNewEmailValidationEmail(emailTo: String, subject: String, usernameTo: String, linkId: String): Boolean
+
+  sendNeEmailConfirmationEmail(emailTo: String, subject: String, usernameTo: String): Boolean
+
+  sendProfileUpdateInfoEmail(emailTo: String, subject: String, usernameTo: String): Boolean
+
+   */
 }

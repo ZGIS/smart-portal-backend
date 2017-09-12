@@ -18,12 +18,15 @@
  */
 
 import akka.stream.Materializer
+import controllers.{ProfileJs, routes}
+import info.smart.models.owc100.OwcContext
+import org.specs2.mock.Mockito
 import play.api.libs.json.Json
 import play.api.mvc._
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 
-class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results {
+class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results with Mockito {
 
   before {
     // here can go customisation
@@ -39,7 +42,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
   lazy val LOGIN = """{"email":"alex@example.com","password":"testpass123"}"""
   lazy val FULLPROFILE = """{"email":"alex@example.com","accountSubject":"local:alex@example.com","firstname":"Alex","lastname":"K","password":"testpass123"}"""
 
-  "UserController" should {
+  "UserController" when {
 
     "send 404 on a bad request and GETs at POST endpoint" in {
       route(app, FakeRequest(GET, "/api/v1/login/gconnect")).map(status(_)) mustBe Some(NOT_FOUND)
@@ -72,6 +75,318 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
 
       headers(preflight3).get(
         "Access-Control-Allow-Headers").get mustBe "Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date"
+    }
+
+    // POST  /api/v1/login/gconnect       controllers.UserController.gconnect
+    "request to gconnect" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.gconnect())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse("""{"user": "testuserid"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/login/oauth2callback       controllers.UserController.oauth2callback
+    "request to oauth2callback" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.oauth2callback())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse("""{"status": "granted"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // GET   /api/v1/logout/gdisconnect   controllers.UserController.gdisconnect
+    "request to gdisconnect" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.gdisconnect())
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // # Users API
+    // GET   /api/v1/users/self     controllers.UserController.userSelf
+    "request to userSelf" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.userSelf())
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // GET   /api/v1/users/profile/:email       controllers.UserController.getProfile(email: String)
+    "request to getProfile(email)" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.getProfile("testuser@gmail.com"))
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/users/update   controllers.UserController.updateProfile
+    "request to updateProfile" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.updateProfile())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse(PROFILENOPASS))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/users/updatepass     controllers.UserController.updatePassword
+    "request to updatePassword" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.updatePassword())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse(LOGIN))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/users/resetpass      controllers.UserController.resetPasswordRequest
+    "request to resetPasswordRequest" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.resetPasswordRequest())
+        .withHeaders("Content-Type" -> "application/json")
+        .withFormUrlEncodedBody("username" -> "alex")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/users/resetpass/:linkId    controllers.UserController.resetPasswordRedeem(linkId: String)
+    "request to resetPasswordRedeem(link)" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.resetPasswordRedeem("link"))
+        .withHeaders("Content-Type" -> "application/json")
+        .withJsonBody(Json.parse(LOGIN))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // POST  /api/v1/users/register       controllers.UserController.registerUser
+    "request to registerUser" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.registerUser())
+        .withHeaders("Content-Type" -> "application/json")
+        .withJsonBody(Json.parse(FULLPROFILE))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // GET   /api/v1/users/register/:linkId     controllers.UserController.registerConfirm(linkId: String)
+    "request to registerConfirm(link)" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.registerConfirm("link"))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+    
+    // GET   /api/v1/users/deleteself     controllers.UserController.deleteSelf
+    "request to deleteSelf" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      // mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.UserController.deleteSelf())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
     }
   }
 }

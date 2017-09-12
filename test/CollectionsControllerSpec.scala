@@ -62,9 +62,11 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
   // needed for routes execution on tested controller
   implicit lazy val materializer: Materializer = app.materializer
 
+  val demodata = new DemoData
+
   "CollectionsController" when {
 
-    "request to getCollections()" in {
+    "request to getCollections(None)" in {
 
       Then("create mock components, particular mocked CollectionsServive")
       // just to provide stub
@@ -89,8 +91,12 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       Then("call request on the Controller")
 
-      // val fakeRequest = FakeRequest(POST, "/api/v1/collections", FakeHeaders(), AnyContentAsJson(Json.parse("""[{"id":"1","address":"my address"}]""")))
-      val fakeRequest = FakeRequest(GET, "/api/v1/collections")
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val fakeRequest = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
 
       val otherResult = controller.getCollections(None).apply(fakeRequest)
       val result = controller.getCollections(None).apply(FakeRequest())
@@ -105,32 +111,211 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       (jsbody \ "count").as[Int] mustBe 0
       (jsbody \ "collections").asOpt[List[OwcContext]] must contain(List())
 
-      Then("call request on the route of the completely mocked app that provides controller itself")
-      // alternative way of calling/testing routes and thus controllers ()without being able to "touch" controller themselves
-      val Some(newResult) = route(app, FakeRequest(routes.CollectionsController.getCollections(None)))
-      status(newResult) must be(OK)
-      contentType(newResult) must contain ("application/json")
-
-      Then("response status must be ok and contain zero collections")
-      val newBody = contentAsJson(newResult)
-      println(Json.stringify(newBody))
-      contentAsJson(newResult) mustEqual Json.parse("""{"count":0,"collections":[]}""")
 
       // TODO now should be evaluated if big FakeModule thing, or explicit controller instances
     }
 
-    /*
-    GET         /api/v1/collections                            controllers.CollectionsController.getCollections(id: Option[String])
-    GET         /api/v1/collections/default                    controllers.CollectionsController.getPersonalDefaultCollection
-    GET         /api/v1/collections/default/files              controllers.CollectionsController.getPersonalFilesFromDefaultCollection
-    POST        /api/v1/collections                            controllers.CollectionsController.insertCollection
-    POST        /api/v1/collections/update                     controllers.CollectionsController.updateCollection
-    GET         /api/v1/collections/delete                     controllers.CollectionsController.deleteCollection(id: String)
+    // GET  /api/v1/collections controllers.CollectionsController.getCollections(id: Option[String])
+    "request to getCollections(fakeContextId)" in {
+      (pending)
 
-    # experimental, entries add, replace, delete from collections
-    POST        /api/v1/collections/entry                      controllers.CollectionsController.addResourceToCollection(collectionid: String)
-    POST        /api/v1/collections/entry/replace              controllers.CollectionsController.replaceResourceInCollection(collectionid: String)
-    GET         /api/v1/collections/entry/delete               controllers.CollectionsController.deleteResourceFromCollection(collectionid: String, resourceid: String)
-    */
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // GET  /api/v1/collections/default controllers.CollectionsController.getPersonalDefaultCollection
+    "request to getPersonalDefaultCollection" in {
+      (pending)
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      mockCollectionsService.getUserDefaultOwcContext(authUser = "authuser") returns Some(demodata.owcContext1)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.getPersonalDefaultCollection())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // GET  /api/v1/collections/default/files controllers.CollectionsController.getPersonalFilesFromDefaultCollection
+    "request to getPersonalFilesFromDefaultCollection" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.getPersonalFilesFromDefaultCollection())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // POST /api/v1/collections controllers.CollectionsController.insertCollection
+    "request to insertCollection" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.insertCollection())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse("""{"var" -> "param"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // POST /api/v1/collections/update controllers.CollectionsController.updateCollection
+
+    "request to updateCollection" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.updateCollection())
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse("""{"var" -> "param"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // GET  /api/v1/collections/delete controllers.CollectionsController.deleteCollection(id: String)
+    "request to deleteCollection(fakeContextId)" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.deleteCollection("fakeContextId"))
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // # experimental, entries add, replace, delete from collections
+    // POST /api/v1/collections/entry controllers.CollectionsController.addResourceToCollection(collectionid: String)
+    "request to addResourceToCollection(fakeContext)" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.addResourceToCollection("fakeContext"))
+        .withHeaders("Content-Type" -> "application/json")
+        .withJsonBody(Json.parse("""{"var" -> "param"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // POST /api/v1/collections/entry/replace controllers.CollectionsController.replaceResourceInCollection(collectionid: String)
+    "request to replaceResourceInCollection(fakeContextId)" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.replaceResourceInCollection("fakeContextId"))
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withJsonBody(Json.parse("""{"var" -> "param"}"""))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
+    // GET  /api/v1/collections/entry/delete controllers.CollectionsController.deleteResourceFromCollection(collectionid: String, resourceid: String)
+    "request to deleteResourceFromCollection(fakeContextId, fakeresourceId)" in {
+      (pending)
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.deleteResourceFromCollection("fakeContextId", "fakeResourceId"))
+        .withHeaders("Content-Type" -> "application/json")
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      val js = contentAsJson(response)
+      (js \ "message").asOpt[String] mustBe defined
+    }
+
   }
 }

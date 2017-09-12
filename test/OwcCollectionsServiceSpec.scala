@@ -19,4 +19,13 @@
 
 class OwcCollectionsServiceSpec extends WithDefaultTest {
 
+  /*
+
+  getUserDefaultOwcContext(authUser: String): Option[OwcContext]
+
+  getOwcLinksForOwcAuthorOwnFiles(authUser: String): Seq[OwcLink]
+
+  getOwcContextsForUserAndId(authUserOption: Option[String], owcContextIdOption: Option[String]): Seq[OwcContext]
+
+   */
 }

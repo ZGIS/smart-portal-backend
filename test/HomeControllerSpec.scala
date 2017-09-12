@@ -23,6 +23,7 @@ import java.time.{ZoneId, ZonedDateTime}
 import akka.stream.Materializer
 import com.google.inject.AbstractModule
 import com.typesafe.config.ConfigFactory
+import controllers.routes
 import mockws.MockWS
 import models.ErrorResult
 import models.db.SessionHolder
@@ -146,7 +147,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
 
     // GET controllers.HomeController.index
     "request to index" in {
-      val response = route(app, FakeRequest(GET, "/")).get
+      val response = route(app, FakeRequest(routes.HomeController.index())).get
 
       Then("status must be OK")
       status(response) must be(OK)
@@ -158,7 +159,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
 
     // GET /api/v1/discovery controllers.HomeController.discovery(fields: Option[String])
     "request to discovery" in {
-      val testRequest1 = FakeRequest(GET, "/api/v1/discovery")
+      val testRequest1 = FakeRequest(routes.HomeController.discovery(None))
 
       val response = route(app, testRequest1).get
 
@@ -195,8 +196,12 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
 
       implicit val emailWrite = PlayJsonFormats.emailAddressWrites
       implicit val loginWrites = Json.writes[LoginCredentials]
-      val testRequest1 = FakeRequest(POST, "/api/v1/login", FakeHeaders(Seq("Content-Type" -> "application/json")),
-        AnyContentAsJson(Json.toJson(LoginCredentials(testUser.email, testPass))))
+      // val testRequest1 = FakeRequest(POST, routes.HomeController.login().url, FakeHeaders(Seq("Content-Type" -> "application/json")),
+      //   AnyContentAsJson(Json.toJson(LoginCredentials(testUser.email, testPass))))
+
+      val testRequest1 = FakeRequest(routes.HomeController.login())
+        .withHeaders("Content-Type" -> "application/json")
+        .withJsonBody(Json.toJson(LoginCredentials(testUser.email, testPass)))
 
       val response = route(app, testRequest1).get
 
@@ -212,8 +217,11 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
     // GET  /api/v1/logout controllers.HomeController.logout
     // POST /api/v1/logout controllers.HomeController.logout
     "request to logout" in {
-      val testRequest1 = FakeRequest(GET, "/api/v1/logout")
-      val testRequest2 = FakeRequest(POST, "/api/v1/logout")
+      val testRequest1 = FakeRequest(GET, routes.HomeController.logout().url)
+      val testRequest2 = FakeRequest(POST, routes.HomeController.logout().url)
+
+      val testRequest3 = FakeRequest(routes.HomeController.logout())
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
 
       val response = route(app, testRequest1).get
 
@@ -227,6 +235,10 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       Then("status must be 401 also for POST")
       val response2 = route(app, testRequest2).get
       status(response2) must be(UNAUTHORIZED)
+
+      Then("status must be 401 also for GET with wrong AUTH token")
+      val response3 = route(app, testRequest3).get
+      status(response3) must be(UNAUTHORIZED)
     }
 
     // GET /api/v1/recaptcha/validate controllers.HomeController.recaptchaValidate(recaptcaChallenge: String)
@@ -244,7 +256,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       }
       */
 
-      val testRequest1 = FakeRequest(GET, "/api/v1/recaptcha/validate?recaptcaChallenge=XCVBHJK")
+      val testRequest1 = FakeRequest(routes.HomeController.recaptchaValidate("XSDFGH45_NHJKUINBECERG45-ERFVRB"))
 
       val response = route(app, testRequest1).get
 
@@ -258,6 +270,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val errorJs = contentAsJson(response).validate[ErrorResult].asOpt
       errorJs mustBe defined
       println(Json.stringify(Json.toJson(errorJs.get)))
+      // it's funny that ErrorResult also validates for positive {"message": "granted"}
     }
   }
 }

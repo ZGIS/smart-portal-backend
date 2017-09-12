@@ -21,4 +21,8 @@ import play.api.mvc.Results
 
 class SosDataControllerSpec extends WithDefaultTest with Results {
 
+  /*
+  POST        /api/v1/sos/timeseries                         controllers.SosDataController.getTimeseries()
+GET         /api/v1/sos/getCapabilities                    controllers.SosDataController.getCapabilities(sosUrl: String)
+   */
 }

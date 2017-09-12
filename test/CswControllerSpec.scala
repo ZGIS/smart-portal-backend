@@ -50,5 +50,11 @@ class CswControllerSpec extends WithDefaultTestFullAppAndDatabase with Results {
       status(topicCategories.get) mustBe 400
       contentAsString(topicCategories.get) mustBe "{\"message\":\"There are no valid values for 'bogus'\"}"
     }
+
+    /*
+    # CSW-T
+POST        /api/v1/csw/insert                             controllers.CswController.insert
+GET         /api/v1/csw/get-valid-values-for/:topic        controllers.CswController.getValidValuesFor(topic: String)
+     */
   }
 }

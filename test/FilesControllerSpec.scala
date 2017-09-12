@@ -21,4 +21,8 @@ import play.api.mvc.Results
 
 class FilesControllerSpec extends WithDefaultTest with Results {
 
+  /*
+  # Files API
+POST        /api/v1/files/uploadform                       controllers.FilesController.uploadMultipartForm
+   */
 }

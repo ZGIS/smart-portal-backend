@@ -72,7 +72,8 @@ libraryDependencies ++= Seq(
 
   "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" % Test,
   specs2 % Test,
-  "de.leanovate.play-mockws" %% "play-mockws" % "2.5.1" % Test
+  "de.leanovate.play-mockws" %% "play-mockws" % "2.5.1" % Test,
+  "com.github.unisay" %% "mockserver-client-scala" % "0.2.1" % Test
 )
 
 resolvers += Resolver.bintrayRepo("hmrc", "releases")

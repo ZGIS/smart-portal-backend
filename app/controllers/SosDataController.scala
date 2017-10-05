@@ -19,6 +19,8 @@
 
 package controllers
 
+import java.time.format.DateTimeFormatter
+import java.time.{OffsetDateTime, ZoneId}
 import javax.inject.Inject
 
 import models.ErrorResult
@@ -26,8 +28,9 @@ import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData}
 import models.tvp.XmlTvpParser
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.libs.ws.WSClient
+import play.api.Configuration
 import play.api.mvc.{Action, AnyContent, Controller}
-import utils.ClassnameLogger
+import utils.{ClassnameLogger, GeoDateParserUtils}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -36,8 +39,12 @@ import scala.io.Source
 /**
   * Controller to access SOS server and return parsed time series to frontend.
   */
-class SosDataController @Inject()(wsClient: WSClient)
+class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
   extends Controller with ClassnameLogger {
+
+  val configuration: play.api.Configuration = config
+  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
   val GET_CAPABILITIES_XML =
     """<?xml version="1.0" encoding="UTF-8"?>
@@ -83,7 +90,7 @@ class SosDataController @Inject()(wsClient: WSClient)
 
         responseFuture.recover {
           case e: Exception =>
-            logger.error("Sos get capabilities threw exception", e)
+            logger.error("Sos GetObservation threw exception", e)
             val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
               Some(e.getMessage))
             InternalServerError(Json.toJson(error)).as(JSON)
@@ -97,9 +104,9 @@ class SosDataController @Inject()(wsClient: WSClient)
             InternalServerError(Json.toJson(error)).as(JSON)
           }
           else if (!response.header("Content-Type").get.contains("application/xml")) {
-            logger.error(s"SOS GetCapabilities result was not XML but ${response.header("Content-Type").get}")
+            logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
             val error = ErrorResult(
-              s"SOS GetCapabilities result was not XML but ${response.header("Content-Type").get}",
+              s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
               Some(response.body))
             InternalServerError(Json.toJson(error)).as(JSON)
           }
@@ -129,12 +136,89 @@ class SosDataController @Inject()(wsClient: WSClient)
   }
 
   /**
+    * Loads a time series from a SOS server. A Timeseries "configuration" has to be passd within the POST
+    * request.
+    *
+    * @return
+    */
+  def exportTimeseries = Action.async(parse.json) { request =>
+    request.body.validate[Timeseries].fold(
+      errors => {
+        logger.error(JsError.toJson(errors).toString())
+        val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
+        Future {
+          BadRequest(Json.toJson(error)).as(JSON)
+        }
+      },
+
+      timeseries => {
+        val responseFuture = wsClient.url(timeseries.sosUrl)
+          .withHeaders(CONTENT_TYPE -> "application/xml")
+          .post(getObservationRequestXml(timeseries, "http://www.opengis.net/waterml/2.0"))
+
+        responseFuture.recover {
+          case e: Exception =>
+            logger.error("Sos GetObservation threw exception", e)
+            val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+              Some(e.getMessage))
+            InternalServerError(Json.toJson(error)).as(JSON)
+        }
+
+        responseFuture.map(response => {
+          if (response.status != 200) {
+            logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
+            val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
+              Some(response.body))
+            InternalServerError(Json.toJson(error)).as(JSON)
+          }
+          else if (!response.header("Content-Type").get.contains("application/xml")) {
+            logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
+            val error = ErrorResult(
+              s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
+              Some(response.body))
+            InternalServerError(Json.toJson(error)).as(JSON)
+          }
+          else {
+            val tvp = scala.xml.XML.load(response.body)
+            val omMembers = (tvp \\ "OM_Observation").map( node => <wml2:observationMember xsi:schemaLocation="http://www.opengis.net/waterml/2.0 http://www.opengis.net/waterml/2.0/waterml2.xsd">{node}</wml2:observationMember>)
+
+            implicit val offsetDateTimeOrdering: Ordering[OffsetDateTime] = Ordering.by(e => e.toEpochSecond)
+            val beginPositions = (omMembers \\ "beginPosition").map(node => node.text)
+              .map(tpos => GeoDateParserUtils.parseDateStringAsOffsetDateTimeSingle(tpos).toOption).filter(_.isDefined).map(_.get).sorted.max
+            val endPositions = (omMembers \\ "endPosition").map(node => node.text)
+              .map(tpos => GeoDateParserUtils.parseDateStringAsOffsetDateTimeSingle(tpos).toOption).filter(_.isDefined).map(_.get).sorted.min
+
+            val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+            val resultCollection = <wml2:Collection xsi:schemaLocation="http://www.opengis.net/waterml/2.0 http://www.opengis.net/waterml/2.0/waterml2.xsd" gml:id="SacGwHub.Col.1">
+                                     <gml:description>Sac Gw Hub WaterML2.0 export</gml:description>
+                                     <wml2:metadata>
+                                       <wml2:DocumentMetadata gml:id="SacGwHub.DocMD.1">
+                                         <wml2:generationDate>{updatedTime.format(formatter)}</wml2:generationDate>
+                                         <wml2:generationSystem>Sac Gw Hub WaterML2.0 exporter</wml2:generationSystem>
+                                       </wml2:DocumentMetadata>
+                                     </wml2:metadata>
+                                     <wml2:temporalExtent>
+                                       <gml:TimePeriod gml:id="SacGwHub.TempExt.1">
+                                         <gml:beginPosition>{beginPositions.format(formatter)}</gml:beginPosition>
+                                         <gml:endPosition>{endPositions.format(formatter)}</gml:endPosition>
+                                       </gml:TimePeriod>
+                                     </wml2:temporalExtent>
+                                    </wml2:Collection>
+
+            Ok(resultCollection).withHeaders("Content-type" -> "application/xml")
+          }
+        })
+      }
+    )
+  }
+
+  /**
     * Create GetObservation Request XML String.
     *
     * @param timeseries
     * @return
     */
-  private def getObservationRequestXml(timeseries: Timeseries) = {
+  private def getObservationRequestXml(timeseries: Timeseries, responseFormat: String = "http://www.opengis.net/om/2.0") = {
     s"""
        |<sos:GetObservation
        |    xmlns:sos="http://www.opengis.net/sos/2.0"
@@ -163,10 +247,12 @@ class SosDataController @Inject()(wsClient: WSClient)
        |
        |    <sos:featureOfInterest>${timeseries.featureOfInterest}</sos:featureOfInterest>
        |
-       |    <sos:responseFormat>http://www.opengis.net/om/2.0</sos:responseFormat>
+       |    <sos:responseFormat>$responseFormat</sos:responseFormat>
        |</sos:GetObservation>
           """.stripMargin
   }
+
+
 
   /**
     * gets Capabilities from s specified SOS server.

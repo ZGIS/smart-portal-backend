@@ -21,6 +21,7 @@ package utils
 
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Comparator
 
 import org.locationtech.spatial4j.context.SpatialContext
 import org.locationtech.spatial4j.io.ShapeIO
@@ -93,6 +94,12 @@ object GeoDateParserUtils extends ClassnameLogger {
     }
   }
 
+  def parseDateStringAsOffsetDateTimeSingle(isoTemporalString: String): Try[OffsetDateTime] = {
+    Try {
+      OffsetDateTime.parse(isoTemporalString)
+    }
+  }
+
   /**
     *
     * @param isoTemporalString
@@ -126,5 +133,17 @@ object GeoDateParserUtils extends ClassnameLogger {
       }.toOption
     }
   }
+
+  def timeLineOrder: Comparator[OffsetDateTime] = OFFSET_INSTANT_COMPARATOR
+
+  private val OFFSET_INSTANT_COMPARATOR: Comparator[OffsetDateTime] =
+    new Comparator[OffsetDateTime] {
+      override def compare(datetime1: OffsetDateTime, datetime2: OffsetDateTime): Int = {
+        var cmp: Int = java.lang.Long.compare(datetime1.toEpochSecond, datetime2.toEpochSecond)
+        if (cmp == 0)
+          cmp = java.lang.Long.compare(datetime1.getNano, datetime2.getNano)
+        cmp
+      }
+    }
 
 }

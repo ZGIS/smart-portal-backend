@@ -222,9 +222,9 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                 }
                 val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(response.body, sosCapabilities)
                 if (wml2.isEmpty) {
-                  logger.error(s"Couldn't extract WML2 from this SOS GetObservation response")
+                  logger.error("Couldn't extract WML2 from this SOS GetObservation response")
                   val error = ErrorResult(
-                    s"Couldn't extract WML2 from this SOS GetObservation response",
+                    "Couldn't extract WML2 from this SOS GetObservation response",
                     Some(response.body))
                   InternalServerError(Json.toJson(error)).as(JSON)
                 } else {

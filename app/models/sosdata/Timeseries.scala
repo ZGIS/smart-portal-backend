@@ -37,6 +37,7 @@ case class Timeseries(
                        toDate: String,
                        uom: Option[String],
                        timeseriesName: String,
+                       responseFormat: Option[String],
                        data: Option[TimeseriesData]
                      ) {
 
@@ -79,6 +80,7 @@ object Timeseries extends ClassnameLogger {
       (JsPath \ "toDate").read[String] and
       (JsPath \ "uom").readNullable[String] and
       (JsPath \ "timeseriesName").read[String] and
+      (JsPath \ "responseFormat").readNullable[String] and
       (JsPath \ "data").readNullable[TimeseriesData]
     ) (Timeseries.apply _)
 
@@ -92,6 +94,7 @@ object Timeseries extends ClassnameLogger {
       (JsPath \ "toDate").write[String] and
       (JsPath \ "uom").writeNullable[String] and
       (JsPath \ "timeseriesName").write[String] and
+      (JsPath \ "responseFormat").writeNullable[String] and
       (JsPath \ "data").writeNullable[TimeseriesData]
     ) (unlift(Timeseries.unapply))
 

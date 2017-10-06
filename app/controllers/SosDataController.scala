@@ -19,18 +19,16 @@
 
 package controllers
 
-import java.time.format.DateTimeFormatter
-import java.time.{OffsetDateTime, ZoneId}
 import javax.inject.Inject
 
 import models.ErrorResult
-import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData}
+import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData, Wml2Export}
 import models.tvp.XmlTvpParser
-import play.api.libs.json.{JsError, JsValue, Json}
-import play.api.libs.ws.WSClient
 import play.api.Configuration
+import play.api.libs.json.{JsError, JsValue, Json}
+import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
-import utils.{ClassnameLogger, GeoDateParserUtils}
+import utils.ClassnameLogger
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -43,8 +41,8 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
   extends Controller with ClassnameLogger {
 
   val configuration: play.api.Configuration = config
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-  lazy val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
+  private lazy val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  private lazy val wml2Exporter = new Wml2Export(appTimeZone)
 
   val GET_CAPABILITIES_XML =
     """<?xml version="1.0" encoding="UTF-8"?>
@@ -110,6 +108,13 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
               Some(response.body))
             InternalServerError(Json.toJson(error)).as(JSON)
           }
+          else if (timeseries.responseFormat.isDefined && !timeseries.responseFormat.get.equalsIgnoreCase("http://www.opengis.net/om/2.0")) {
+            logger.error(s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}")
+            val error = ErrorResult(
+              s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}",
+              Some(response.body))
+            InternalServerError(Json.toJson(error)).as(JSON)
+          }
           else {
             val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(response.body))
             val tsdata =
@@ -152,6 +157,25 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
       },
 
       timeseries => {
+
+        if (timeseries.responseFormat.isDefined && !timeseries.responseFormat.get.equalsIgnoreCase("http://www.opengis.net/waterml/2.0")) {
+          logger.error(s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}")
+          val error = ErrorResult(
+            s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("")}", None)
+          InternalServerError(Json.toJson(error)).as(JSON)
+        }
+
+        val capabilitiesFuture = retrieveSosCapabilities(timeseries.sosUrl)
+
+        // still normal future recover
+        capabilitiesFuture.recover {
+          case e: Exception =>
+            logger.error("Sos get capabilities threw exception", e)
+            val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+              Some(e.getMessage))
+            InternalServerError(Json.toJson(error)).as(JSON)
+        }
+
         val responseFuture = wsClient.url(timeseries.sosUrl)
           .withHeaders(CONTENT_TYPE -> "application/xml")
           .post(getObservationRequestXml(timeseries, "http://www.opengis.net/waterml/2.0"))
@@ -164,7 +188,15 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
             InternalServerError(Json.toJson(error)).as(JSON)
         }
 
-        responseFuture.map(response => {
+        val combinedFuture: Future[(Either[ErrorResult, SosCapabilities], WSResponse)] = for {
+          capaResult <- capabilitiesFuture
+          sosDataResult <- responseFuture
+        } yield (capaResult, sosDataResult)
+
+        combinedFuture.map(combinedResponse => {
+
+          val response = combinedResponse._2
+
           if (response.status != 200) {
             logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
             val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
@@ -179,33 +211,27 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
             InternalServerError(Json.toJson(error)).as(JSON)
           }
           else {
-            val tvp = scala.xml.XML.load(response.body)
-            val omMembers = (tvp \\ "OM_Observation").map( node => <wml2:observationMember xsi:schemaLocation="http://www.opengis.net/waterml/2.0 http://www.opengis.net/waterml/2.0/waterml2.xsd">{node}</wml2:observationMember>)
-
-            implicit val offsetDateTimeOrdering: Ordering[OffsetDateTime] = Ordering.by(e => e.toEpochSecond)
-            val beginPositions = (omMembers \\ "beginPosition").map(node => node.text)
-              .map(tpos => GeoDateParserUtils.parseDateStringAsOffsetDateTimeSingle(tpos).toOption).filter(_.isDefined).map(_.get).sorted.max
-            val endPositions = (omMembers \\ "endPosition").map(node => node.text)
-              .map(tpos => GeoDateParserUtils.parseDateStringAsOffsetDateTimeSingle(tpos).toOption).filter(_.isDefined).map(_.get).sorted.min
-
-            val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
-            val resultCollection = <wml2:Collection xsi:schemaLocation="http://www.opengis.net/waterml/2.0 http://www.opengis.net/waterml/2.0/waterml2.xsd" gml:id="SacGwHub.Col.1">
-                                     <gml:description>Sac Gw Hub WaterML2.0 export</gml:description>
-                                     <wml2:metadata>
-                                       <wml2:DocumentMetadata gml:id="SacGwHub.DocMD.1">
-                                         <wml2:generationDate>{updatedTime.format(formatter)}</wml2:generationDate>
-                                         <wml2:generationSystem>Sac Gw Hub WaterML2.0 exporter</wml2:generationSystem>
-                                       </wml2:DocumentMetadata>
-                                     </wml2:metadata>
-                                     <wml2:temporalExtent>
-                                       <gml:TimePeriod gml:id="SacGwHub.TempExt.1">
-                                         <gml:beginPosition>{beginPositions.format(formatter)}</gml:beginPosition>
-                                         <gml:endPosition>{endPositions.format(formatter)}</gml:endPosition>
-                                       </gml:TimePeriod>
-                                     </wml2:temporalExtent>
-                                    </wml2:Collection>
-
-            Ok(resultCollection).withHeaders("Content-type" -> "application/xml")
+            // Either future folding begins
+            combinedResponse._1 match {
+              case Right(sosCapabilities) =>
+                if (!sosCapabilities.responseFormats.contains("http://www.opengis.net/waterml/2.0")) {
+                  logger.error(s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}")
+                  val error = ErrorResult(
+                    s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}", None)
+                  InternalServerError(Json.toJson(error)).as(JSON)
+                }
+                val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(response.body, sosCapabilities)
+                if (wml2.isEmpty) {
+                  logger.error(s"Couldn't extract WML2 from this SOS GetObservation response")
+                  val error = ErrorResult(
+                    s"Couldn't extract WML2 from this SOS GetObservation response",
+                    Some(response.body))
+                  InternalServerError(Json.toJson(error)).as(JSON)
+                } else {
+                  Ok(wml2.get)
+                }
+              case Left(errorResult)  => InternalServerError(Json.toJson(errorResult)).as(JSON)
+            }
           }
         })
       }
@@ -252,8 +278,6 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
           """.stripMargin
   }
 
-
-
   /**
     * gets Capabilities from s specified SOS server.
     *
@@ -262,10 +286,9 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
     */
   def getCapabilities(sosUrl: String): Action[AnyContent] = Action.async { request =>
 
-    val responseFuture = wsClient.url(sosUrl)
-      .withHeaders(CONTENT_TYPE -> "application/xml")
-      .post(GET_CAPABILITIES_XML)
+    val responseFuture = retrieveSosCapabilities(sosUrl)
 
+    // still normal future recover
     responseFuture.recover {
       case e: Exception =>
         logger.error("Sos get capabilities threw exception", e)
@@ -274,22 +297,46 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
         InternalServerError(Json.toJson(error)).as(JSON)
     }
 
+    // Either future folding begins
+    responseFuture.map(response => {
+      response match {
+        case Right(sosCapabilities) => Ok(sosCapabilities.toJson()).as(JSON)
+        case Left(errorResult)  => InternalServerError(Json.toJson(errorResult)).as(JSON)
+      }
+    })
+  }
+
+  /**
+    * making the capabilities call reusable
+    *
+    * @param sosUrl
+    * @return
+    */
+  private def retrieveSosCapabilities(sosUrl: String): Future[Either[ErrorResult, SosCapabilities]] = {
+    val responseFuture = wsClient.url(sosUrl)
+      .withHeaders(CONTENT_TYPE -> "application/xml")
+      .post(GET_CAPABILITIES_XML)
+
+    responseFuture.recover {
+      case e: Exception =>
+        logger.error("Sos get capabilities threw exception", e)
+        Left(ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+          Some(e.getMessage)))
+    }
+
     responseFuture.map(response => {
       if (response.status != 200) {
         logger.error(s"Calling SOS ${sosUrl} HTTP result status ${response.status}")
-        val error = ErrorResult(s"Server ${sosUrl} responded with ${response.status} on GetCapabilities",
-          Some(response.body))
-        InternalServerError(Json.toJson(error)).as(JSON)
+        Left(ErrorResult(s"Server ${sosUrl} responded with ${response.status} on GetCapabilities",
+          Some(response.body)))
       }
       else if (!response.header("Content-Type").get.contains("application/xml")) {
         logger.error(s"SOS GetCapabilities result was not XML but ${response.header("Content-Type").get}")
-        val error = ErrorResult(s"SOS GetCapabilities result was not XML but ${response.header("Content-Type").get}",
-          Some(response.body))
-        InternalServerError(Json.toJson(error)).as(JSON)
+        Left(ErrorResult(s"SOS GetCapabilities result was not XML but ${response.header("Content-Type").get}",
+          Some(response.body)))
       }
       else {
-        val json = SosCapabilities.fromXml(response.xml, sosUrl).get.toJson()
-        Ok(json).as(JSON)
+        Right(SosCapabilities.fromXml(response.xml, sosUrl).get)
       }
     })
   }

@@ -34,7 +34,9 @@ case class SosCapabilities(
                           featuresOfInterest: Seq[String],
                           offerings: Seq[String],
                           observedProperties: Seq[String],
-                          procedures: Seq[String]
+                          procedures: Seq[String],
+                          responseFormats: Option[Seq[String]],
+                          serviceMetadata: Option[SosServiceMetadata]
                           ) {
   def toJson(): JsValue = {
     Json.toJson(this)
@@ -48,7 +50,9 @@ object SosCapabilities extends ClassnameLogger {
       (JsPath \ "featuresOfInterest").read[Seq[String]] and
       (JsPath \ "offerings").read[Seq[String]] and
       (JsPath \ "observedProperties").read[Seq[String]] and
-      (JsPath \ "procedures").read[Seq[String]]
+      (JsPath \ "procedures").read[Seq[String]] and
+      (JsPath \ "responseFormats").readNullable[Seq[String]] and
+      (JsPath \ "serviceMetadata").readNullable[SosServiceMetadata]
     ) (SosCapabilities.apply _)
 
   implicit val writes: Writes[SosCapabilities] = (
@@ -57,7 +61,9 @@ object SosCapabilities extends ClassnameLogger {
       (JsPath \ "featuresOfInterest").write[Seq[String]] and
       (JsPath \ "offerings").write[Seq[String]] and
       (JsPath \ "observedProperties").write[Seq[String]] and
-      (JsPath \ "procedures").write[Seq[String]]
+      (JsPath \ "procedures").write[Seq[String]] and
+      (JsPath \ "responseFormats").writeNullable[Seq[String]] and
+      (JsPath \ "serviceMetadata").writeNullable[SosServiceMetadata]
     ) (unlift(SosCapabilities.unapply))
 
   def fromJson(json: JsValue): Option[SosCapabilities] = {
@@ -81,30 +87,37 @@ object SosCapabilities extends ClassnameLogger {
       nodeSeq.head.label match {
         case "Capabilities" =>
           Some(SosCapabilities(
-            (nodeSeq \ "ServiceIdentification" \ "Title").text,
-            sosUrl,
-            parseValuesFromOperationsMetadata(
+            title = (nodeSeq \ "ServiceIdentification" \ "Title").text,
+            sosUrl = sosUrl,
+            featuresOfInterest = parseValuesFromOperationsMetadata(
               (nodeSeq \\ "OperationsMetadata" \ "Operation") filter(n => (n \ "@name" toString) == "GetObservation"),
               "featureOfInterest"),
-            parseValuesFromOperationsMetadata(
+            offerings = parseValuesFromOperationsMetadata(
               (nodeSeq \\ "OperationsMetadata" \ "Operation") filter(n => (n \ "@name" toString) == "GetObservation"),
               "offering"),
-            parseValuesFromOperationsMetadata(
+            observedProperties = parseValuesFromOperationsMetadata(
               (nodeSeq \\ "OperationsMetadata" \ "Operation") filter(n => (n \ "@name" toString) == "GetObservation"),
               "observedProperty"),
-            parseValuesFromOperationsMetadata(
+            procedures = parseValuesFromOperationsMetadata(
               (nodeSeq \\ "OperationsMetadata" \ "Operation") filter(n => (n \ "@name" toString) == "GetObservation"),
-              "procedure")
+              "procedure"),
+            responseFormats = Some(
+              parseValuesFromOperationsMetadata(
+              (nodeSeq \\ "OperationsMetadata" \ "Operation") filter(n => (n \ "@name" toString) == "GetObservation"),
+                "responseFormat")
+            ),
+            serviceMetadata = SosServiceMetadata.fromXml(nodeSeq)
           ))
         case _ =>
-          throw new IllegalArgumentException(f"Expected MDMetadataNode but found  ${nodeSeq.head.label}")
+          throw new IllegalArgumentException(f"Expected OperationsMetadataNode but found  ${nodeSeq.head.label}")
       }
     }
     catch {
       //FIXME SR replace by specific exceptions
-      case e: Exception => logger.warn(f"Exception on parsing MD_Metadata: ${e.getMessage}", e)
+      case e: Exception => logger.warn(f"Exception on parsing OperationsMetadata: ${e.getMessage}", e)
         None
-    }  }
+    }
+  }
 
   private def parseValuesFromOperationsMetadata(nodeseq: NodeSeq, parameter: String): Seq[String] = {
     val param = (nodeseq \ "Parameter") filter(node => (node \ "@name" toString) == parameter)

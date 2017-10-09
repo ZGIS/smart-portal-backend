@@ -63,20 +63,14 @@ class Wml2Export(timeZone: String) extends ClassnameLogger {
 <gml:description>{gmlDescription}</gml:description>
 <wml2:metadata>
   <wml2:DocumentMetadata gml:id="SacGwHub.DocMD.1">
-    <wml2:generationDate>
-      {updatedTime.format(formatter)}
-    </wml2:generationDate>
+    <wml2:generationDate>{updatedTime.format(formatter)}</wml2:generationDate>
     <wml2:generationSystem>Sac Gw Hub WaterML2.0 exporter</wml2:generationSystem>
   </wml2:DocumentMetadata>
 </wml2:metadata>
 <wml2:temporalExtent>
   <gml:TimePeriod gml:id="SacGwHub.TempExt.1">
-    <gml:beginPosition>
-      {beginPositions.format(formatter)}
-    </gml:beginPosition>
-    <gml:endPosition>
-      {endPositions.format(formatter)}
-    </gml:endPosition>
+    <gml:beginPosition>{beginPositions.format(formatter)}</gml:beginPosition>
+    <gml:endPosition>{endPositions.format(formatter)}</gml:endPosition>
   </gml:TimePeriod>
 </wml2:temporalExtent>
 {omMembers}

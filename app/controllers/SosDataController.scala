@@ -214,7 +214,8 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
             // Either future folding begins
             combinedResponse._1 match {
               case Right(sosCapabilities) =>
-                if (!sosCapabilities.responseFormats.contains("http://www.opengis.net/waterml/2.0")) {
+                logger.debug(s"sosCapabilities ${sosCapabilities.responseFormats}")
+                if (sosCapabilities.responseFormats.isDefined && !sosCapabilities.responseFormats.get.contains("http://www.opengis.net/waterml/2.0")) {
                   logger.error(s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}")
                   val error = ErrorResult(
                     s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}", None)
@@ -228,7 +229,12 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                     Some(response.body))
                   InternalServerError(Json.toJson(error)).as(JSON)
                 } else {
+                  val fileName = "export.wml"
                   Ok(wml2.get)
+                    .withHeaders(s"Content-disposition" -> s"attachment; filename=$fileName")
+                    .withHeaders("Access-Control-Expose-Headers" -> "Content-disposition")
+                    .withHeaders("Access-Control-Expose-Headers" -> "x-filename")
+                    .withHeaders("x-filename" -> fileName)
                 }
               case Left(errorResult)  => InternalServerError(Json.toJson(errorResult)).as(JSON)
             }

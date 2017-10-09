@@ -82,9 +82,10 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
       },
 
       timeseries => {
+        val sosXmlRequest = getObservationRequestXml(timeseries)
         val responseFuture = wsClient.url(timeseries.sosUrl)
           .withHeaders(CONTENT_TYPE -> "application/xml")
-          .post(getObservationRequestXml(timeseries))
+          .post(sosXmlRequest)
 
         responseFuture.recover {
           case e: Exception =>
@@ -132,7 +133,14 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                   name = timeseries.timeseriesName
                 )
               }
-            val result = timeseries.copy(data = Some(tsdata), uom = Some(tvp.head.measUnit))
+            val uom = if (tvp.isEmpty) {
+                if (timeseries.uom.isEmpty) {
+                  timeseries.observedProperty
+                } else {
+                  timeseries.uom.getOrElse("empty")
+                }
+              } else tvp.head.measUnit
+            val result = timeseries.copy(data = Some(tsdata), uom = Some(uom))
             Ok(result.toJson()).as(JSON)
           }
         })
@@ -176,9 +184,10 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
             InternalServerError(Json.toJson(error)).as(JSON)
         }
 
+        val sosXmlRequest = getObservationRequestXml(timeseries, "http://www.opengis.net/waterml/2.0")
         val responseFuture = wsClient.url(timeseries.sosUrl)
           .withHeaders(CONTENT_TYPE -> "application/xml")
-          .post(getObservationRequestXml(timeseries, "http://www.opengis.net/waterml/2.0"))
+          .post(sosXmlRequest)
 
         responseFuture.recover {
           case e: Exception =>
@@ -221,7 +230,7 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                     s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}", None)
                   InternalServerError(Json.toJson(error)).as(JSON)
                 }
-                val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(response.body, sosCapabilities)
+                val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(response.body, sosCapabilities, sosXmlRequest)
                 if (wml2.isEmpty) {
                   logger.error("Couldn't extract WML2 from this SOS GetObservation response")
                   val error = ErrorResult(

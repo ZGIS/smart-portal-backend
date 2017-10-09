@@ -17,6 +17,9 @@
  * limitations under the License.
  */
 
+import java.time.format.DateTimeFormatter
+import java.time.{OffsetDateTime, ZoneId}
+
 import models.sosdata.{SosCapabilities, Wml2Export}
 import play.api.mvc.Results
 
@@ -31,7 +34,6 @@ class SosDataControllerSpec extends WithDefaultTest with Results {
   "SosCapabilites Parser" should {
 
     "read capabilites from xml" in {
-      val xml = Source.fromURL(capaResource1)
       val sosCapa = SosCapabilities.fromXml(scala.xml.XML.load(capaResource1), url).get
 
       sosCapa.featuresOfInterest must contain ("http://vocab.smart-project.info/ngmp/feature/389")
@@ -58,10 +60,35 @@ class SosDataControllerSpec extends WithDefaultTest with Results {
       val sosCapa = SosCapabilities.fromXml(scala.xml.XML.load(capaResource1), url).get
 
       val appTimeZone: String = "Pacific/Auckland"
+      val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
       val wml2Exporter = new Wml2Export(appTimeZone)
       val sourceString = scala.io.Source.fromURL(wml2Resource1).getLines().mkString
 
-      val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(sourceString,sosCapa)
+      val requestXml = s"""<sos:GetObservation
+            |    xmlns:sos="http://www.opengis.net/sos/2.0"
+            |    xmlns:fes="http://www.opengis.net/fes/2.0"
+            |    xmlns:gml="http://www.opengis.net/gml/3.2"
+            |    xmlns:swe="http://www.opengis.net/swe/2.0"
+            |    xmlns:xlink="http://www.w3.org/1999/xlink"
+            |    xmlns:swes="http://www.opengis.net/swes/2.0"
+            |    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" service="SOS" version="2.0.0" xsi:schemaLocation="http://www.opengis.net/sos/2.0 http://schemas.opengis.net/sos/2.0/sos.xsd">
+            |    <sos:procedure>${sosCapa.procedures.head}</sos:procedure>
+            |    <sos:offering>${sosCapa.offerings.head}</sos:offering>
+            |    <sos:observedProperty>${sosCapa.observedProperties.head}</sos:observedProperty>
+            |    <sos:temporalFilter>
+            |        <fes:During>
+            |            <fes:ValueReference>phenomenonTime</fes:ValueReference>
+            |            <gml:TimePeriod gml:id="tp_1">
+            |                <gml:beginPosition>${updatedTime.minusYears(1).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}</gml:beginPosition>
+            |                <gml:endPosition>${updatedTime.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}</gml:endPosition>
+            |            </gml:TimePeriod>
+            |        </fes:During>
+            |    </sos:temporalFilter>
+            |    <sos:featureOfInterest>${sosCapa.featuresOfInterest.head}</sos:featureOfInterest>
+            |    <sos:responseFormat>http://www.opengis.net/waterml/2.0</sos:responseFormat></sos:GetObservation>
+          """.stripMargin
+
+      val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(sourceString,sosCapa, requestXml)
 
       println(wml2.toString())
     }

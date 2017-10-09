@@ -19,6 +19,7 @@
 
 package controllers
 
+import java.net.URLEncoder
 import javax.inject.Inject
 
 import models.ErrorResult
@@ -33,6 +34,7 @@ import utils.ClassnameLogger
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.io.Source
+import scala.util.Try
 
 /**
   * Controller to access SOS server and return parsed time series to frontend.
@@ -238,9 +240,10 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                     Some(response.body))
                   InternalServerError(Json.toJson(error)).as(JSON)
                 } else {
-                  val fileName = "export.wml"
+                  val fileName = "export-" + Try (URLEncoder.encode(sosCapabilities.title, "UTF-8") ).getOrElse("-sosdata") + ".wml"
+
                   Ok(wml2.get)
-                    .withHeaders(s"Content-disposition" -> s"attachment; filename=$fileName")
+                    .withHeaders("Content-disposition" -> s"attachment; filename=$fileName")
                     .withHeaders("Access-Control-Expose-Headers" -> "Content-disposition")
                     .withHeaders("Access-Control-Expose-Headers" -> "x-filename")
                     .withHeaders("x-filename" -> fileName)

@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId}
 
@@ -24,6 +25,7 @@ import models.sosdata.{SosCapabilities, Wml2Export}
 import play.api.mvc.Results
 
 import scala.io.Source
+import scala.util.Try
 
 class SosDataControllerSpec extends WithDefaultTest with Results {
 
@@ -89,6 +91,10 @@ class SosDataControllerSpec extends WithDefaultTest with Results {
           """.stripMargin
 
       val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(sourceString,sosCapa, requestXml)
+      val fileName = "export-" + Try (URLEncoder.encode(sosCapa.title.replace(" ", "_"), "UTF-8") ).getOrElse("-sosdata") + ".wml"
+
+      wml2.toString.contains("NGMP") mustBe true
+      fileName mustEqual "export-NGMP_SOS.wml"
 
       println(wml2.toString())
     }

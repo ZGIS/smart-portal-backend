@@ -20,6 +20,8 @@
 package controllers
 
 import java.net.URLEncoder
+import java.time.{OffsetDateTime, ZoneId}
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 import models.ErrorResult
@@ -45,6 +47,7 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
   val configuration: play.api.Configuration = config
   private lazy val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   private lazy val wml2Exporter = new Wml2Export(appTimeZone)
+  lazy val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
   val GET_CAPABILITIES_XML =
     """<?xml version="1.0" encoding="UTF-8"?>
@@ -240,7 +243,8 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                     Some(response.body))
                   InternalServerError(Json.toJson(error)).as(JSON)
                 } else {
-                  val fileName = "export-" + Try (URLEncoder.encode(sosCapabilities.title, "UTF-8") ).getOrElse("-sosdata") + ".wml"
+                  val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+                  val fileName = "export-" + Try (URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8") + "-" + updatedTime.format(formatter) ).getOrElse("-sosdata") + ".wml"
 
                   Ok(wml2.get)
                     .withHeaders("Content-disposition" -> s"attachment; filename=$fileName")

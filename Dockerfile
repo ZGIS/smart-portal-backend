@@ -45,5 +45,6 @@ CMD [ "/smart-portal-backend-1.0-SNAPSHOT/bin/smart-portal-backend", \
     "-Dconfig.resource=application.conf", \
     "-Dhttp.address=0.0.0.0", \
     "-Dhttp.port=9000", \
-    "-DapplyEvolutions.default=true", \
+    "-Dplay.evolutions.db.default.autoApply=true", \
+    "-Dplay.evolutions.db.default.autoApplyDowns=true", \
     "-Dlogger.resource=logback-stdout.xml"]

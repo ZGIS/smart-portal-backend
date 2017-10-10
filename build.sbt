@@ -187,8 +187,12 @@ publishArtifact in (Compile, packageDoc) := false
 
 javaOptions in Universal ++= Seq(
   // others will be added as app parameters
-  "-DapplyEvolutions.default=true",
+  // "-DapplyEvolutions.default=true",
+  "-Dplay.evolutions.db.default.autoApply=true",
+  "-Dplay.evolutions.db.default.autoApplyDowns=true",
   "-Dconfig.resource=application.conf",
-  "-Dlogger.resource=logback-stdout.xml"
+  "-Dlogger.resource=logback-stdout.xml",
+  "-Dhttp.address=0.0.0.0",
+  "-Dhttp.port=9000"
   //"-Dapplication.base_url=http://test.smart-project.info/"
 )

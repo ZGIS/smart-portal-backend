@@ -329,7 +329,7 @@ class CollectionsController @Inject()(config: Configuration,
         }
     }
     owcXmlElements.append("</urlset>\n")
-    Ok(owcXmlElements).withHeaders("Content-type" -> "application/xml")
+    Ok(owcXmlElements.toString()).withHeaders("Content-type" -> "application/xml")
   }
 }
 

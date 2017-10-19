@@ -109,9 +109,9 @@ javaOptions in Test +="-Dlogger.resource=logback-stdout-test.xml"
 val genSiteDir = "src/site/generated"
 
 // Scala style task for compile, config file is scalastyle-config.xml
-lazy val compileScalastyle = taskKey[Unit]("compileScalastyle")
-compileScalastyle := org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
-(compile in Compile) <<= (compile in Compile) dependsOn compileScalastyle
+// lazy val compileScalastyle = taskKey[Unit]("compileScalastyle")
+// compileScalastyle := org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
+// (compile in Compile) <<= (compile in Compile) dependsOn compileScalastyle
 
 // Scala style task to run with tests
 lazy val testScalastyle = taskKey[Unit]("testScalastyle")

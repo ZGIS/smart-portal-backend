@@ -132,7 +132,7 @@ lazy val coverageCopyTask = TaskKey[Unit]("copy-coverage")
 
 coverageCopyTask := {
   println(s"Copying: ./target/scala-2.11/scoverage-report/ to $genSiteDir")
-  val result = Seq("cp", "-r", "./target/scala-2.11/scoverage-report", genSiteDir + "/scoverage-report") !!
+  val result = Seq("cp", "-r", "./target/scala-2.11/scoverage-report", genSiteDir) !!
 }
 
 // sbt-dependency-graph

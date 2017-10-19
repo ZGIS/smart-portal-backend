@@ -19,6 +19,7 @@
 
 package controllers
 
+import java.time.format.DateTimeFormatter
 import javax.inject._
 
 import info.smart.models.owc100._
@@ -27,9 +28,11 @@ import org.apache.commons.lang3.StringEscapeUtils
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
-import play.api.mvc.{Action, Controller}
+import play.api.mvc.{Action, AnyContent, Controller}
 import services.{EmailService, OwcCollectionsService}
 import utils.{ClassnameLogger, PasswordHashing}
+
+import scala.xml.NodeSeq
 
 @Singleton
 class CollectionsController @Inject()(config: Configuration,
@@ -291,6 +294,42 @@ class CollectionsController @Inject()(config: Configuration,
             val error = ErrorResult("Deletion of OwcContext failed.", Some(s"DocumentId: ${owcContextId}"))
             BadRequest(Json.toJson(error)).as(JSON)
           }
+  }
+
+  /**
+    * Creates a sitemap xml for publicly accessible records/collections and provides links via webgui access
+    * https://support.google.com/webmasters/answer/75712?visit_id=1-636439946733108040-1790029023&rd=1
+    *
+    * @return
+    */
+  def generateSitemapFromPubliccollections: Action[AnyContent] = Action {
+
+    val owcXmlElements: scala.collection.mutable.StringBuilder = new StringBuilder
+    owcXmlElements.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+    owcXmlElements.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n")
+
+    collectionsService.getOwcContextsForUserAndId(None, None).foreach{
+      doc =>
+        val docPart = s"""<url>
+            |  <loc>https://dev.smart-project.info/#${doc.id.getPath}</loc>
+            |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_DATE)}</lastmod>
+            |  <priority>1.0</priority>
+            |</url>
+          """.stripMargin
+        owcXmlElements.append(docPart)
+        doc.resource.foreach{
+          res =>
+            val resPart = s"""<url>
+                             |  <loc>https://dev.smart-project.info/#${res.id.getPath}</loc>
+                             |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_DATE)}</lastmod>
+                             |  <priority>1.0</priority>
+                             |</url>
+          """.stripMargin
+            owcXmlElements.append(resPart)
+        }
+    }
+    owcXmlElements.append("</urlset>\n")
+    Ok(owcXmlElements).withHeaders("Content-type" -> "application/xml")
   }
 }
 

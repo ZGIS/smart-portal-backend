@@ -21,6 +21,7 @@ package models.users
 
 import java.sql.Connection
 import java.time.ZonedDateTime
+import java.util.UUID
 
 import anorm.SqlParser._
 import anorm._
@@ -37,13 +38,13 @@ object UserDAO extends ClassnameLogger {
     *
     */
   val userParser = {
-    get[String]("users.email") ~
-      get[String]("users.accountsubject") ~
-      get[String]("users.firstname") ~
-      get[String]("users.lastname") ~
-      get[String]("users.password") ~
-      get[String]("users.laststatustoken") ~
-      get[ZonedDateTime]("users.laststatuschange") map {
+    get[String]("email") ~
+      get[String]("accountsubject") ~
+      get[String]("firstname") ~
+      get[String]("lastname") ~
+      get[String]("password") ~
+      get[String]("laststatustoken") ~
+      get[ZonedDateTime]("laststatuschange") map {
       case email ~ accountsubject ~ firstname ~ lastname ~ password ~ laststatustoken ~ laststatuschange =>
         User(EmailAddress(email), accountsubject, firstname, lastname, password, laststatustoken, laststatuschange)
     }
@@ -67,8 +68,8 @@ object UserDAO extends ClassnameLogger {
       "laststatuschange" -> user.laststatuschange)
 
     val rowCount = SQL(
-      """
-          insert into users values (
+      s"""
+          insert into $table_users values (
             {email}, {accountsubject}, {firstname}, {lastname}, {password}, {laststatustoken}, {laststatuschange}
           )
         """).on(nps: _*).executeUpdate()
@@ -87,8 +88,8 @@ object UserDAO extends ClassnameLogger {
     */
   def updateNoPass(user: User)(implicit connection: Connection): Option[User] = {
     val rowCount = SQL(
-      """
-          update users set
+      s"""
+          update $table_users set
             accountsubject = {accountsubject},
             firstname = {firstname},
             lastname = {lastname},
@@ -117,8 +118,8 @@ object UserDAO extends ClassnameLogger {
     */
   def updatePassword(user: User)(implicit connection: Connection): Option[User] = {
     val rowCount = SQL(
-      """
-          update users set
+      s"""
+          update $table_users set
             password = {password},
             laststatustoken = {laststatustoken},
             laststatuschange = {laststatuschange} where email = {email}
@@ -158,7 +159,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def deleteUser(user: User)(implicit connection: Connection): Boolean = {
-    val rowCount = SQL("delete from users where accountsubject = {accountsubject}").on(
+    val rowCount = SQL(s"delete from $table_users where accountsubject = {accountsubject}").on(
         'accountsubject -> user.accountSubject
       ).executeUpdate()
 
@@ -190,7 +191,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findUserByEmailAddress(emailAddress: EmailAddress)(implicit connection: Connection): Option[User] = {
-      SQL("select users.* from users where email = {email}").on(
+      SQL(s"select * from $table_users where email = {email}").on(
         'email -> emailAddress.value
       ).as(userParser.singleOpt)
   }
@@ -201,16 +202,16 @@ object UserDAO extends ClassnameLogger {
     * @param accountSubject
     */
   def findByAccountSubject(accountSubject: String)(implicit connection: Connection): Option[User] = {
-      SQL("select users.* from users where accountsubject = {accountsubject}").on(
+      SQL(s"select * from $table_users where accountsubject = {accountsubject}").on(
         'accountsubject -> accountSubject
       ).as(userParser.singleOpt)
   }
 
   /**
-    * Retrieve all users.
+    * Retrieve all
     */
   def getAllUsers(implicit connection: Connection): Seq[User] = {
-      SQL("select users.* from users").as(userParser *)
+      SQL(s"select * from $table_users").as(userParser *)
   }
 
   // more utility functions
@@ -222,7 +223,7 @@ object UserDAO extends ClassnameLogger {
     * @return
     */
   def findUsersByToken(token: StatusToken, statusInfo: String)(implicit connection: Connection): Seq[User] = {
-      SQL(s"""select users.* from users where laststatustoken like '$token$statusInfo'""").as(userParser *)
+      SQL(s"""select * from $table_users where laststatustoken like '$token$statusInfo'""").as(userParser *)
   }
 
   /**
@@ -272,4 +273,5 @@ object UserDAO extends ClassnameLogger {
   def findActiveUsers(implicit connection: Connection): Seq[User] = {
     StatusToken.activatedTokens.flatMap(t => findUsersByToken(StatusToken(t), "%"))
   }
+
 }

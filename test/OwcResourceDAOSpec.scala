@@ -18,7 +18,7 @@
  */
 
 import info.smart.models.owc100.OwcContext
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.owc._
 import org.locationtech.spatial4j.context.SpatialContext
 import play.api.libs.json.Json
@@ -51,7 +51,7 @@ class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "create OwcResources with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaConnection { implicit connection =>
           OwcResourceDAO.getAllOwcResources.size mustEqual 0
@@ -79,7 +79,7 @@ class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "won't create OwcResources with DB if one of dependencies UUID already exists" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
 
@@ -108,7 +108,7 @@ class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
     "update OwcResources with DB" in {
 
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcResourceDAO.createOwcResource(owcResource2) must contain(owcResource2)
@@ -135,7 +135,7 @@ class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
     "delete OwcResources with DB" in {
 
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcResourceDAO.createOwcResource(owcResource2) must contain(owcResource2)
@@ -167,7 +167,7 @@ class OwcResourceDAOSpec extends WithDefaultTestFullAppAndDatabase {
     "bulkload OwcResources from JSON into DB" in {
 
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         val owcDoc1 = Json.parse(jsonTestCollection1).validate[OwcContext].get
         val owcDoc2 = Json.parse(jsonTestCollection2).validate[OwcContext].get

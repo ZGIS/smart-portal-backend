@@ -18,9 +18,9 @@
  */
 
 import com.google.inject.AbstractModule
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.gmd._
-import services.{EmailService, GoogleServicesDAO, MetadataService, OwcCollectionsService}
+import services._
 import utils.PasswordHashing
 
 /**
@@ -36,15 +36,17 @@ import utils.PasswordHashing
 class Module extends AbstractModule {
 
   override def configure(): Unit = {
+
+    // Database managed Access
+    bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
+
     // utils and services
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
+    bind(classOf[UserService]).asEagerSingleton()
     bind(classOf[MetadataService]).asEagerSingleton()
     bind(classOf[OwcCollectionsService]).asEagerSingleton()
     bind(classOf[GoogleServicesDAO]).asEagerSingleton()
-
-    // Database managed Access
-    bind(classOf[SessionHolder]).asEagerSingleton()
 
     // companion objects to inject objects into (see http://michaelpnash.github.io/guice-up-your-scala/)
     bind(classOf[MdMetadataCitationTrait]).toInstance(MdMetadataCitation)

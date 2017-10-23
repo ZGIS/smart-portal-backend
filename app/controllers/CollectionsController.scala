@@ -29,21 +29,18 @@ import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc.{Action, AnyContent, Controller}
-import services.{EmailService, OwcCollectionsService}
+import services.{EmailService, OwcCollectionsService, UserService}
 import utils.{ClassnameLogger, PasswordHashing}
 
-import scala.xml.NodeSeq
-
 @Singleton
-class CollectionsController @Inject()(config: Configuration,
-                                      cacheApi: CacheApi,
+class CollectionsController @Inject()(val configuration: Configuration,
+                                      val cache: CacheApi,
+                                      val userService: UserService,
+                                      val passwordHashing: PasswordHashing,
                                       emailService: EmailService,
-                                      collectionsService: OwcCollectionsService,
-                                      override val passwordHashing: PasswordHashing)
+                                      collectionsService: OwcCollectionsService)
   extends Controller with Security with ClassnameLogger {
 
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   /**
@@ -68,6 +65,21 @@ class CollectionsController @Inject()(config: Configuration,
       authUser =>
         implicit request => {
           val owcJsDocs = collectionsService.getUserDefaultOwcContext(authUser).map(doc => doc.toJson)
+          owcJsDocs.fold {
+            val error: ErrorResult = ErrorResult(s"Could not find user collection for '${authUser}' ", None)
+            BadRequest(Json.toJson(error)).as(JSON)
+          } {
+            owcDocJs =>
+              Ok(owcDocJs)
+          }
+        }
+  }
+
+  def createNewCustomCollection: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      authUser =>
+        implicit request => {
+          val owcJsDocs = collectionsService.createNewCustomCollection(authUser).map(doc => doc.toJson)
           owcJsDocs.fold {
             val error: ErrorResult = ErrorResult(s"Could not find user collection for '${authUser}' ", None)
             BadRequest(Json.toJson(error)).as(JSON)
@@ -108,6 +120,8 @@ class CollectionsController @Inject()(config: Configuration,
               BadRequest(Json.toJson(error)).as(JSON)
             },
             owcContext => {
+              logger.trace(Json.prettyPrint(owcContext.toJson))
+              // TODO mangle Context and Resource IDs
               val inserted = collectionsService.insertCollection(owcContext, authUser)
               inserted.fold {
                 val error: ErrorResult = ErrorResult("Collection could not be inserted",
@@ -139,6 +153,7 @@ class CollectionsController @Inject()(config: Configuration,
               BadRequest(Json.toJson(error)).as(JSON)
             },
             owcContext => {
+              logger.trace(Json.prettyPrint(owcContext.toJson))
               val updated = collectionsService.updateCollection(owcContext, authUser)
               updated.fold {
                 val error: ErrorResult = ErrorResult("Collection could not be updated",
@@ -171,6 +186,7 @@ class CollectionsController @Inject()(config: Configuration,
               BadRequest(Json.toJson(error)).as(JSON)
             },
             owcResource => {
+              logger.trace(Json.prettyPrint(owcResource.toJson))
               val collectionDoc = collectionsService.getOwcContextsForUserAndId(
                 authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
               val updatedCollection = collectionDoc.map {
@@ -208,6 +224,7 @@ class CollectionsController @Inject()(config: Configuration,
               BadRequest(Json.toJson(error)).as(JSON)
             },
             owcResource => {
+              logger.trace(Json.prettyPrint(owcResource.toJson))
               val collectionDoc = collectionsService.getOwcContextsForUserAndId(
                 authUserOption = Some(authUser), owcContextIdOption = Some(owcContextId)).headOption
               val updatedCollection = collectionDoc.map {
@@ -329,7 +346,6 @@ class CollectionsController @Inject()(config: Configuration,
         }
     }
     owcXmlElements.append("</urlset>\n")
-    Ok(owcXmlElements.mkString).withHeaders("Content-type" -> "application/xml")
+    Ok(owcXmlElements.mkString).as("application/xml")
   }
 }
-

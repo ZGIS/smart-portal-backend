@@ -26,7 +26,7 @@ import com.typesafe.config.ConfigFactory
 import controllers.routes
 import mockws.MockWS
 import models.ErrorResult
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.users.{LoginCredentials, StatusToken, User, UserDAO}
 import org.specs2.mock.Mockito
 import play.api.db.Database
@@ -56,7 +56,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
   class FakeModule extends AbstractModule {
     def configure(): Unit = {
       bind(classOf[PasswordHashing]).asEagerSingleton()
-      bind(classOf[SessionHolder]).asEagerSingleton()
+      bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
       bind(classOf[WSClient]).toInstance(mockws)
       bind(classOf[EmailService]).toInstance(mockEmailService)
       bind(classOf[OwcCollectionsService]).toInstance(mockCollectionsService)
@@ -80,7 +80,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
 
   val passwordHashing: PasswordHashing = app.injector.instanceOf[PasswordHashing]
 
-  val injectedSessionHolder: SessionHolder = app.injector.instanceOf[SessionHolder]
+  val injectedSessionHolder: DatabaseSessionHolder = app.injector.instanceOf[DatabaseSessionHolder]
   val database: Database = injectedSessionHolder.db
 
   before {

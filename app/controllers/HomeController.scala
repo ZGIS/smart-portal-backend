@@ -22,7 +22,7 @@ package controllers
 import javax.inject._
 
 import models.ErrorResult
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
 import play.api.cache._
@@ -31,6 +31,7 @@ import play.api.libs.json.Writes._
 import play.api.libs.json._
 import play.api.libs.ws._
 import play.api.mvc._
+import services.UserService
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.duration._
@@ -38,24 +39,23 @@ import scala.concurrent.duration._
 /**
   * HomeController, maybe rename? Provides login and logout
   *
-  * @param config
-  * @param cacheApi
+  * @param configuration
+  * @param cache
   * @param passwordHashing
-  * @param sessionHolder
+  * @param dbSession
   * @param ws
   */
 @Singleton
-class HomeController @Inject()(config: Configuration,
-                               cacheApi: CacheApi,
-                               override val passwordHashing: PasswordHashing,
-                               sessionHolder: SessionHolder,
+class HomeController @Inject()(val configuration: Configuration,
+                               val cache: CacheApi,
+                               val userService: UserService,
+                               val passwordHashing: PasswordHashing,
+                               dbSession: DatabaseSessionHolder,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {
 
   lazy private val reCaptchaSecret: String =
     configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
 
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
   val recaptcaVerifyUrl = "https://www.google.com/recaptcha/api/siteverify"
 
   /**
@@ -128,30 +128,24 @@ class HomeController @Inject()(config: Configuration,
         BadRequest(Json.toJson(error)).as(JSON)
       },
       valid = credentials => {
-        // find user in db
-        sessionHolder.viaConnection { implicit connection =>
-          UserDAO.findUserByEmailAsString(credentials.email).fold {
-            // should never indicate if user not found or just password wrong?
-            logger.error("User email or password wrong.")
-            val error = ErrorResult("User email or password wrong.", None)
+        // authenticate user in db
+        userService.authenticateLocal(credentials) match {
+          case Left(error) =>
+            logger.error(error.message)
             Unauthorized(Json.toJson(error)).as(JSON)
-          } { user =>
-            // compare password
-            if (passwordHashing.validatePassword(credentials.password, user.password)) {
-              // here is correct auth branch
-              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-              // logger.debug(s"Logging in email from $uaIdentifier")
-              val token = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-              cache.set(token, user.email)
-              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs()))
-                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
-            } else {
-              // should never indicate if user not found or just password wrong?
-              logger.error("User email or password wrong.")
-              val error = ErrorResult("User email or password wrong.", None)
-              Unauthorized(Json.toJson(error)).as(JSON)
-            }
-          }
+
+          case Right(user) =>
+            val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+            logger.trace(s"Logging in email from $uaIdentifier")
+            val token = userService.upsertUserSessionCache(user.email.value, uaIdentifier)
+            logger.trace(s"Logging in setting cache $token")
+            Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs))
+              .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+
+          case _ =>
+            val error = ErrorResult("Could not validate request.", None)
+            logger.error(error.message)
+            InternalServerError(Json.toJson(error)).as(JSON)
         }
       })
   }
@@ -193,10 +187,11 @@ class HomeController @Inject()(config: Configuration,
     * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
     * X-XSRF-TOKEN in HTTP header.
     */
-  def logout: Action[Unit] = HasToken(parse.empty) { token =>
-    email =>
-      implicit request =>
-        cache.remove(token)
-        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+  def logout: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      email =>
+        implicit request =>
+          userService.removeUserSessionCache(email, token)
+          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 }

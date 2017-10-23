@@ -18,8 +18,7 @@
  */
 
 import akka.stream.Materializer
-import controllers.{ProfileJs, routes}
-import info.smart.models.owc100.OwcContext
+import controllers.routes
 import org.specs2.mock.Mockito
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -103,7 +102,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/login/oauth2callback       controllers.UserController.oauth2callback
     "request to oauth2callback" in {
       (pending)
@@ -130,7 +129,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // GET   /api/v1/logout/gdisconnect   controllers.UserController.gdisconnect
     "request to gdisconnect" in {
       (pending)
@@ -181,7 +180,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // GET   /api/v1/users/profile/:email       controllers.UserController.getProfile(email: String)
     "request to getProfile(email)" in {
       (pending)
@@ -206,7 +205,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/users/update   controllers.UserController.updateProfile
     "request to updateProfile" in {
       (pending)
@@ -233,7 +232,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/users/updatepass     controllers.UserController.updatePassword
     "request to updatePassword" in {
       (pending)
@@ -260,7 +259,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/users/resetpass      controllers.UserController.resetPasswordRequest
     "request to resetPasswordRequest" in {
       (pending)
@@ -286,7 +285,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/users/resetpass/:linkId    controllers.UserController.resetPasswordRedeem(linkId: String)
     "request to resetPasswordRedeem(link)" in {
       (pending)
@@ -312,7 +311,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // POST  /api/v1/users/register       controllers.UserController.registerUser
     "request to registerUser" in {
       (pending)
@@ -338,7 +337,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // GET   /api/v1/users/register/:linkId     controllers.UserController.registerConfirm(linkId: String)
     "request to registerConfirm(link)" in {
       (pending)
@@ -362,7 +361,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-    
+
     // GET   /api/v1/users/deleteself     controllers.UserController.deleteSelf
     "request to deleteSelf" in {
       (pending)

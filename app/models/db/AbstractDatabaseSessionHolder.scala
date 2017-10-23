@@ -17,21 +17,20 @@
  * limitations under the License.
  */
 
-package models
+package models.db
 
-package object users {
+import java.sql.Connection
 
-  val table_users = "users"
+import play.api.db.Database
 
-  val table_usermetarecords = "usermetarecords"
-  val table_userfiles = "userfiles"
+/**
+  * trait to test with database mock
+  */
+trait AbstractDatabaseSessionHolder {
+  val db: Database
 
-  val table_consentlogging = "consentlogging"
-  val table_sessions = "sessions"
+  def viaConnection[T](func: Connection => T) : T
 
-  val table_groups = "usergroups"
-  val table_groups_users = "usergroups_has_users"
-  val table_groups_context = "usergroups_has_owc_context_rights"
-
+  def viaTransaction[T](func: Connection => T) : T
 
 }

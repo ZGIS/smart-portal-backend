@@ -521,12 +521,19 @@ object OwcContextDAO extends ClassnameLogger {
     // get current list,
     val current: List[URL] = owcContext.resource.map(_.id)
 
+    logger.trace(s"preUpdateCheckOwcResources: current: List[URL] ${current.map(_.toString).mkString}")
+
     // get old list,
     val oldOwcContext = findOwcContextById(owcContext.id)
     val old: List[URL] = oldOwcContext.map(o => o.resource.map(_.id)).getOrElse(List())
 
+    logger.trace(s"preUpdateCheckOwcResources: old: List[URL] ${current.map(_.toString).mkString}")
+
     // in old but not current -> delete
     val toBeDeleted = old.diff(current)
+
+    logger.trace(s"preUpdateCheckOwcResources: toBeDeleted: List[URL] ${current.map(_.toString).mkString}")
+
     val deleted = oldOwcContext.map { owcContext =>
       owcContext.resource.filter(o => toBeDeleted.contains(o.id))
         .map { owcResource =>
@@ -546,20 +553,25 @@ owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".str
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)
+
+    logger.trace(s"preUpdateCheckOwcResources: toBeUpdated: List[URL] ${current.map(_.toString).mkString}")
+
     val updated = owcContext.resource.filter(o => toBeUpdated.contains(o.id))
       .map(OwcResourceDAO.updateOwcResource(_))
       .count(_.isDefined) == toBeUpdated.length
 
     // in current but not in old -> insert
     val toBeInserted = current.diff(old)
+
+    logger.trace(s"preUpdateCheckOwcResources: toBeInserted: List[URL] ${current.map(_.toString).mkString}")
+
     val inserted = owcContext.resource.filter(o => toBeInserted.contains(o.id))
       .map { owcResource =>
         val createdOwcResource = OwcResourceDAO.createOwcResource(owcResource)
 
         // Now also insert new relation into tableOwcContextHasOwcResources table for the created and to be referenced OwcResource
         val createdOwcResourceRelation = SQL(
-          s"""Delete from $tableOwcContextHasOwcResources where
-             |owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".stripMargin).on(
+          s"""Insert into $tableOwcContextHasOwcResources values ({owc_context_id}, {owc_resource_id})""".stripMargin).on(
           'owc_context_id -> owcContext.id.toString,
           'owc_resource_id -> owcResource.id.toString
         ).executeUpdate().equals(1)

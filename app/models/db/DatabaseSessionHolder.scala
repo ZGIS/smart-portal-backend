@@ -28,12 +28,10 @@ import utils.ClassnameLogger
 /**
   * trying higher level db mgmt to unify DAOs better and handle cross-DAO transactions
   *
-  * @param database
+  * @param db
   */
 @Singleton
-class SessionHolder @Inject()(database: Database) extends AbstractSessionHolder with ClassnameLogger{
-
-  val db: Database = database
+class DatabaseSessionHolder @Inject()(val db: Database) extends AbstractDatabaseSessionHolder with ClassnameLogger{
 
   /**
     * enclose sql blocks with availabe sharable connection

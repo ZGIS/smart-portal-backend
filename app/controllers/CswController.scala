@@ -28,7 +28,7 @@ import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
 import play.api.{Application, Configuration}
-import services.{MetadataService, OwcCollectionsService}
+import services.{MetadataService, OwcCollectionsService, UserService}
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -64,6 +64,7 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
   */
 class CswController @Inject()(val configuration: Configuration,
                               val cache: CacheApi,
+                              val userService: UserService,
                               val passwordHashing: PasswordHashing,
                               wsClient: WSClient,
                               implicit val context: ExecutionContext,
@@ -107,86 +108,101 @@ class CswController @Inject()(val configuration: Configuration,
   def insert: Action[JsValue] = HasTokenAsync(parse.json) {
     token =>
       authUser =>
-        implicit request => {
+        implicit request =>
+
           logger.debug(request.toString)
-
           //TODO parse JSON to MDMetadataSet and convert that to XML
-          val mdMetadata = MdMetadata.fromJson(((request.body.as[JsObject]) \ "metadata").get)
+          // val mdMetadata = MdMetadata.fromJson(((request.body.as[JsObject]) \ "metadata").get)
+          (request.body.as[JsObject] \ "metadata").validate[MdMetadata].fold(
+            errors => {
+              logger.error(JsError.toJson(errors).toString())
+              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+              Future {
+                BadRequest(Json.toJson(error)).as(JSON)
+              }
+            },
+            mdMetadata => {
+              logger.trace(Json.prettyPrint(mdMetadata.toJson()))
+              //FIXME SR I find that pretty hard to read. Is there a better way of chaining WS calls?
+              // see https://www.playframework.com/documentation/2.5.x/ScalaWS#chaining-ws-calls
+              val futureResponse: Future[(WSResponse, WSResponse)] = for {
+                getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
+                insertResponse <- {
+                  //check if getCapaResponse indicates, that the CSW can perform Transactions
+                  val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
+                    logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
+                    node.attribute("name").get.text.equals("Transaction")
+                  })
+                  logger.debug(s"operation = ${operation.toString()}")
+                  if (operation.isEmpty) {
+                    throw new UnsupportedOperationException("CSW does not support Transaction.")
+                  }
 
-          //FIXME SR I find that pretty hard to read. Is there a better way of chaining WS calls?
-          // see https://www.playframework.com/documentation/2.5.x/ScalaWS#chaining-ws-calls
-          val futureResponse: Future[(WSResponse, WSResponse)] = for {
-            getCapaResponse <- wsClient.url(CSW_OPERATIONS_METADATA_URL).get()
-            insertResponse <- {
-              //check if getCapaResponse indicates, that the CSW can perform Transactions
-              val operation = (getCapaResponse.xml \\ "OperationsMetadata" \\ "Operation").filter(node => {
-                logger.debug(s"Attribute 'name'=${node.attribute("name").get.text.toString}")
-                node.attribute("name").get.text.equals("Transaction")
+                  //insert MDMEtadata in insert template
+                  logger.debug(s"MD_MetadataXML: ${mdMetadata.toXml().toString()}")
+                  val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.toXml()))
+                  val finalXML = rule.transform(cswtInsertXml)
+                  logger.debug(s"finalXml: ${finalXML.toString()}")
+                  wsClient.url(CSW_URL).post(finalXML.toString())
+                }
+                updateIngesterIndexResponse <- {
+                  val response = wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
+                  response.onSuccess {
+                    case response if response.status == 200 => {
+                      logger.info(
+                        s"Successfully called $INGESTER_UPDATE_INDEX_URL (${response.status} - ${response.statusText})");
+                      logger.info(s"response: ${response.body}");
+                    }
+                    case response => {
+                      logger.warn(
+                        s"Call to '$INGESTER_UPDATE_INDEX_URL' returned error: ${response.status} - ${response.statusText}");
+                      logger.warn(s"response: ${response.body}");
+                    }
+                  }
+                  response
+                }
+              } yield (insertResponse, updateIngesterIndexResponse)
+
+              futureResponse.recover {
+                case e: Exception =>
+                  logger.error("Insert CSW threw exception", e)
+                  val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on CSW insert: ${e.getMessage}",
+                    None)
+                  InternalServerError(Json.toJson(error)).as(JSON)
+              }
+
+              futureResponse.map(response => {
+                logger.debug(response._1.xml.toString())
+                response._1.xml match {
+                  case e: Elem if e.label == "TransactionResponse" => {
+                    val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
+                    logger.debug(s"Adding ${mdMetadata.fileIdentifier} to default collection of $authUser.")
+                    val userMetaEntryOk = userService.insertUserMetaRecordEntry(CSW_URL, mdMetadata.fileIdentifier, authUser)
+                    val added = collectionsService.addMdResourceToUserDefaultCollection(CSW_URL, mdMetadata, authUser)
+                    if (added && userMetaEntryOk.isDefined) {
+                      Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
+                        "message" -> s"Inserted as ${fileIdentifier} and reference entry added to your data collection."))
+                    } else {
+                      val error = ErrorResult(s"Could not add ${mdMetadata.fileIdentifier} to your collection of $authUser.", None)
+                      logger.warn(error.message)
+                      BadRequest(Json.toJson(error)).as(JSON)
+                    }
+                  }
+                  case e: Elem if e.label == "ExceptionReport" => {
+                    val message = (e \\ "Exception" \\ "ExceptionText").text
+                    //TODO SR make this InternalServerError
+                    val error = ErrorResult(message, None)
+                    InternalServerError(Json.toJson(error)).as(JSON)
+                  }
+                  case _ => {
+                    val error = ErrorResult(s"Unexpected Response from CSW: ${response._1.status} - ${response._1.statusText}",
+                      Some(response._1.body))
+                    InternalServerError(Json.toJson(error)).as(JSON)
+                  }
+                }
               })
-              logger.debug(s"operation = ${operation.toString()}")
-              if (operation.isEmpty) {
-                throw new UnsupportedOperationException("CSW does not support Transaction.")
-              }
-
-              //insert MDMEtadata in insert template
-              logger.debug(s"MD_MetadataXML: ${mdMetadata.get.toXml().toString()}")
-              val rule = new RuleTransformer(new AddMDMetadataToInsert(mdMetadata.get.toXml()))
-              val finalXML = rule.transform(cswtInsertXml)
-              logger.debug(s"finalXml: ${finalXML.toString()}")
-              wsClient.url(CSW_URL).post(finalXML.toString())
             }
-            updateIngesterIndexResponse <- {
-              val response = wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
-              response.onSuccess {
-                case response if response.status == 200 => {
-                  logger.info(
-                    s"Successfully called $INGESTER_UPDATE_INDEX_URL (${response.status} - ${response.statusText})");
-                  logger.info(s"response: ${response.body}");
-                }
-                case response => {
-                  logger.warn(
-                    s"Call to '$INGESTER_UPDATE_INDEX_URL' returned error: ${response.status} - ${response.statusText}");
-                  logger.warn(s"response: ${response.body}");
-                }
-              }
-              response
-            }
-          } yield (insertResponse, updateIngesterIndexResponse)
+          )
 
-          futureResponse.recover {
-            case e: Exception =>
-              logger.error("Insert CSW threw exception", e)
-              val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on CSW insert: ${e.getMessage}",
-                None)
-              InternalServerError(Json.toJson(error)).as(JSON)
-          }
-
-          futureResponse.map(response => {
-            logger.debug(response._1.xml.toString())
-            response._1.xml match {
-              case e: Elem if e.label == "TransactionResponse" => {
-                val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
-                logger.debug(s"Adding ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
-                val added = collectionsService.addMdResourceToUserDefaultCollection(CSW_URL, mdMetadata.get, authUser)
-                if (!added) {
-                  logger.warn(s"Could not add ${mdMetadata.get.fileIdentifier} to default collection of $authUser.")
-                }
-                Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
-                  "message" -> s"Inserted as ${fileIdentifier}."))
-              }
-              case e: Elem if e.label == "ExceptionReport" => {
-                val message = (e \\ "Exception" \\ "ExceptionText").text
-                //TODO SR make this InternalServerError
-                val error = ErrorResult(message, None)
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              case _ => {
-                val error = ErrorResult(s"Unexpected Response from CSW: ${response._1.status} - ${response._1.statusText}",
-                  Some(response._1.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-            }
-          })
-        }
   }
 }

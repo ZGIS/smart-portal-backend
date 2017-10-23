@@ -30,7 +30,7 @@ import utils.ClassnameLogger
   * UserGroup Users Level object (members and their rights level)
   * @param usergroups_uuid
   * @param users_accountsubject
-  * @param userlevel 0 = normal group member, 1 = power-user ? is that enough
+  * @param userlevel 0 = normal group member, 1 = power-user ? is that enough (3 overlord admin?)
   */
 case class UserGroupUsersLevel(usergroups_uuid: UUID,
                                users_accountsubject: String,

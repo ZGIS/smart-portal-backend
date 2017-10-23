@@ -22,7 +22,7 @@ import java.net.URL
 
 import anorm.{SQL, SqlParser}
 import info.smart.models.owc100._
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.owc._
 import models.users.UserDAO
 import org.locationtech.spatial4j.context.SpatialContext
@@ -60,7 +60,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "create OwcContexts with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
@@ -119,7 +119,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "won't create OwcContexts with DB when dependents exist" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
@@ -160,9 +160,10 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       }
     }
 
+    // TODO improve rigorous update testing
     "update OwcContexts with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
@@ -215,7 +216,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "delete OwcContexts with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
@@ -260,7 +261,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "bulkload OwcContext from JSON into DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         Json.parse(jsonTestCollection1).validate[OwcContext].isSuccess mustBe true
         val owcDoc1 = Json.parse(jsonTestCollection1).validate[OwcContext].get
@@ -310,7 +311,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "Apply GeoJsonFixes for empty rels JSON into DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
         val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
@@ -353,7 +354,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       val testUser1 = demodata.testUser1(cryptPass)
 
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           UserDAO.createUser(testUser1) must contain(testUser1)
@@ -420,7 +421,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         val defaultCollection = Json.parse(jsonDefaultFilesCollection).validate[OwcContext].get
 
         withTestDatabase { database =>
-          val sessionHolder = new SessionHolder(database)
+          val sessionHolder = new DatabaseSessionHolder(database)
 
           sessionHolder.viaTransaction { implicit connection =>
             UserDAO.createUser(testUser1) must contain(testUser1)
@@ -445,5 +446,121 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         }
       }
     }
+
+    "Regression Test CollectionsService.addMdResourceToUserDefaultCollection(CSW_URL, mdMetadata, authUser)" in {
+      withTestDatabase { database =>
+
+        val passwordHashing = new PasswordHashing(app.configuration)
+        val cryptPass = passwordHashing.createHash("testpass123")
+        val testUser1 = demodata.testUser1(cryptPass)
+
+        val regr1Collection = this.getClass().getResource("owc100/regression_1/DefaultCollection1.json")
+        val regr1CollectionJson = scala.io.Source.fromURL(regr1Collection).getLines.mkString
+
+        val regr1UpdateCollection = this.getClass().getResource("owc100/regression_1/complete-update.json")
+        val regr1UpdateCollectionJson = scala.io.Source.fromURL(regr1UpdateCollection).getLines.mkString
+
+        val regr1Resource = this.getClass().getResource("owc100/regression_1/add-meta-resource.json")
+        val regr1ResourceJson = scala.io.Source.fromURL(regr1Resource).getLines.mkString
+
+        val defaultCollection = Json.parse(regr1CollectionJson).validate[OwcContext].get
+        val updatedDefaultCollection = Json.parse(regr1UpdateCollectionJson).validate[OwcContext].get
+        val addMetaResource = Json.parse(regr1ResourceJson).validate[OwcResource].get
+
+        addMetaResource.toJson.validate[OwcResource].get mustEqual addMetaResource
+
+        withTestDatabase { database =>
+          val sessionHolder = new DatabaseSessionHolder(database)
+
+          sessionHolder.viaTransaction { implicit connection =>
+            UserDAO.createUser(testUser1) must contain(testUser1)
+          }
+
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.createUsersDefaultOwcContext(defaultCollection, testUser1) mustBe defined
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.findUserDefaultOwcContext(testUser1) mustBe defined
+            val owcFromDb1 = OwcContextDAO.findUserDefaultOwcContext(testUser1).get
+            owcFromDb1.resource.size mustEqual 0
+            owcFromDb1.id mustEqual new URL("http://portal.smart-project.info/context/user/0ff87bab-a99e-4c26-9960-630cfdb44cba")
+
+            owcFromDb1.toJson.validate[OwcContext].get mustEqual defaultCollection
+          }
+
+          /*
+          Now cleanup up and insert complete update at as one complete collection
+           */
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.deleteOwcContext(defaultCollection, testUser1) mustBe true
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.getAllOwcContexts.size mustEqual 0
+          }
+
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.createUsersDefaultOwcContext(updatedDefaultCollection, testUser1) mustBe defined
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.findUserDefaultOwcContext(testUser1) mustBe defined
+            val owcFromDb1 = OwcContextDAO.findUserDefaultOwcContext(testUser1).get
+            owcFromDb1.resource.size mustEqual 1
+            owcFromDb1.id mustEqual new URL("http://portal.smart-project.info/context/user/0ff87bab-a99e-4c26-9960-630cfdb44cba")
+
+            owcFromDb1.toJson.validate[OwcContext].get mustEqual updatedDefaultCollection
+
+          }
+
+          /*
+          clean up again and start over to test difference
+           */
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.deleteOwcContext(updatedDefaultCollection, testUser1) mustBe true
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.getAllOwcContexts.size mustEqual 0
+          }
+
+          // again start over with default collection with no features in it
+          sessionHolder.viaTransaction { implicit connection =>
+            OwcContextDAO.createUsersDefaultOwcContext(defaultCollection, testUser1) mustBe defined
+          }
+
+          /*
+          This represents the problem: the updated owc context doc collection will not be updated in the database for spurious reasons
+           */
+          val entries = defaultCollection.resource ++ Seq(addMetaResource)
+          val newDoc = defaultCollection.copy(resource = entries)
+
+          // an insert of the updated collection at once works, which means there is no logical inconsistency in the data
+          newDoc mustEqual updatedDefaultCollection
+
+          /*
+          this update used to fail:
+          [error] m.owc.OwcContextDAO - (updateContext/resources) one of deleted: true , updated: true , inserted: false not complete, recommend abort
+          [error] m.owc.OwcContextDAO - Precondition failed, won't update OwcContext
+           */
+          sessionHolder.viaTransaction {implicit connection =>
+            OwcContextDAO.updateOwcContext(newDoc, testUser1).isDefined mustBe true
+          }
+
+          sessionHolder.viaConnection { implicit connection =>
+            OwcContextDAO.findUserDefaultOwcContext(testUser1) mustBe defined
+            val owcFromDb1 = OwcContextDAO.findUserDefaultOwcContext(testUser1).get
+            owcFromDb1.resource.size mustEqual 1
+            owcFromDb1.id mustEqual new URL("http://portal.smart-project.info/context/user/0ff87bab-a99e-4c26-9960-630cfdb44cba")
+
+            owcFromDb1.toJson.validate[OwcContext].get mustEqual newDoc
+
+          }
+        }
+      }
+    }
+
+
   }
 }

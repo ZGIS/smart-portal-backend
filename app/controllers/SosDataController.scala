@@ -19,9 +19,11 @@
 
 package controllers
 
+import java.io.File
 import java.net.URLEncoder
-import java.time.{OffsetDateTime, ZoneId}
+import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
+import java.time.{OffsetDateTime, ZoneId}
 import javax.inject.Inject
 
 import models.ErrorResult
@@ -41,10 +43,11 @@ import scala.util.Try
 /**
   * Controller to access SOS server and return parsed time series to frontend.
   */
-class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
+class SosDataController @Inject()(val configuration: Configuration, wsClient: WSClient)
   extends Controller with ClassnameLogger {
 
-  val configuration: play.api.Configuration = config
+  lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
+    .getOrElse("/tmp")
   private lazy val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   private lazy val wml2Exporter = new Wml2Export(appTimeZone)
   lazy val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -246,7 +249,21 @@ class SosDataController @Inject()(config: Configuration, wsClient: WSClient)
                   val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
                   val fileName = "export-" + Try (URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8") + "-" + updatedTime.format(formatter) ).getOrElse("-sosdata") + ".wml"
 
-                  Ok(wml2.get)
+                  val pathOfUploadTmp = Paths.get(uploadDataPath)
+                  val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sos-export-")
+                  val tmpFile = new File(intermTempDir.resolve(fileName).toAbsolutePath.toString)
+
+                  scala.xml.XML.save(tmpFile.getAbsolutePath, wml2.get.head, "UTF-8", true, null)
+
+                  Ok.sendFile(
+                    content = tmpFile,
+                    fileName = _ => fileName,
+                    onClose = () => {
+                      Try (tmpFile.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                      Try (Files.delete(intermTempDir)).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                    }
+                  )
+                    .as("application/xml")
                     .withHeaders("Content-disposition" -> s"attachment; filename=$fileName")
                     .withHeaders("Access-Control-Expose-Headers" -> "Content-disposition")
                     .withHeaders("Access-Control-Expose-Headers" -> "x-filename")

@@ -25,11 +25,12 @@ import java.util.UUID
 import javax.inject._
 
 import info.smart.models.owc100._
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.gmd.MdMetadata
 import models.owc._
 import models.users._
 import play.api.Configuration
+import play.api.libs.json.Json
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, GeoDateParserUtils}
 import utils.StringUtils._
@@ -37,7 +38,7 @@ import utils.StringUtils._
 import scala.util.{Success, Try}
 
 @Singleton
-class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
+class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
                                       config: Configuration) extends ClassnameLogger {
 
   val configuration: play.api.Configuration = config
@@ -50,7 +51,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     * @return
     */
   def getUserDefaultOwcContext(authUser: String): Option[OwcContext] = {
-    sessionHolder.viaConnection(implicit connection =>
+    dbSession.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
           OwcContextDAO.findUserDefaultOwcContext(user))).getOrElse(None)
@@ -64,7 +65,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     */
   def getOwcLinksForOwcAuthorOwnFiles(authUser: String): Seq[OwcLink] = {
 
-    val userCollection = sessionHolder.viaConnection(implicit connection =>
+    val userCollection = dbSession.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         u => OwcContextDAO.findUserDefaultOwcContext(u))).getOrElse(None)
     userCollection.fold {
@@ -90,16 +91,16 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       // no email provided
       owcContextIdOption.fold {
         // TODO docs for anonymous, no id provided => all public docs (implies docs must be public)
-        sessionHolder.viaConnection(implicit connection => OwcContextDAO.getAllPublicOwcContexts)
+        dbSession.viaConnection(implicit connection => OwcContextDAO.getAllPublicOwcContexts)
       } {
         // TODO find doc by id for anonymous, only one doc if available (implies doc must be public)
         owcContextId => {
-          sessionHolder.viaConnection(implicit connection => OwcContextDAO.findPublicOwcContextsById(owcContextId).toSeq)
+          dbSession.viaConnection(implicit connection => OwcContextDAO.findPublicOwcContextsById(owcContextId).toSeq)
         }
       }
     } { authUser => {
       // trying to find a user from provided authuser option
-      sessionHolder.viaConnection(implicit connection =>
+      dbSession.viaConnection(implicit connection =>
         UserDAO.findUserByEmailAsString(authUser).fold {
           logger.warn("Provided user not found.")
           owcContextIdOption.fold {
@@ -162,7 +163,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       keyword = List(),
       resource = List())
 
-    val ok = sessionHolder.viaTransaction(implicit connection =>
+    val ok = dbSession.viaTransaction(implicit connection =>
       OwcContextDAO.createUsersDefaultOwcContext(defaultOwcDoc, user))
     ok match {
       case Some(theDoc) => {
@@ -173,6 +174,64 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
         logger.error("Something failed miserably")
         None
       }
+    }
+  }
+
+  /**
+    * making it easier to handle creation of new custom collection for user, server-side vs client-side
+    *
+    * @param authUser
+    * @return
+    */
+  def createNewCustomCollection(authUser: String): Option[OwcContext] = {
+
+    val userLookup = dbSession.viaConnection { implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser)
+    }
+
+    userLookup.fold[Option[OwcContext]] {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't access users collection")
+      None
+    } {
+      user =>
+
+        val propsUuid = UUID.randomUUID()
+        val profileLink = OwcProfile.CORE.newOf
+
+        val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
+
+        val defaultOwcDoc = OwcContext(
+          id = new URL(s"http://portal.smart-project.info/context/user/${propsUuid.toString}"),
+          areaOfInterest = None,
+          specReference = List(profileLink), // aka links.profiles[] & rel=profile
+          contextMetadata = List(), // aka links.via[] & rel=via
+          language = "en",
+          title = "New Collection",
+          subtitle = Some("A new custom collection"),
+          updateDate = OffsetDateTime.now(ZoneId.of(appTimeZone)),
+          author = List(author1),
+          publisher = Some("GNS Science"),
+          creatorApplication = None,
+          creatorDisplay = None,
+          rights = Some("CC BY SA 4.0 NZ"),
+          timeIntervalOfInterest = None,
+          keyword = List(),
+          resource = List())
+
+        val ok = dbSession.viaTransaction(implicit connection =>
+          OwcContextDAO.createCustomOwcContext(defaultOwcDoc, user))
+
+        ok match {
+          case Some(theDoc) => {
+            logger.info(s"created new custom collection for user ${user.firstname} ${user.lastname}")
+            Some(theDoc)
+          }
+          case _ => {
+            logger.error("Something failed miserably")
+            None
+          }
+        }
     }
   }
 
@@ -218,7 +277,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       mimeType = cswGetRecordOps.mimeType,
       rel = "via")
 
-    val userLookup = sessionHolder.viaConnection { implicit connection =>
+    val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findUserByEmailAsString(authUser)
     }
 
@@ -228,7 +287,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       false
     } {
       user =>
-        val collectionLookup = sessionHolder.viaConnection { implicit connection =>
+        val collectionLookup = dbSession.viaConnection { implicit connection =>
           OwcContextDAO.findUserDefaultOwcContext(user)
         }
         collectionLookup.fold {
@@ -269,13 +328,74 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
               keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
               folder = None)
 
+            logger.trace(Json.prettyPrint(owcResource.toJson))
+
             val entries = owcDoc.resource ++ Seq(owcResource)
             val newDoc = owcDoc.copy(resource = entries)
 
-            sessionHolder.viaTransaction { implicit connection =>
+            logger.trace(Json.prettyPrint(newDoc.toJson))
+
+            dbSession.viaTransaction { implicit connection =>
               OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
         }
+    }
+  }
+
+  /**
+    *
+    * @param filename
+    * @param contentType
+    * @param accountSubject
+    * @param filelink
+    * @param fileSize
+    * @return
+    */
+  def fileMetadata(filename: String, contentType: Option[String], authuser: String, filelink: String, fileSize: Option[Int]): OwcResource = {
+
+    dbSession.viaConnection { implicit connection =>
+
+      val propsUuid = UUID.randomUUID()
+      val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+      val user = UserDAO.findUserByEmailAsString(authuser)
+      val email = user.map(u => EmailAddress(u.email))
+      val owcAuthor = user.map(u => OwcAuthor(name = s"${u.firstname} ${u.lastname}".toOption(), email = email, uri = None))
+      val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(propsUuid.toString, "UTF-8")}")
+
+      val viaLink = OwcLink(href = baseLink,
+        mimeType = Some("application/json"),
+        lang = None,
+        title = None,
+        length = None,
+        rel = "via")
+
+      val dataLink = OwcLink(href = new URL(filelink),
+        mimeType = if (contentType.isDefined) contentType else Some("application/octet-stream"),
+        lang = None,
+        title = Some(filename),
+        length = fileSize,
+        rel = "enclosure")
+
+      OwcResource(
+        id = baseLink,
+        geospatialExtent = None,
+        title = filename,
+        subtitle = Some(s"$filename uploaded to $filelink via GW Hub by $email"),
+        updateDate = updatedTime,
+        author = if (owcAuthor.isDefined) List(owcAuthor.get) else List(),
+        publisher = Some("GNS Science"),
+        rights = Some(s"IP limitation: Please inquire with $email"),
+        temporalExtent = None,
+        contentDescription = List(), // links.alternates[] and rel=alternate
+        preview = List(), // aka links.previews[] and rel=icon (atom)
+        contentByRef = List(dataLink), // aka links.data[] and rel=enclosure (atom)
+        resourceMetadata = List(viaLink), // aka links.via[] & rel=via
+        offering = List(),
+        minScaleDenominator = None,
+        maxScaleDenominator = None,
+        active = None,
+        keyword = List(),
+        folder = None)
     }
   }
 
@@ -287,7 +407,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     */
   def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
 
-    val userLookup = sessionHolder.viaConnection { implicit connection =>
+    val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findUserByEmailAsString(authUser)
     }
     userLookup.fold {
@@ -296,7 +416,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
       false
     } {
       user =>
-        val collectionLookup = sessionHolder.viaConnection { implicit connection =>
+        val collectionLookup = dbSession.viaConnection { implicit connection =>
           OwcContextDAO.findUserDefaultOwcContext(user)
         }
         collectionLookup.fold {
@@ -308,7 +428,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
             val entries = owcDoc.resource ++ Seq(owcResource)
             val newDoc = owcDoc.copy(resource = entries)
 
-            sessionHolder.viaTransaction { implicit connection =>
+            dbSession.viaTransaction { implicit connection =>
               OwcContextDAO.updateOwcContext(newDoc, user).isDefined
             }
         }
@@ -322,7 +442,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     * @return
     */
   def insertCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
-    sessionHolder.viaTransaction(implicit connection =>
+    dbSession.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
           OwcContextDAO.createCustomOwcContext(owcContext, user))).getOrElse(None)
@@ -335,7 +455,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     * @return
     */
   def updateCollection(owcContext: OwcContext, authUser: String): Option[OwcContext] = {
-    sessionHolder.viaTransaction(implicit connection =>
+    dbSession.viaTransaction(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).map(
         user =>
           OwcContextDAO.updateOwcContext(owcContext, user))).getOrElse(None)
@@ -348,7 +468,7 @@ class OwcCollectionsService @Inject()(sessionHolder: SessionHolder,
     * @return
     */
   def deleteCollection(owcContext: OwcContext, authUser: String): Boolean = {
-    sessionHolder.viaConnection(implicit connection =>
+    dbSession.viaConnection(implicit connection =>
       UserDAO.findUserByEmailAsString(authUser).exists {
         user =>
           val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)

@@ -18,7 +18,7 @@
  */
 
 import info.smart.models.owc100._
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.owc._
 
 /**
@@ -36,7 +36,7 @@ class OwcOfferingDAOSpec extends WithDefaultTestFullAppAndDatabase {
     
     "create OwcOfferings with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaConnection { implicit connection =>
           OwcOfferingDAO.getAllOwcOfferings.size mustEqual 0
@@ -65,7 +65,7 @@ class OwcOfferingDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "won't create OwcOfferings with DB when depending OwcContent / StyleSet / Operation UUIDs exist" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcOfferingDAO.createOwcOffering(offering2) must contain (offering2)
@@ -88,7 +88,7 @@ class OwcOfferingDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "update OwcOfferings with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcOfferingDAO.createOwcOffering(offering2) must contain (offering2)
@@ -104,7 +104,7 @@ class OwcOfferingDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "delete OwcOfferings with DB" in {
       withTestDatabase { database =>
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
 
         sessionHolder.viaTransaction { implicit connection =>
           OwcOfferingDAO.createOwcOffering(offering2_1) must contain (offering2_1)

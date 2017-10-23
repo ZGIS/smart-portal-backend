@@ -21,7 +21,7 @@ import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 
 import controllers.{ProfileJs, RegisterJs}
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.db.Database
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
@@ -34,7 +34,7 @@ import utils.PasswordHashing
   */
 class UserDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
-  val sessionHolder: SessionHolder = app.injector.instanceOf[SessionHolder]
+  val sessionHolder: DatabaseSessionHolder = app.injector.instanceOf[DatabaseSessionHolder]
   val database: Database = sessionHolder.db
 
   before {

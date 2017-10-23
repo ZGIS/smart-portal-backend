@@ -19,7 +19,8 @@
 
 package models.users
 
-import java.time.ZonedDateTime
+import java.time.{OffsetDateTime, ZonedDateTime}
+import java.util.UUID
 
 import controllers.ProfileJs
 import uk.gov.hmrc.emailaddress.EmailAddress
@@ -68,12 +69,16 @@ case class User(email: EmailAddress,
     *
     * @return
     */
-  def asProfileJs(): ProfileJs = {
+  def asProfileJs: ProfileJs = {
     ProfileJs(email, accountSubject, firstname, lastname)
   }
 
   def isActive: Boolean = {
     StatusToken.isActive(StatusToken(laststatustoken.split(":")(0)))
+  }
+
+  def isBlocked: Boolean = {
+    StatusToken.isBlocked(StatusToken(laststatustoken.split(":")(0)))
   }
 
 }

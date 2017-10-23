@@ -32,7 +32,7 @@ import play.api.mvc._
 import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Configuration}
-import services.{EmailService, OwcCollectionsService}
+import services.{EmailService, OwcCollectionsService, UserService}
 import utils.PasswordHashing
 
 
@@ -41,11 +41,13 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
   // creating mock instances for underlying required services for this controller
   private lazy val mockCollectionsService = mock[OwcCollectionsService]
   private lazy val mockEmailService = mock[EmailService]
+  private lazy val mockUserService = mock[UserService]
 
   // creating "fake" Guice Module to inject mock service instances into test application, with the required dependencies
   class FakeModule extends AbstractModule {
     def configure(): Unit = {
       bind(classOf[PasswordHashing]).asEagerSingleton()
+      bind(classOf[UserService]).toInstance(mockUserService)
       bind(classOf[EmailService]).toInstance(mockEmailService)
       bind(classOf[OwcCollectionsService]).toInstance(mockCollectionsService)
     }
@@ -82,8 +84,9 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       // explicitely instatiating tested controller
       val controller = new CollectionsController(
-        cacheApi = mockCache,
-        config = appConfig,
+        cache = mockCache,
+        configuration = appConfig,
+        userService = mockUserService,
         emailService = mockEmailService,
         collectionsService = mockCollectionsService,
         passwordHashing = new PasswordHashing(appConfig)

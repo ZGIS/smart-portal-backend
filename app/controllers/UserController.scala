@@ -19,22 +19,18 @@
 
 package controllers
 
-import java.io.FileReader
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 import javax.inject._
 
-import com.google.api.client.googleapis.auth.oauth2._
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
 import models.ErrorResult
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.mvc._
-import services.{EmailService, OwcCollectionsService}
+import services.{EmailService, GoogleServicesDAO, OwcCollectionsService, UserService}
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, PasswordHashing}
 
@@ -70,27 +66,25 @@ case class RegisterJs(email: EmailAddress,
 
 /**
   *
-  * @param config
-  * @param cacheApi
+  * @param configuration
+  * @param cache
   * @param emailService
   * @param collectionsService
-  * @param sessionHolder
+  * @param dbsession
   * @param passwordHashing
   */
 @Singleton
-class UserController @Inject()(config: Configuration,
-                               cacheApi: CacheApi,
+class UserController @Inject()(val configuration: Configuration,
+                               val cache: CacheApi,
+                               val userService: UserService,
+                               val passwordHashing: PasswordHashing,
                                emailService: EmailService,
                                collectionsService: OwcCollectionsService,
-                               sessionHolder: SessionHolder,
-                               override val passwordHashing: PasswordHashing) extends Controller with ClassnameLogger with Security {
+                               googleService: GoogleServicesDAO,
+                               dbsession: DatabaseSessionHolder)
+  extends Controller with ClassnameLogger with Security {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-  lazy private val googleClientSecret: String = configuration.getString("google.client.secret")
-    .getOrElse("client_secret.json")
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
-  val gauthRedirectUrl = "postmessage"
 
   /**
     * self registering for user accounts
@@ -109,7 +103,7 @@ class UserController @Inject()(config: Configuration,
       },
       jsuser => {
         // found none, good ...
-        sessionHolder.viaTransaction { implicit connection =>
+        dbsession.viaTransaction { implicit connection =>
           UserDAO.findUserByEmailAddress(jsuser.email).fold {
             // found none, good, create user
             val regLinkId = java.util.UUID.randomUUID().toString()
@@ -131,7 +125,7 @@ class UserController @Inject()(config: Configuration,
               val emailWentOut = emailService.sendRegistrationEmail(jsuser.email, "Please confirm your GW HUB account", jsuser.firstname, regLinkId)
               logger.info(s"New user registered. Email went out $emailWentOut")
               // creating default collection only after registration, account is only barely usable here
-              Ok(Json.toJson(user.asProfileJs()))
+              Ok(Json.toJson(user.asProfileJs))
             }
           } { user =>
             // found user with that email already
@@ -156,7 +150,7 @@ class UserController @Inject()(config: Configuration,
     uuidTest match {
       case Success(v) => {
         // logger.debug("Result of " + uuidTest.get.toString + " is: " + v)
-        sessionHolder.viaTransaction { implicit connection =>
+        dbsession.viaTransaction { implicit connection =>
           UserDAO.findRegisteredUsersWithRegLink(linkId).headOption.fold {
             // found none, if more than one take head of the list
             logger.error("Unknown registration link.")
@@ -216,13 +210,13 @@ class UserController @Inject()(config: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          sessionHolder.viaConnection(implicit connection =>
+          dbsession.viaConnection(implicit connection =>
             UserDAO.findUserByEmailAsString(cachedSecUserEmail).fold {
               logger.error("User email not found.")
               val error = ErrorResult("User email not found.", None)
               BadRequest(Json.toJson(error)).as(JSON)
             } { user =>
-              Ok(Json.toJson(user.asProfileJs()))
+              Ok(Json.toJson(user.asProfileJs))
             }
           )
   }
@@ -236,7 +230,7 @@ class UserController @Inject()(config: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          sessionHolder.viaTransaction { implicit connection =>
+          dbsession.viaTransaction { implicit connection =>
             UserDAO.findUserByEmailAsString(cachedSecUserEmail).fold {
               logger.error("User email not found.")
               val error = ErrorResult("User email not found.", None)
@@ -265,7 +259,7 @@ class UserController @Inject()(config: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          sessionHolder.viaConnection(implicit connection =>
+          dbsession.viaConnection(implicit connection =>
             UserDAO.findUserByEmailAsString(email).fold {
               logger.error("User email not found.")
               val error = ErrorResult("User email not found.", None)
@@ -273,7 +267,7 @@ class UserController @Inject()(config: Configuration,
             } { user =>
               // too much checking here?
               if (user.email.value.equals(email) && cachedSecUserEmail.equals(email)) {
-                Ok(Json.toJson(user.asProfileJs()))
+                Ok(Json.toJson(user.asProfileJs))
               } else {
                 logger.error("User email Security Token mismatch.")
                 val error = ErrorResult("User email Security Token mismatch.", None)
@@ -300,7 +294,7 @@ class UserController @Inject()(config: Configuration,
               BadRequest(Json.toJson(error)).as(JSON)
             },
             incomingProfileJs => {
-              sessionHolder.viaTransaction { implicit connection =>
+              dbsession.viaTransaction { implicit connection =>
                 // looking first for the HasToken auth subject
                 UserDAO.findUserByEmailAsString(cachedSecUserEmail).fold {
                   logger.error("User Security Token mismatch.")
@@ -323,7 +317,7 @@ class UserController @Inject()(config: Configuration,
                     } { user =>
                       val emailWentOut = emailService.sendProfileUpdateInfoEmail(user.email, "Your account profile information was updated", user.firstname)
                       logger.info(s"User profile updated. Email went out $emailWentOut")
-                      Ok(Json.toJson(user.asProfileJs()))
+                      Ok(Json.toJson(user.asProfileJs))
                     }
                   } else {
                     // check if new email is used already by another user than yourself
@@ -344,7 +338,7 @@ class UserController @Inject()(config: Configuration,
                       } { user =>
                         val emailWentOut = emailService.sendNewEmailValidationEmail(user.email, "Please confirm your new email address", user.firstname, regLinkId)
                         logger.info(s"User profile updated with email change. Email went out $emailWentOut with reglink: $regLinkId")
-                        Ok(Json.toJson(user.asProfileJs()))
+                        Ok(Json.toJson(user.asProfileJs))
                       }
                     } { dbuser =>
                       // found one, that means the email is already in use, ABORT
@@ -376,7 +370,7 @@ class UserController @Inject()(config: Configuration,
             },
             valid = credentials => {
               // find user in db
-              sessionHolder.viaTransaction { implicit connection =>
+              dbsession.viaTransaction { implicit connection =>
                 UserDAO.findUserByEmailAddress(credentials.email).fold {
                   logger.error("User not found.")
                   val error = ErrorResult("User not found", None)
@@ -426,7 +420,7 @@ class UserController @Inject()(config: Configuration,
       },
       valid = credentials => {
         // find user in db
-        sessionHolder.viaTransaction { implicit connection =>
+        dbsession.viaTransaction { implicit connection =>
           UserDAO.findUserByEmailAddress(credentials.email).fold {
             logger.error("User email not found.")
             val error = ErrorResult("User email not found.", None)
@@ -463,7 +457,7 @@ class UserController @Inject()(config: Configuration,
     val uuidTest = Try(java.util.UUID.fromString(linkId))
     uuidTest match {
       case Success(v) => {
-        sessionHolder.viaTransaction { implicit connection =>
+        dbsession.viaTransaction { implicit connection =>
           UserDAO.findUsersByPassResetLink(linkId).headOption.fold {
             logger.error("Unknown password reset link.")
             Redirect("/#/register")
@@ -522,109 +516,96 @@ class UserController @Inject()(config: Configuration,
         val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
         BadRequest(Json.toJson(error)).as(JSON)
       },
-      valid = credentials => {
-        if (!new java.io.File(googleClientSecret).exists) {
-          val error = ErrorResult("Service JSON file not available", None)
-          InternalServerError(Json.toJson(error)).as(JSON)
-        } else {
-          // do lots of Google OAuth2 stuff
-          val clientSecrets = GoogleClientSecrets.load(
-            JacksonFactory.getDefaultInstance(), new FileReader(googleClientSecret))
+      valid = gAuthCredentials => {
+        val accessTokenResult = googleService.getGoogleAuthorization(gAuthCredentials)
+        accessTokenResult match {
+          case Left(errorResult) => {
+            logger.error(errorResult.message + errorResult.details.mkString)
+            InternalServerError(Json.toJson(errorResult)).as(JSON)
+          }
+          case Right(googleTokenResponse) => {
+            // Get profile info from ID token
+            val gAuthPayload = googleTokenResponse.parseIdToken().getPayload
+            // Use this value as a key to identify a user.
+            val userId = gAuthPayload.getSubject()
+            val email = gAuthPayload.getEmail()
+            val emailVerified = gAuthPayload.getEmailVerified()
+            // get further payload things that is easy in java but needs to work in scala too
+            val name = Option(gAuthPayload.get("name").asInstanceOf[String])
+            val familyName = Option(gAuthPayload.get("family_name").asInstanceOf[String])
+            val givenName = Option(gAuthPayload.get("given_name").asInstanceOf[String])
+            if ((gAuthCredentials.accesstype.equalsIgnoreCase("LOGIN") || gAuthCredentials.accesstype.equalsIgnoreCase("REGISTER")) &&
+              emailVerified && EmailAddress.isValid(email)) {
 
-          // 988846878323-bkja0j1tgep5ojthfr2e92ao8n7iksab.apps.googleusercontent.com
-          val clientId = clientSecrets.getDetails().getClientId()
-          logger.debug(s"clientId $clientId")
-          // Specify the same redirect URI that you use with your web
-          // app. If you don't have a web version of your app, you can
-          // specify an empty string.
-          val tokenResponse: GoogleTokenResponse = new GoogleAuthorizationCodeTokenRequest(
-            new NetHttpTransport(),
-            JacksonFactory.getDefaultInstance(),
-            "https://www.googleapis.com/oauth2/v4/token",
-            clientId,
-            clientSecrets.getDetails().getClientSecret(),
-            credentials.authcode,
-            gauthRedirectUrl).execute()
-
-          val accessToken = tokenResponse.getAccessToken()
-          // Use access token to call API
-          val credential = new GoogleCredential().setAccessToken(accessToken)
-          // Get profile info from ID token
-          val idToken: GoogleIdToken = tokenResponse.parseIdToken()
-          val payload = idToken.getPayload()
-          // Use this value as a key to identify a user.
-          val userId = payload.getSubject()
-          val email = payload.getEmail()
-          val emailVerified = payload.getEmailVerified()
-          // get further payload things that is easy in java but needs to work in scala too
-          val name = Option(payload.get("name").asInstanceOf[String])
-          val pictureUrl = Option(payload.get("picture").asInstanceOf[String])
-          val locale = Option(payload.get("locale").asInstanceOf[String])
-          val familyName = Option(payload.get("family_name").asInstanceOf[String])
-          val givenName = Option(payload.get("given_name").asInstanceOf[String])
-          if ((credentials.accesstype.equalsIgnoreCase("LOGIN") || credentials.accesstype.equalsIgnoreCase("REGISTER")) &&
-            emailVerified && EmailAddress.isValid(email)) {
-
-            val emailAddress = EmailAddress(email)
-            // viaConnection lookup email block
-            val firstUserLookup = sessionHolder.viaConnection { implicit connection =>
-              UserDAO.findUserByEmailAddress(emailAddress)
-            }
-
-            firstUserLookup.fold {
-              // 'error, no user': well, must be a new user coming through from Google
-              val cryptPass = passwordHashing.createHash(UUID.randomUUID().toString)
-
-              val newUser = User(emailAddress,
-                s"google:${userId}",
-                givenName.getOrElse(name.getOrElse(emailAddress.mailbox.value)),
-                familyName.getOrElse(""),
-                cryptPass,
-                s"${StatusToken.ACTIVE}:REGCONFIRMED",
-                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-              val createUserCall = sessionHolder.viaConnection { implicit connection =>
-                UserDAO.createUser(newUser)
+              val emailAddress = EmailAddress(email)
+              // viaConnection lookup email block
+              val firstUserLookup = dbsession.viaConnection { implicit connection =>
+                UserDAO.findUserByEmailAddress(emailAddress)
               }
 
-              createUserCall.fold {
-                logger.error("User create error.")
-                val error = ErrorResult("Error while creating user", None)
-                InternalServerError(Json.toJson(error)).as(JSON)
-              } { createdUser =>
-                val emailWentOut = emailService.sendConfirmationEmail(createdUser.email, "Your GW HUB account is now active", createdUser.firstname)
-                // all good here, creating default collection (Unit)
-                val userOwcDocTransaction = sessionHolder.viaTransaction { implicit connection =>
-                  collectionsService.createUserDefaultCollection(createdUser)
+              firstUserLookup.fold {
+                // 'error, no user': well, must be a new user coming through from Google
+                val cryptPass = passwordHashing.createHash(UUID.randomUUID().toString)
+
+                // Use access token to call API for refresh or check-up?
+                // val googleAccessToken = googleTokenResponse.getAccessToken()
+                // val googleCredential = new GoogleCredential().setAccessToken(googleAccessToken)
+                val newUser = User(emailAddress,
+                  s"google:${userId}",
+                  givenName.getOrElse(name.getOrElse(emailAddress.mailbox.value)),
+                  familyName.getOrElse(""),
+                  cryptPass,
+                  s"${StatusToken.ACTIVE}:REGCONFIRMED",
+                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+                val createUserCall = dbsession.viaConnection { implicit connection =>
+                  UserDAO.createUser(newUser)
                 }
 
-                userOwcDocTransaction.fold {
-                  logger.error(s"Couldn't create user default collection for ${createdUser.accountSubject}.")
-                  val error = ErrorResult("Error while creating user default collection.", None)
+                createUserCall.fold {
+                  logger.error("User create error.")
+                  val error = ErrorResult("Error while creating user", None)
                   InternalServerError(Json.toJson(error)).as(JSON)
-                } { owcDoc =>
-                  logger.info(s"New user registered ${createdUser.accountSubject}. Email went out $emailWentOut. " +
-                    s"User Collection ${owcDoc.id.toString}")
-                  val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                  // logger.debug(s"Logging in email from $uaIdentifier")
-                  val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
-                  cache.set(token, createdUser.email.value)
-                  Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> createdUser.email.value, "userprofile" -> createdUser.asProfileJs()))
-                    .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
-                }
-              }
-            } { existingUser =>
-              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-              // logger.debug(s"Logging in email from $uaIdentifier")
-              val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
-              cache.set(token, existingUser.email.value)
-              Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> existingUser.email.value, "userprofile" -> existingUser.asProfileJs()))
-                .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
-            }
+                } { createdUser =>
+                  val emailWentOut = emailService.sendConfirmationEmail(createdUser.email, "Your GW HUB account is now active", createdUser.firstname)
+                  // all good here, creating default collection (Unit)
+                  val userOwcDocTransaction = dbsession.viaTransaction { implicit connection =>
+                    collectionsService.createUserDefaultCollection(createdUser)
+                  }
 
-          } else {
-            logger.error("Invalid accesstype requested")
-            val error = ErrorResult("Invalid accestype requested", None)
+                  userOwcDocTransaction.fold {
+                    logger.error(s"Couldn't create user default collection for ${createdUser.accountSubject}.")
+                    val error = ErrorResult("Error while creating user default collection.", None)
+                    InternalServerError(Json.toJson(error)).as(JSON)
+                  } { owcDoc =>
+                    logger.info(s"New user registered ${createdUser.accountSubject}. Email went out $emailWentOut. " +
+                      s"User Collection ${owcDoc.id.toString}")
+                    val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+                    // logger.debug(s"Logging in email from $uaIdentifier")
+                    val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
+                    cache.set(token, createdUser.email.value)
+                    Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> createdUser.email.value, "userprofile" -> createdUser.asProfileJs))
+                      .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+                  }
+                }
+              } { existingUser =>
+                val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+                // logger.debug(s"Logging in email from $uaIdentifier")
+                val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
+                cache.set(token, existingUser.email.value)
+                Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> existingUser.email.value, "userprofile" -> existingUser.asProfileJs))
+                  .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+              }
+
+            } else {
+              logger.error("Invalid accesstype requested")
+              val error = ErrorResult("Invalid accestype requested", None)
+              BadRequest(Json.toJson(error)).as(JSON)
+            }
+          }
+          case _ => {
+            logger.error("Google OAuth Access failed.")
+            val error = ErrorResult("Google OAuth Access failed.", None)
             BadRequest(Json.toJson(error)).as(JSON)
           }
         }

@@ -20,7 +20,7 @@
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 
-import models.db.SessionHolder
+import models.db.DatabaseSessionHolder
 import models.owc.OwcContextDAO
 import models.users._
 import utils.PasswordHashing
@@ -39,7 +39,7 @@ class UserGroupSpec extends WithDefaultTestFullAppAndDatabase {
     "handle UserGroup with DB" in {
       withTestDatabase { database =>
 
-        val sessionHolder = new SessionHolder(database)
+        val sessionHolder = new DatabaseSessionHolder(database)
         val passwordHashing = new PasswordHashing(app.configuration)
 
         val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())

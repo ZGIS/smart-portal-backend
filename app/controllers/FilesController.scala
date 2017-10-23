@@ -19,119 +19,40 @@
 
 package controllers
 
-import java.net.{URL, URLEncoder}
-import java.time._
-import java.util.UUID
+import java.io.File
+import java.nio.file.{Files, Paths}
 import javax.inject.Inject
 
-import com.google.cloud.storage.{Acl, Blob, BlobInfo, Storage, StorageOptions}
-import com.google.common.io.Files
-import info.smart.models.owc100._
 import models.ErrorResult
-import models.db.SessionHolder
-import models.users.UserDAO
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.Json
-import play.api.libs.ws.WSClient
 import play.api.mvc._
-import services.{GoogleServicesDAO, OwcCollectionsService}
-import uk.gov.hmrc.emailaddress.EmailAddress
-import utils.StringUtils.OptionConverters
+import services.{GoogleServicesDAO, OwcCollectionsService, UserService}
 import utils.{ClassnameLogger, PasswordHashing}
 
-import scala.concurrent.ExecutionContext
 import scala.util.Try
 
 /**
-  * 
-  * @param config
-  * @param cacheApi
+  *
+  * @param configuration
+  * @param cache
   * @param passwordHashing
-  * @param wsClient
-  * @param context
   * @param googleService
-  * @param sessionHolder
   * @param collectionsService
   */
-class FilesController @Inject()(config: Configuration,
-                                cacheApi: CacheApi,
+class FilesController @Inject()(val configuration: Configuration,
+                                val cache: CacheApi,
+                                val userService: UserService,
                                 val passwordHashing: PasswordHashing,
-                                wsClient: WSClient,
-                                implicit val context: ExecutionContext,
                                 googleService: GoogleServicesDAO,
-                                sessionHolder: SessionHolder,
                                 collectionsService: OwcCollectionsService
-                               )
-  extends Controller with ClassnameLogger with Security {
+                               ) extends Controller with ClassnameLogger with Security {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-  lazy private val googleClientSecret: String = configuration.getString("google.client.secret")
-    .getOrElse("client_secret.json")
-  lazy private val googleStorageBucket: String = configuration.getString("google.storage.bucket")
-    .getOrElse("smart-backup")
-  lazy private val googleProjectId: String = configuration.getString("google.project.id")
-    .getOrElse("dynamic-cove-129211")
   lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
     .getOrElse("/tmp")
-  val cache: play.api.cache.CacheApi = cacheApi
-  val configuration: play.api.Configuration = config
-
-  /**
-    *
-    * @param filename
-    * @param contentType
-    * @param accountSubject
-    * @param filelink
-    * @param fileSize
-    * @return
-    */
-  def fileMetadata(filename: String, contentType: Option[String], accountSubject: String, filelink: String, fileSize: Option[Int]): OwcResource = {
-    sessionHolder.viaConnection { implicit connection =>
-      val propsUuid = UUID.randomUUID()
-      val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
-      val user = UserDAO.findByAccountSubject(accountSubject)
-      val email = user.map(u => EmailAddress(u.email))
-      val owcAuthor = user.map(u => OwcAuthor(name = s"${u.firstname} ${u.lastname}".toOption(), email = email, uri = None))
-      val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(propsUuid.toString, "UTF-8")}")
-
-      val viaLink = OwcLink(href = baseLink,
-        mimeType = Some("application/json"),
-        lang = None,
-        title = None,
-        length = None,
-        rel = "via")
-
-      val dataLink = OwcLink(href = new URL(filelink),
-        mimeType = if (contentType.isDefined) contentType else Some("application/octet-stream"),
-        lang = None,
-        title = Some(filename),
-        length = fileSize,
-        rel = "enclosure")
-
-      OwcResource(
-        id = baseLink,
-        geospatialExtent = None,
-        title = filename,
-        subtitle = Some(s"$filename uploaded to $filelink via GW Hub by $email"),
-        updateDate = updatedTime,
-        author = if (owcAuthor.isDefined) List(owcAuthor.get) else List(),
-        publisher = Some("GNS Science"),
-        rights = Some(s"IP limitation: Please inquire with $email"),
-        temporalExtent = None,
-        contentDescription = List(), // links.alternates[] and rel=alternate
-        preview = List(), // aka links.previews[] and rel=icon (atom)
-        contentByRef = List(dataLink), // aka links.data[] and rel=enclosure (atom)
-        resourceMetadata = List(viaLink), // aka links.via[] & rel=via
-        offering = List(),
-        minScaleDenominator = None,
-        maxScaleDenominator = None,
-        active = None,
-        keyword = List(),
-        folder = None)
-    }
-  }
 
   /**
     *
@@ -143,52 +64,49 @@ class FilesController @Inject()(config: Configuration,
         implicit request =>
 
           request.body.file("file").map { theFile =>
-            import java.io.File
+
             val filename = theFile.filename
             val contentType = theFile.contentType
-            val tmpFile = new File(s"$uploadDataPath/$filename")
+            val pathOfUploadTmp = Paths.get(uploadDataPath)
+            val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sac-upload-")
+            val tmpFile = new File(intermTempDir.resolve(filename).toAbsolutePath.toString)
             val handle = theFile.ref.moveTo(tmpFile)
             val kilobytes = handle.length / 1024
 
-            // Google Java upload stuff
-            import scala.collection.JavaConverters._
+            googleService.uploadFileGoogleBucket(handle) match {
+              case Left(errorResult) =>
+                logger.error(errorResult.message + errorResult.details.mkString)
+                InternalServerError(Json.toJson(errorResult)).as(JSON)
+              case Right(blob) =>
+                // return the public download link
+                val owcResource = collectionsService.fileMetadata(filename, contentType, authUser, blob.getMediaLink(), Try(kilobytes.toInt).toOption)
+                logger.trace(Json.prettyPrint(owcResource.toJson))
 
-            // val storage: Storage = authenticatedStorageOptions.getService()
-            val storage: Storage = StorageOptions.getDefaultInstance().getService()
-            // val noCredentials = NoCredentials.getInstance()
+                val userFileEntryOk = userService.insertUserFileEntry(filename, authUser, blob.getMediaLink())
+                val insertOk = collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser)
 
-            // Modify access list to allow all users with link to read file
-            val roAcl = Acl.of(Acl.User.ofAllUsers(), Acl.Role.READER)
-            val acls: java.util.List[Acl] = List(roAcl).asJava
-
-            // the inputstream is closed by default, so we don't need to close it here
-            val blob: Blob = storage.create(BlobInfo.newBuilder(googleStorageBucket, filename).setAcl(acls).build(),
-              Files.asByteSource(tmpFile).openStream())
-
-            // return the public download link
-            val owcResource = fileMetadata(filename, contentType, authUser, blob.getMediaLink(), Try(kilobytes.toInt).toOption)
-            val insertOk = collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, authUser)
-
-            if (insertOk) {
-              logger.debug(s"file upload $filename to ${blob.getMediaLink}")
-              //FIXME SR do we also want to have a general "return" object? Status is always in the respone so it does not need to be in here
-              Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> blob.getMediaLink(), "entry" -> owcResource.toJson))
-            } else {
-              logger.error("file metadata insert failed.")
-              val error = ErrorResult("File metadata insert failed.", None)
-              BadRequest(Json.toJson(error)).as(JSON)
+                if (insertOk && userFileEntryOk.isDefined) {
+                  logger.debug(s"file upload $filename to ${blob.getMediaLink}")
+                  Try(handle.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                  Try(Files.delete(intermTempDir)).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                  //FIXME SR do we also want to have a general "return" object? Status is always in the respone so it does not need to be in here
+                  Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> blob.getMediaLink(), "entry" -> owcResource.toJson))
+                } else {
+                  logger.error("file metadata insert failed.")
+                  val error = ErrorResult("File metadata insert failed.", None)
+                  BadRequest(Json.toJson(error)).as(JSON)
+                }
+              case _ =>
+                logger.error("file upload to cloud storage failed")
+                val error = ErrorResult("File upload to cloud storage failed.", None)
+                BadRequest(Json.toJson(error)).as(JSON)
             }
+
           }.getOrElse {
-            logger.error("file upload failed")
-            val error = ErrorResult("File upload failed.", None)
+            logger.error("file upload from client failed")
+            val error = ErrorResult("File upload from client failed.", None)
             BadRequest(Json.toJson(error)).as(JSON)
           }
   }
-
-  /*  def uploadDirect = Action(parseOm2Measurements.temporaryFile) { request =>
-      request.body.moveTo(new File("/tmp/uploaded.bin"))
-      Ok("File uploaded")
-    }*/
-
 
 }

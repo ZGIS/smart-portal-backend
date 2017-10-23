@@ -27,6 +27,10 @@ sealed trait StatusToken {
 
 object StatusToken {
 
+  case object BLOCKED extends StatusToken {
+    val value: String = "BLOCKED"
+  }
+
   case object REGISTERED extends StatusToken {
     val value: String = "REGISTERED"
   }
@@ -61,5 +65,9 @@ object StatusToken {
 
   def isActive(token: StatusToken): Boolean = {
     activatedTokens.contains(token.value)
+  }
+
+  def isBlocked(token: StatusToken): Boolean = {
+    token == BLOCKED
   }
 }

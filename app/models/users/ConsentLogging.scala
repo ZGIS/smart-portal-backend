@@ -17,13 +17,42 @@
  * limitations under the License.
  */
 
-package models.db
+package models.users
 
-import play.api.db.Database
+import java.time.ZonedDateTime
+
+import utils.ClassnameLogger
+
+/*
+CREATE TABLE consentlogging (
+id INTEGER NOT NULL ,
+timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+ipaddress varchar(255),
+useragent varchar(255),
+email varchar(255),
+accountsubject varchar(255),
+link TEXT,
+referrer TEXT,
+PRIMARY KEY (id)
+);
+*/
 
 /**
-  * trait to test with database mock
+  *
+  * @param id
+  * @param timestamp
+  * @param ipaddress
+  * @param useragent
+  * @param email
+  * @param accountsubject
+  * @param link
+  * @param referrer
   */
-trait AbstractSessionHolder {
-  val db: Database
-}
+case class ConsentLogging(id: Long,
+                          timestamp: ZonedDateTime,
+                          ipaddress: String,
+                          useragent: String,
+                          email: String,
+                          accountsubject: String,
+                          link: String,
+                          referrer: String) extends ClassnameLogger

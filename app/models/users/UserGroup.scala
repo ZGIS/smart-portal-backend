@@ -283,6 +283,10 @@ object UserGroup extends ClassnameLogger {
     }
   }
 
+  def getAllUserGroups(implicit connection: Connection): Seq[UserGroup] = {
+    SQL(s"""select * from $table_groups""").as(groupsParser *)
+  }
+
   def findUserGroupsById(uuid: UUID)(implicit connection: Connection): Option[UserGroup] = {
     SQL(s"""select * from $table_groups where uuid = '${uuid.toString}'""").as(groupsParser.singleOpt)
   }

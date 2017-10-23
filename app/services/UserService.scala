@@ -23,12 +23,12 @@ import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 import javax.inject._
 
-import controllers.ProfileJs
 import models.ErrorResult
 import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
 import play.api.cache.CacheApi
+import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
@@ -67,6 +67,109 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
+  /**
+    * passing findUserByEmailAsString request through from controller
+    *
+    * @param email
+    * @return
+    */
+  def findUserByEmailAsString(email: String): Option[User] = {
+    dbSession.viaConnection(implicit connection => {
+      UserDAO.findUserByEmailAsString(email)
+    })
+  }
+
+  /**
+    * passing findUserByEmailAddress request through from controller
+    *
+    * @param email
+    * @return
+    */
+  def findUserByEmailAddress(email: EmailAddress): Option[User] = {
+    dbSession.viaConnection(implicit connection => {
+      UserDAO.findUserByEmailAddress(email)
+    })
+  }
+
+  /**
+    * passing findUsersByPassResetLink request through from controller
+    *
+    * @param linkId
+    * @return
+    */
+  def findRegisteredUsersWithRegLink(linkId: String): Seq[User] = {
+    dbSession.viaConnection(implicit connection => {
+      UserDAO.findRegisteredUsersWithRegLink(linkId)
+    })
+  }
+
+  /**
+    * passing findUsersByPassResetLink request through from controller
+    *
+    * @param linkId
+    * @return
+    */
+  def findUsersByPassResetLink(linkId: String): Seq[User] = {
+    dbSession.viaConnection(implicit connection => {
+      UserDAO.findUsersByPassResetLink(linkId)
+    })
+  }
+
+  /**
+    * passing createUser request through from controller
+    *
+    * @param user
+    * @return
+    */
+  def createUser(user: User): Option[User] = {
+    dbSession.viaTransaction(implicit connection => {
+      UserDAO.createUser(user)
+    })
+  }
+
+  /**
+    * passing deleteUser(user) request through from controller
+    *
+    * @param user
+    * @return
+    */
+  def deleteUser(user: User): Boolean = {
+    dbSession.viaTransaction(implicit connection => {
+      UserDAO.deleteUser(user)
+    })
+  }
+
+  /**
+    * passing updateNoPass request through from controller
+    *
+    * @param user
+    * @return
+    */
+  def updateNoPass(user: User): Option[User] = {
+    dbSession.viaTransaction(implicit connection => {
+      UserDAO.updateNoPass(user)
+    })
+  }
+
+  /**
+    * passing updatePassword request through from controller
+    *
+    * @param user
+    * @return
+    */
+  def updatePassword(user: User): Option[User] = {
+    dbSession.viaTransaction(implicit connection => {
+      UserDAO.updatePassword(user)
+    })
+  }
+
+  /**
+    * set the new session and put it into cache
+    *
+    * @param userEmail
+    * @param userAgentHeader
+    * @return
+    */
   def upsertUserSessionCache(userEmail: String, userAgentHeader: String): String = {
     val token = passwordHashing.createSessionCookie(userEmail, userAgentHeader)
 
@@ -117,43 +220,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   /**
-    * list all users, of course (also for admin) must not see password
-    *
-    * @return
-    */
-  def getallUsers: Seq[ProfileJs] = {
-    dbSession.viaConnection( implicit connection => {
-      UserDAO.getAllUsers.map(u => u.asProfileJs)
-    })
-  }
-
-  def blockUnblockUsers(command: String, email: String): Option[User] = {
-    val userOpt = dbSession.viaConnection( implicit connection => {
-      UserDAO.findUserByEmailAsString(email)
-    })
-    userOpt.fold[Option[User]]{
-      None
-    } {
-      user =>
-        val statusToken = if (command.equalsIgnoreCase("BLOCK")) StatusToken.BLOCKED else StatusToken.ACTIVE
-        val updateUser = User(
-          user.email,
-          user.accountSubject,
-          user.firstname,
-          user.lastname,
-          "***",
-          s"${statusToken.value}:BY-ADMIN",
-          ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-        // result of Option can be evaluated upstream in controller
-        dbSession.viaTransaction { implicit connection =>
-          UserDAO.updateNoPass(updateUser)
-        }
-
-    }
-  }
-
-  /**
     * unambiguous keep track of user upload files and owning them
     *
     * @param filename
@@ -163,19 +229,31 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     */
   def insertUserFileEntry(filename: String, authUser: String, filelink: String): Option[UserFile] = {
 
-    val userFile = UserFile(
-      uuid = UUID.randomUUID(),
-      users_accountsubject = authUser,
-      originalfilename = filename,
-      linkreference = filelink,
-      laststatustoken = "UPLOAD",
-      laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+    val userLookup = dbSession.viaConnection { implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser)
+    }
 
-    dbSession.viaTransaction( implicit connection => {
-      UserFile.createUserFile(userFile)
-    })
+    userLookup.fold[Option[UserFile]] {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't store in users collection")
+      None
+    } {
+      user =>
 
+        val userFile = UserFile(
+          uuid = UUID.randomUUID(),
+          users_accountsubject = user.accountSubject,
+          originalfilename = filename,
+          linkreference = filelink,
+          laststatustoken = "UPLOAD",
+          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+        dbSession.viaTransaction(implicit connection => {
+          UserFile.createUserFile(userFile)
+        })
+    }
   }
+
 
   /**
     * unambiguous keep track of user metadata records and owning them
@@ -186,16 +264,40 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def insertUserMetaRecordEntry(CSW_URL: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
-    val userMetaRecord = UserMetaRecord(
-      uuid = UUID.randomUUID(),
-      users_accountsubject = authUser,
-      originaluuid = mdMetadataUuid,
-      cswreference = s"https://portal.smart-project.info/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=$mdMetadataUuid",
-      laststatustoken = "UPLOAD",
-      laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-    dbSession.viaTransaction(implicit connection => {
-      UserMetaRecord.createUserMetaRecord(userMetaRecord)
+    val userLookup = dbSession.viaConnection { implicit connection =>
+      UserDAO.findUserByEmailAsString(authUser)
+    }
+
+    userLookup.fold[Option[UserMetaRecord]] {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't store in users collection")
+      None
+    } {
+      user =>
+
+        val userMetaRecord = UserMetaRecord(
+          uuid = UUID.randomUUID(),
+          users_accountsubject = user.accountSubject,
+          originaluuid = mdMetadataUuid,
+          cswreference = s"https://portal.smart-project.info/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=$mdMetadataUuid",
+          laststatustoken = "UPLOAD",
+          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+        dbSession.viaTransaction(implicit connection => {
+          UserMetaRecord.createUserMetaRecord(userMetaRecord)
+        })
+    }
+  }
+
+  /**
+    * log file downloads via consent accept button on webgui
+    *
+    * @param logRequest
+    */
+  def logLinkInfo(logRequest: UserLinkLogging): Int = {
+    dbSession.viaConnection(implicit connection => {
+      UserLinkLogging.createUserLinkLogging(logRequest)
     })
   }
 

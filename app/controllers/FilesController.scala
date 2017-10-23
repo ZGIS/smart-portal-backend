@@ -21,9 +21,11 @@ package controllers
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import java.time.{ZoneId, ZonedDateTime}
 import javax.inject.Inject
 
 import models.ErrorResult
+import models.users.UserLinkLogging
 import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.Files.TemporaryFile
@@ -107,6 +109,30 @@ class FilesController @Inject()(val configuration: Configuration,
             val error = ErrorResult("File upload from client failed.", None)
             BadRequest(Json.toJson(error)).as(JSON)
           }
+  }
+
+  /**
+    * fire an entry into db for a url (somebody clicked ok to conset download file)
+    *
+    * @param link
+    * @return
+    */
+  def logLinkInfo(link: String): Action[Unit] = HasOptionalToken(parse.empty) {
+    authUserOption =>
+      implicit request =>
+
+        val logRequest = UserLinkLogging(id = None,
+          timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+          ipaddress = Some(request.remoteAddress),
+          useragent = request.headers.get(UserAgentHeader),
+          email = authUserOption,
+          link = link,
+          referer = request.headers.get(RefererHeader))
+
+        val updated = userService.logLinkInfo(logRequest)
+
+        logger.trace(logRequest.toString)
+        Ok(Json.obj("status" -> "OK", "message" -> s"$updated file request logged."))
   }
 
 }

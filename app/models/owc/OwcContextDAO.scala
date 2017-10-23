@@ -534,7 +534,7 @@ object OwcContextDAO extends ClassnameLogger {
 
     logger.trace(s"preUpdateCheckOwcResources: toBeDeleted: List[URL] ${current.map(_.toString).mkString}")
 
-    val deleted = oldOwcContext.map { owcContext =>
+    val deleted: Boolean = oldOwcContext.exists { owcContext =>
       owcContext.resource.filter(o => toBeDeleted.contains(o.id))
         .map { owcResource =>
           // delete relation from tableOwcContextHasOwcResources table before finally deleting referenced OwcResource
@@ -548,8 +548,8 @@ owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".str
           val deletedOwcResource = OwcResourceDAO.deleteOwcResource(owcResource)
 
           deletedOwcResource && deletedOwcResourceRelation
-        }
-    }.count(_ == true) == toBeDeleted.length
+        }.count(_ == true) == toBeDeleted.length
+    }
 
     // in both lists -> update
     val toBeUpdated = current.intersect(old)

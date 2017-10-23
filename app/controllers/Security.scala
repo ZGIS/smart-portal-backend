@@ -19,10 +19,10 @@
 
 package controllers
 
+import play.api.Configuration
 import play.api.cache.CacheApi
 import play.api.libs.json._
 import play.api.mvc._
-import play.api.{Configuration, Logger}
 import services.UserService
 import utils.{ClassnameLogger, PasswordHashing}
 
@@ -48,60 +48,7 @@ trait Security extends ClassnameLogger {
 
   val UserAgentHeader = "User-Agent"
   val UserAgentHeaderDefault = "Default-UA/1.0"
-
-  /**
-    * HasToken for asynchronous actions
-    * @param p
-    * @param f
-    * @tparam A
-    * @return
-    */
-  //TODO SR how to use HasToken here and not copy paste code?
-  def HasTokenAsync[A](p: BodyParser[A] = parse.anyContent)
-                      (f: String => String => Request[A] => Future[Result]): Action[A] =
-    Action.async(p) { implicit request =>
-      {
-        import scala.concurrent.ExecutionContext.Implicits.global;
-
-        request.cookies.get(AuthTokenCookieKey).fold {
-          logger.error(request.cookies.toString)
-          Future[Result] {
-            Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie"))
-          }
-        } { xsrfTokenCookie =>
-          logger.trace(s"cookie ${xsrfTokenCookie.value}")
-          val maybeToken = request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey))
-
-          maybeToken flatMap { token =>
-            // ua needed to differentiate between different devices/sessions
-            val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-            logger.trace(s"token: $token")
-            logger.trace(s"ua: $uaIdentifier")
-            // cache token -> maps to a String email
-            cache.get[String](token) map { email =>
-              // lazy val passwordHashing = new PasswordHashing(configuration)
-              val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
-              logger.trace(s"testcookie: $cookieForUSerAndDevice")
-              if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
-                logger.trace(s"request for active session: $email / $token / $uaIdentifier")
-                f(token)(email)(request)
-              }
-              else {
-                Future[Result] {
-                  Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
-                    .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-                }
-              }
-            }
-          } getOrElse {
-            Future[Result] {
-              Unauthorized(Json.obj("status" -> "ERR", "message" -> "No Token"))
-                .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-            }
-          }
-        }
-      }
-    }
+  val RefererHeader = "Referer"
 
   /**
     * Checks that the token is:
@@ -131,10 +78,10 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           val cacheOpt: Option[String] = cache.get[String](headerToken)
-          val result = cacheOpt.fold{
+          val result = cacheOpt.fold {
             Unauthorized(Json.obj("status" -> "ERR", "message" -> "No server-side session"))
               .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-          }{
+          } {
             email =>
               val cookieForUSerAndDevice = passwordHashing.testSessionCookie(headerToken, email, uaIdentifier)
               logger.trace(s"testcookie: $cookieForUSerAndDevice")
@@ -149,18 +96,6 @@ trait Security extends ClassnameLogger {
           }
           Some(result)
 
-//          cache.get[String](token) map { email =>
-//            // lazy val passwordHashing = new PasswordHashing(configuration)
-//            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
-//            logger.trace(s"testcookie: $cookieForUSerAndDevice")
-//            if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
-//              logger.trace(s"request for active session: $email / $token / $uaIdentifier")
-//              f(token)(email)(request)
-//            }
-//            else {
-//              Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
-//            }
-//          }
         } getOrElse Unauthorized(Json.obj("status" -> "ERR", "message" -> "No token header found"))
           .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
       }
@@ -197,10 +132,10 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           val cacheOpt: Option[String] = cache.get[String](headerToken)
-          val result = cacheOpt.fold{
+          val result = cacheOpt.fold {
             logger.trace("optional cookie: No server-side session")
             f(None)(request)
-          }{ email =>
+          } { email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)
             val cookieForUSerAndDevice = passwordHashing.testSessionCookie(headerToken, email, uaIdentifier)
             logger.trace(s"testcookie: $cookieForUSerAndDevice")
@@ -221,5 +156,102 @@ trait Security extends ClassnameLogger {
           f(None)(request)
         }
       }
+    }
+
+
+  /**
+    * HasToken for asynchronous actions
+    *
+    * @param p
+    * @param f
+    * @tparam A
+    * @return
+    */
+  //TODO SR how to use HasToken here and not copy paste code?
+  def HasTokenAsync[A](p: BodyParser[A] = parse.anyContent)
+                      (f: String => String => Request[A] => Future[Result]): Action[A] =
+    Action.async(p) { implicit request => {
+      import scala.concurrent.ExecutionContext.Implicits.global;
+
+      request.cookies.get(AuthTokenCookieKey).fold {
+        logger.error(request.cookies.toString)
+        Future[Result] {
+          Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie"))
+        }
+      } { xsrfTokenCookie =>
+        logger.trace(s"cookie ${xsrfTokenCookie.value}")
+        val maybeToken = request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey))
+
+        maybeToken flatMap { token =>
+          // ua needed to differentiate between different devices/sessions
+          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+          logger.trace(s"token: $token")
+          logger.trace(s"ua: $uaIdentifier")
+          // cache token -> maps to a String email
+          cache.get[String](token) map { email =>
+            // lazy val passwordHashing = new PasswordHashing(configuration)
+            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
+            logger.trace(s"testcookie: $cookieForUSerAndDevice")
+            if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
+              logger.trace(s"request for active session: $email / $token / $uaIdentifier")
+              f(token)(email)(request)
+            }
+            else {
+              Future[Result] {
+                Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid Token"))
+                  .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+              }
+            }
+          }
+        } getOrElse {
+          Future[Result] {
+            Unauthorized(Json.obj("status" -> "ERR", "message" -> "No Token"))
+              .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+          }
+        }
+      }
+    }
+    }
+
+
+  def HasOptionalTokenAsync[A](p: BodyParser[A] = parse.anyContent)
+                              (f: Option[String] => Request[A] => Future[Result]): Action[A] =
+    Action.async(p) { implicit request => {
+
+      request.cookies.get(AuthTokenCookieKey).fold {
+        logger.error(request.cookies.toString)
+
+        logger.trace("optional cookie: Invalid XSRF-Token cookie")
+        f(None)(request)
+
+      } { xsrfTokenCookie =>
+        logger.trace(s"cookie ${xsrfTokenCookie.value}")
+        val maybeToken = request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey))
+
+        maybeToken flatMap { token =>
+          // ua needed to differentiate between different devices/sessions
+          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+          logger.trace(s"token: $token")
+          logger.trace(s"ua: $uaIdentifier")
+          // cache token -> maps to a String email
+          cache.get[String](token) map { email =>
+            // lazy val passwordHashing = new PasswordHashing(configuration)
+            val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
+            logger.trace(s"testcookie: $cookieForUSerAndDevice")
+            if (xsrfTokenCookie.value == token && cookieForUSerAndDevice) {
+              logger.trace(s"request for active session: $email / $token / $uaIdentifier")
+              f(Some(email))(request)
+            }
+            else {
+              logger.trace("optional cookie: Invalid Token")
+              f(None)(request)
+            }
+          }
+        } getOrElse {
+          logger.trace("optional cookie: No token header found")
+          f(None)(request)
+        }
+      }
+    }
     }
 }

@@ -81,8 +81,11 @@ package object controllers {
       (JsPath \ "firstname").write[String] and
       (JsPath \ "lastname").write[String]) (unlift(ProfileJs.unapply))
 
-  implicit val userMetaRecordsFormat: Format[UserMetaRecord] = Json.format[UserMetaRecord]
   implicit val userFilesFormat: Format[UserFile] = Json.format[UserFile]
+  implicit val userMetaRecordsFormat: Format[UserMetaRecord] = Json.format[UserMetaRecord]
+
+  implicit val userLinkLoggingsFormat: Format[UserLinkLogging] = Json.format[UserLinkLogging]
+  implicit val userSessionsFormat: Format[UserSession] = Json.format[UserSession]
 
   implicit val userGroupContextsVisibilityFormat: Format[UserGroupContextsVisibility] = Json.format[UserGroupContextsVisibility]
   implicit val userGroupUsersLevelFormat: Format[UserGroupUsersLevel] = Json.format[UserGroupUsersLevel]

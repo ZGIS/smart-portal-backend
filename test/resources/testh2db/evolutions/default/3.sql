@@ -16,9 +16,8 @@ CREATE TABLE consentlogging (
   ipaddress varchar(255),
   useragent varchar(255),
   email varchar(255),
-  accountsubject varchar(255),
   link TEXT,
-  referrer TEXT,
+  referer TEXT,
   PRIMARY KEY (id)
 );
 

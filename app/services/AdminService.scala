@@ -20,9 +20,11 @@
 package services
 
 
+import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 import javax.inject._
 
+import controllers.ProfileJs
 import models.ErrorResult
 import models.db.DatabaseSessionHolder
 import models.users._
@@ -37,6 +39,87 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
                              configuration: Configuration) extends ClassnameLogger {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+
+  /**
+    * list all users, of course (also for admin) must not see password
+    *
+    * @return
+    */
+  def getallUsers: Seq[ProfileJs] = {
+    dbSession.viaConnection( implicit connection => {
+      UserDAO.getAllUsers.map(u => u.asProfileJs)
+    })
+  }
+
+  def blockUnblockUsers(command: String, email: String): Option[User] = {
+    val userOpt = dbSession.viaConnection( implicit connection => {
+      UserDAO.findUserByEmailAsString(email)
+    })
+    userOpt.fold[Option[User]]{
+      None
+    } {
+      user =>
+        val statusToken = if (command.equalsIgnoreCase("BLOCK")) StatusToken.BLOCKED else StatusToken.ACTIVE
+        val updateUser = User(
+          user.email,
+          user.accountSubject,
+          user.firstname,
+          user.lastname,
+          "***",
+          s"${statusToken.value}:BY-ADMIN",
+          ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+        // result of Option can be evaluated upstream in controller
+        dbSession.viaTransaction { implicit connection =>
+          UserDAO.updateNoPass(updateUser)
+        }
+
+    }
+  }
+
+  /**
+    * list all files uploaded by users (for admin)
+    *
+    * @return
+    */
+  def getallUserFiles: Seq[UserFile] = {
+    dbSession.viaConnection( implicit connection => {
+      UserFile.getAllUserFiles
+    })
+  }
+
+  /**
+    * list all csw meta entries uploaded by users (for admin)
+    *
+    * @return
+    */
+  def getallUserMetaRecords: Seq[UserMetaRecord] = {
+    dbSession.viaConnection( implicit connection => {
+      UserMetaRecord.getAllUserMetaRecords
+    })
+  }
+
+  /**
+    * list all file request loggings (for admin)
+    *
+    * @return
+    */
+  def getAllUserLinkLoggings: Seq[UserLinkLogging] = {
+    dbSession.viaConnection( implicit connection => {
+      UserLinkLogging.getAllUserLinkLoggings
+    })
+  }
+
+  /**
+    * find file request loggings (for admin)
+    *
+    * @return
+    */
+  def findUserLinkLoggingsByLink(link: String): Seq[UserLinkLogging] = {
+    dbSession.viaConnection( implicit connection => {
+      UserLinkLogging.findUserLinkLoggingsByLink(link)
+    })
+  }
 
   /**
     * The first 5 fuctions handle user groups overall,

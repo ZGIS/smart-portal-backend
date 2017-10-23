@@ -90,6 +90,12 @@ CREATE TABLE userfiles (
     ).as(userFilesParser.singleOpt)
   }
 
+  def findUserFilesByLink(link: String)(implicit connection: Connection): Seq[UserFile] = {
+    SQL(s"select * from $table_userfiles where linkreference LIKE '%{link}%' OR originalfilename LIKE '%{link}%'").on(
+      'link -> link
+    ).as(userFilesParser *)
+  }
+
   def createUserFile(userFile: UserFile)(implicit connection: Connection): Option[UserFile] = {
     val nps = Seq[NamedParameter](// Tuples as NamedParameter
       "uuid" -> userFile.uuid.toString,

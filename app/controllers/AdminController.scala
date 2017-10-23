@@ -220,7 +220,7 @@ class AdminController @Inject()(val configuration: Configuration,
             } getOrElse {
               logger.error("file upload from client failed")
               val error = ErrorResult("File upload from client failed.", None)
-              BadRequest(Json.toJson(error)).as(JSON)
+              NotImplemented(Json.toJson(error)).as(JSON)
             }
           }
   }
@@ -239,14 +239,88 @@ class AdminController @Inject()(val configuration: Configuration,
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
           } else {
-            val userList = userService.getallUsers.map(u => Json.toJson(u))
-            Ok(Json.obj("status" -> "OK", "userlist" -> JsArray(userList)))
+            val userList = adminService.getallUsers.map(u => Json.toJson(u))
+            Ok(Json.obj("status" -> "OK", "users" -> JsArray(userList)))
           }
   }
 
   /**
-    * TODO
+    * for admin view list all user files
     *
+    * @return
+    */
+  def getAllUserFiles: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      cachedSecUserEmail =>
+        implicit request =>
+          if (!isAdmin(cachedSecUserEmail)) {
+            logger.error("User email not Admin.")
+            val error = ErrorResult("User email not Admin.", None)
+            Unauthorized(Json.toJson(error)).as(JSON)
+          } else {
+            val userList = adminService.getallUserFiles.map(u => Json.toJson(u))
+            Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userList)))
+          }
+  }
+
+  /**
+    * for admin view list all user metadata records
+    *
+    * @return
+    */
+  def getallUserMetaRecords: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      cachedSecUserEmail =>
+        implicit request =>
+          if (!isAdmin(cachedSecUserEmail)) {
+            logger.error("User email not Admin.")
+            val error = ErrorResult("User email not Admin.", None)
+            Unauthorized(Json.toJson(error)).as(JSON)
+          } else {
+            val userList = adminService.getallUserMetaRecords.map(u => Json.toJson(u))
+            Ok(Json.obj("status" -> "OK", "metarecords" -> JsArray(userList)))
+          }
+  }
+
+  /**
+    * for admin view list all user link request logs
+    *
+    * @return
+    */
+  def getallUserLinkLoggings: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      cachedSecUserEmail =>
+        implicit request =>
+          if (!isAdmin(cachedSecUserEmail)) {
+            logger.error("User email not Admin.")
+            val error = ErrorResult("User email not Admin.", None)
+            Unauthorized(Json.toJson(error)).as(JSON)
+          } else {
+            val loglist = adminService.getAllUserLinkLoggings.map(u => Json.toJson(u))
+            Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
+          }
+  }
+
+  /**
+    * for admin view find user link request logs by file name or link
+    *
+    * @return
+    */
+  def findUserLinkLoggingsByLink(link: String): Action[Unit] = HasToken(parse.empty) {
+    token =>
+      cachedSecUserEmail =>
+        implicit request =>
+          if (!isAdmin(cachedSecUserEmail)) {
+            logger.error("User email not Admin.")
+            val error = ErrorResult("User email not Admin.", None)
+            Unauthorized(Json.toJson(error)).as(JSON)
+          } else {
+            val loglist = adminService.findUserLinkLoggingsByLink(link).map(u => Json.toJson(u))
+            Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
+          }
+  }
+
+  /**
     * handle for admin to block users by their email so they can't log-in (and unblock them again)
     *
     * @param command
@@ -262,7 +336,7 @@ class AdminController @Inject()(val configuration: Configuration,
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
           } else {
-            userService.blockUnblockUsers(command, email).fold {
+            adminService.blockUnblockUsers(command, email).fold {
               logger.error(s"User $email : status update ($command) failed.")
               val error = ErrorResult(s"User $email : status update ($command) failed.", None)
               BadRequest(Json.toJson(error)).as(JSON)

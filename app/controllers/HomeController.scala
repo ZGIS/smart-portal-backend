@@ -42,7 +42,6 @@ import scala.concurrent.duration._
   * @param configuration
   * @param cache
   * @param passwordHashing
-  * @param dbSession
   * @param ws
   */
 @Singleton
@@ -50,7 +49,6 @@ class HomeController @Inject()(val configuration: Configuration,
                                val cache: CacheApi,
                                val userService: UserService,
                                val passwordHashing: PasswordHashing,
-                               dbSession: DatabaseSessionHolder,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {
 
   lazy private val reCaptchaSecret: String =

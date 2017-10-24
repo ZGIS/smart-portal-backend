@@ -57,7 +57,7 @@ class AdminController @Inject()(val configuration: Configuration,
     */
   def isAdmin(email: String): Boolean = {
     configuration.getStringList("smart.admin.emails").fold(false)(
-      adminList => if (!adminList.contains(email)) true else false)
+      adminList => if (adminList.contains(email)) true else false)
   }
 
   /**

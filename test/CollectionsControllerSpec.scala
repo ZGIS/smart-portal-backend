@@ -25,7 +25,6 @@ import info.smart.models.owc100.OwcContext
 import org.scalatest.TestData
 import org.scalatestplus.play.OneAppPerTest
 import org.specs2.mock._
-import play.api.cache.CacheApi
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -71,8 +70,6 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
     "request to getCollections(None)" in {
 
       Then("create mock components, particular mocked CollectionsServive")
-      // just to provide stub
-      val mockCache = mock[CacheApi]
 
       // configuration is only used to read application.(test).conf keys, and they are all defended with .getOrElse() if not accessible
       val appConfig = app.configuration
@@ -84,7 +81,6 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       // explicitely instatiating tested controller
       val controller = new CollectionsController(
-        cache = mockCache,
         configuration = appConfig,
         userService = mockUserService,
         emailService = mockEmailService,

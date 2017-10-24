@@ -23,7 +23,6 @@ import javax.inject.{Inject, Provider}
 
 import models.ErrorResult
 import models.gmd.MdMetadata
-import play.api.cache.CacheApi
 import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
@@ -63,7 +62,6 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
   * @param collectionsService
   */
 class CswController @Inject()(val configuration: Configuration,
-                              val cache: CacheApi,
                               val userService: UserService,
                               val passwordHashing: PasswordHashing,
                               wsClient: WSClient,
@@ -177,8 +175,8 @@ class CswController @Inject()(val configuration: Configuration,
                   case e: Elem if e.label == "TransactionResponse" => {
                     val fileIdentifier = (e \\ "InsertResult" \\ "BriefRecord" \\ "identifier").text
                     logger.debug(s"Adding ${mdMetadata.fileIdentifier} to default collection of $authUser.")
-                    val userMetaEntryOk = userService.insertUserMetaRecordEntry(CSW_URL, mdMetadata.fileIdentifier, authUser)
                     val added = collectionsService.addMdResourceToUserDefaultCollection(CSW_URL, mdMetadata, authUser)
+                    val userMetaEntryOk = userService.insertUserMetaRecordEntry(CSW_URL, mdMetadata.fileIdentifier, authUser)
                     if (added && userMetaEntryOk.isDefined) {
                       Ok(Json.obj("type" -> "success", "fileIdentifier" -> fileIdentifier,
                         "message" -> s"Inserted as ${fileIdentifier} and reference entry added to your data collection."))

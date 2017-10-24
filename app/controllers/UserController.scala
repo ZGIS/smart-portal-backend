@@ -24,10 +24,8 @@ import java.util.UUID
 import javax.inject._
 
 import models.ErrorResult
-import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.mvc._
 import services.{EmailService, GoogleServicesDAO, OwcCollectionsService, UserService}
@@ -65,16 +63,16 @@ case class RegisterJs(email: EmailAddress,
                       password: String)
 
 /**
-  *
+  * 
   * @param configuration
-  * @param cache
+  * @param userService
+  * @param passwordHashing
   * @param emailService
   * @param collectionsService
-  * @param passwordHashing
+  * @param googleService
   */
 @Singleton
 class UserController @Inject()(val configuration: Configuration,
-                               val cache: CacheApi,
                                val userService: UserService,
                                val passwordHashing: PasswordHashing,
                                emailService: EmailService,
@@ -232,7 +230,8 @@ class UserController @Inject()(val configuration: Configuration,
           } { user =>
             val result = userService.deleteUser(user)
             if (result) {
-              cache.remove(token)
+              // cache.remove(token)
+              userService.removeUserSessionCache(cachedSecUserEmail, token)
               Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
             } else {
               logger.error(s"User ${user.accountSubject} could not be deleted.")
@@ -382,10 +381,12 @@ class UserController @Inject()(val configuration: Configuration,
                     BadRequest(Json.toJson(error)).as(JSON)
                   } { user =>
                     val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                    cache.remove(token)
+                    // cache.remove(token)
+                    userService.removeUserSessionCache(cachedSecUserEmail, token)
                     emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
-                    val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-                    cache.set(newtoken, user.email.value)
+                    // val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+                    // cache.set(newtoken, user.email.value)
+                    val newtoken = userService.upsertUserSessionCache(user.email.value, uaIdentifier)
                     Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email.value))
                       .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
                   }
@@ -566,8 +567,9 @@ class UserController @Inject()(val configuration: Configuration,
                       s"User Collection ${owcDoc.id.toString}")
                     val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                     // logger.debug(s"Logging in email from $uaIdentifier")
-                    val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
-                    cache.set(token, createdUser.email.value)
+                    // val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
+                    // cache.set(token, createdUser.email.value)
+                    val token = userService.upsertUserSessionCache(createdUser.email.value, uaIdentifier)
                     Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> createdUser.email.value, "userprofile" -> createdUser.asProfileJs))
                       .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
                   }
@@ -575,8 +577,9 @@ class UserController @Inject()(val configuration: Configuration,
               } { existingUser =>
                 val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
                 // logger.debug(s"Logging in email from $uaIdentifier")
-                val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
-                cache.set(token, existingUser.email.value)
+                // val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
+                // cache.set(token, existingUser.email.value)
+                val token = userService.upsertUserSessionCache(existingUser.email.value, uaIdentifier)
                 Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> existingUser.email.value, "userprofile" -> existingUser.asProfileJs))
                   .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
               }
@@ -607,7 +610,8 @@ class UserController @Inject()(val configuration: Configuration,
     token =>
       email =>
         implicit request =>
-          cache.remove(token)
+          // cache.remove(token)
+          userService.removeUserSessionCache(email, token)
           // do some Google OAuth2 unregisteR
           Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }

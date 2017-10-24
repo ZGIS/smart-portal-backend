@@ -31,7 +31,6 @@ import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData, Wml2Export}
 import models.tvp.XmlTvpParser
 import models.users.UserLinkLogging
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
@@ -47,7 +46,6 @@ import scala.util.Try
   * Controller to access SOS server and return parsed time series to frontend.
   */
 class SosDataController @Inject()(val configuration: Configuration,
-                                  val cache: CacheApi,
                                   val userService: UserService,
                                   val passwordHashing: PasswordHashing,
                                   wsClient: WSClient)

@@ -20,10 +20,10 @@
 package controllers
 
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.json._
 import play.api.mvc._
 import services.UserService
+import models.users.UserSession
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.Future
@@ -37,7 +37,6 @@ import scala.concurrent.Future
 trait Security extends ClassnameLogger {
   self: Controller =>
 
-  val cache: CacheApi
   val userService: UserService
   val configuration: Configuration
   val passwordHashing: PasswordHashing
@@ -77,7 +76,9 @@ trait Security extends ClassnameLogger {
           logger.trace(s"headerToken: $headerToken")
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
-          val cacheOpt: Option[String] = cache.get[String](headerToken)
+          // val cacheOpt: Option[String] = cache.get[String](headerToken)
+          val cacheOpt: Option[String] = userService.checkUserSessionCacheByToken(
+            headerToken, xsrfTokenCookie.value, uaIdentifier)
           val result = cacheOpt.fold {
             Unauthorized(Json.obj("status" -> "ERR", "message" -> "No server-side session"))
               .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
@@ -131,7 +132,9 @@ trait Security extends ClassnameLogger {
           logger.trace(s"headerToken: $headerToken")
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
-          val cacheOpt: Option[String] = cache.get[String](headerToken)
+          // val cacheOpt: Option[String] = cache.get[String](headerToken)
+          val cacheOpt: Option[String] = userService.checkUserSessionCacheByToken(
+            headerToken, xsrfTokenCookie.value, uaIdentifier)
           val result = cacheOpt.fold {
             logger.trace("optional cookie: No server-side session")
             f(None)(request)
@@ -188,7 +191,10 @@ trait Security extends ClassnameLogger {
           logger.trace(s"token: $token")
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
-          cache.get[String](token) map { email =>
+          // cache.get[String](token) map {
+          userService.checkUserSessionCacheByToken(
+            token, xsrfTokenCookie.value, uaIdentifier) map {
+            email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)
             val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
             logger.trace(s"testcookie: $cookieForUSerAndDevice")
@@ -234,7 +240,10 @@ trait Security extends ClassnameLogger {
           logger.trace(s"token: $token")
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
-          cache.get[String](token) map { email =>
+          // cache.get[String](token) map {
+          userService.checkUserSessionCacheByToken(
+            token, xsrfTokenCookie.value, uaIdentifier) map {
+            email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)
             val cookieForUSerAndDevice = passwordHashing.testSessionCookie(token, email, uaIdentifier)
             logger.trace(s"testcookie: $cookieForUSerAndDevice")

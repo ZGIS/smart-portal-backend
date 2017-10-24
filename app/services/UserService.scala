@@ -27,14 +27,12 @@ import models.ErrorResult
 import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
-import play.api.cache.CacheApi
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class UserService @Inject()(dbSession: DatabaseSessionHolder,
                             val passwordHashing: PasswordHashing,
-                            cache: CacheApi,
                             configuration: Configuration) extends ClassnameLogger {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
@@ -174,9 +172,29 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     val token = passwordHashing.createSessionCookie(userEmail, userAgentHeader)
 
     // TODO here replace cache access with DB
-    cache.set(token, userEmail)
+    // cache.set(token, userEmail)
+    val sessionOpt = dbSession.viaConnection(implicit connection => {
+      UserSession.findUserSessionByToken(token).fold{
+        UserSession.createUserSession(UserSession(
+          token = token,
+          useragent = userAgentHeader,
+          email = userEmail,
+          laststatustoken = s"${StatusToken.ACTIVE}:NEW_SESSION",
+          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+        ))
+      }{
+        session =>
+          UserSession.updateUserSessionStatus(UserSession(
+            token = token,
+            useragent = userAgentHeader,
+            email = userEmail,
+            laststatustoken = s"${StatusToken.ACTIVE}:SESSION_UPDATE",
+            laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+          ))
+      }
+    })
 
-    token
+    sessionOpt.map(_.token).getOrElse("XXXXXXXXXXXXXXXXXXXXX-INVALID-xxxxxxxxxxxxxxx")
   }
 
   /**
@@ -190,17 +208,21 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   def checkUserSessionCacheByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[String] = {
 
     // TODO here replace cache access with DB
-    val userEmailOpt = cache.get[String](xsrfToken)
+    // val userEmailOpt = cache.get[String](xsrfToken)
+    val userEmailOpt = dbSession.viaConnection(implicit connection => {
+      UserSession.findUserSessionByToken(xsrfToken)
+    })
 
-    if (userEmailOpt.isEmpty) {
+    userEmailOpt.fold[Option[String]] {
       logger.debug(s"no session for xsrfToken: $xsrfToken")
       None
-    } else {
-      val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, userEmailOpt.get, userAgentHeader)
+    } {
+      session =>
+      val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
       logger.trace(s"testcookie: $cookieForUSerAndUserAgent")
       if (xsrfToken == xsrfTokenCookie && cookieForUSerAndUserAgent) {
-        logger.trace(s"request for active session: $userEmailOpt.get / $xsrfToken / $userAgentHeader")
-        userEmailOpt
+        logger.trace(s"request for active session: ${session.email} / $xsrfToken / $userAgentHeader")
+        Some(session.email)
       } else {
         logger.error("Invalid Token")
         None
@@ -216,7 +238,10 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     */
   def removeUserSessionCache(userEmail: String, xsrfToken: String): Unit = {
     // TODO here replace with DB cache
-    cache.remove(xsrfToken)
+    // cache.remove(xsrfToken)
+    dbSession.viaConnection(implicit connection => {
+      UserSession.deleteUserSessionByToken(xsrfToken)
+    })
   }
 
   /**

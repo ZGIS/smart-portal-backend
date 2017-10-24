@@ -4,7 +4,6 @@ CREATE TABLE sessions (
   token varchar(255) NOT NULL,
   useragent varchar(255) NOT NULL,
   email varchar(255) NOT NULL,
-  accountsubject varchar(255) NOT NULL,
   laststatustoken varchar(255) NOT NULL,
   laststatuschange TIMESTAMP NOT NULL,
   PRIMARY KEY (token)

@@ -27,7 +27,6 @@ import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc._
@@ -36,7 +35,6 @@ import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class AdminController @Inject()(val configuration: Configuration,
-                                val cache: CacheApi,
                                 val userService: UserService,
                                 val passwordHashing: PasswordHashing,
                                 emailService: EmailService,

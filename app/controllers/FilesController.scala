@@ -27,7 +27,6 @@ import javax.inject.Inject
 import models.ErrorResult
 import models.users.UserLinkLogging
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -39,13 +38,11 @@ import scala.util.Try
 /**
   *
   * @param configuration
-  * @param cache
   * @param passwordHashing
   * @param googleService
   * @param collectionsService
   */
 class FilesController @Inject()(val configuration: Configuration,
-                                val cache: CacheApi,
                                 val userService: UserService,
                                 val passwordHashing: PasswordHashing,
                                 googleService: GoogleServicesDAO,

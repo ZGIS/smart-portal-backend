@@ -34,9 +34,9 @@ import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
 import play.api.libs.ws.WSClient
-import play.api.mvc.{Action, AnyContentAsJson, Results}
+import play.api.mvc.{Action, Results}
+import play.api.test.FakeRequest
 import play.api.test.Helpers._
-import play.api.test.{FakeHeaders, FakeRequest}
 import play.api.{Application, Configuration}
 import services.{EmailService, OwcCollectionsService}
 import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}

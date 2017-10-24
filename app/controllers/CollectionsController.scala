@@ -26,7 +26,6 @@ import info.smart.models.owc100._
 import models.ErrorResult
 import org.apache.commons.lang3.StringEscapeUtils
 import play.api.Configuration
-import play.api.cache.CacheApi
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc.{Action, AnyContent, Controller}
 import services.{EmailService, OwcCollectionsService, UserService}
@@ -34,7 +33,6 @@ import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class CollectionsController @Inject()(val configuration: Configuration,
-                                      val cache: CacheApi,
                                       val userService: UserService,
                                       val passwordHashing: PasswordHashing,
                                       emailService: EmailService,

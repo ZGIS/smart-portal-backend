@@ -25,7 +25,6 @@ import java.util.UUID
 import javax.inject._
 
 import controllers.ProfileJs
-import models.ErrorResult
 import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration

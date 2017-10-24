@@ -21,7 +21,6 @@ package models.users
 
 import java.sql.Connection
 import java.time.ZonedDateTime
-import java.util.UUID
 
 import anorm.SqlParser.get
 import anorm.{NamedParameter, SQL, ~}

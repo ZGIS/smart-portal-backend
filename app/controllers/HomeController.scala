@@ -40,13 +40,12 @@ import scala.concurrent.duration._
   * HomeController, maybe rename? Provides login and logout
   *
   * @param configuration
-  * @param cache
+  * @param userService
   * @param passwordHashing
   * @param ws
   */
 @Singleton
 class HomeController @Inject()(val configuration: Configuration,
-                               val cache: CacheApi,
                                val userService: UserService,
                                val passwordHashing: PasswordHashing,
                                ws: WSClient) extends Controller with Security with ClassnameLogger {

@@ -32,8 +32,8 @@ import models.users._
 import play.api.Configuration
 import play.api.libs.json.Json
 import uk.gov.hmrc.emailaddress.EmailAddress
-import utils.{ClassnameLogger, GeoDateParserUtils}
 import utils.StringUtils._
+import utils.{ClassnameLogger, GeoDateParserUtils}
 
 import scala.util.{Success, Try}
 
@@ -248,7 +248,8 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
 
     val updatedTime = Try(OffsetDateTime.of(mdMetadata.citation.ciDate, LocalTime.of(12, 0), ZoneOffset.UTC))
       .getOrElse(OffsetDateTime.now(ZoneId.systemDefault()))
-    val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}_copy_${UUID.randomUUID().toString}")
+    // val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}_copy_${UUID.randomUUID().toString}")
+    val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
 
     val cswGetCapaOps = OwcOperation(
       code = "GetCapabilities",
@@ -346,7 +347,6 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     *
     * @param filename
     * @param contentType
-    * @param accountSubject
     * @param filelink
     * @param fileSize
     * @return

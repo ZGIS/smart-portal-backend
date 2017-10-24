@@ -18,14 +18,10 @@
  */
 
 import akka.stream.Materializer
-import akka.util.Timeout
 import controllers.routes
-import org.scalatestplus.play.OneAppPerTest
 import play.api.mvc.Results
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
-
-import scala.concurrent.duration._
 
 class CswControllerSpec extends WithDefaultTestFullAppAndDatabase with Results {
 

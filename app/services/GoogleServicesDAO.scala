@@ -44,8 +44,10 @@ trait AbstractCloudServiceDAO {
 
   // def getProviderAuthorization(authCredentials: AuthCredentials): Either[ErrorResult, ProviderAuthResponse]
 }
+
 /**
   * provide Google
+  *
   * @param configuration
   */
 @Singleton

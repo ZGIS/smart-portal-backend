@@ -32,7 +32,7 @@ import models.users.GAuthCredentials
 import play.api.Configuration
 import utils.ClassnameLogger
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 trait AbstractCloudServiceDAO {
 
@@ -104,10 +104,11 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
         GoogleFiles.asByteSource(fileHandle).openStream())
     }
 
-    if (blobTry.isSuccess)
-      Right(blobTry.get)
-    else
-      Left(ErrorResult("Blob creation in cloud storage failed.", Some(blobTry.failed.get.getLocalizedMessage)))
+    blobTry match {
+      case Success(blob) => Right(blob)
+      case Failure(ex) => Left(ErrorResult("Blob creation in cloud storage failed.", Some(ex.getLocalizedMessage)))
+    }
+
   }
 
   /**
@@ -137,10 +138,10 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
           gAuthRedirectUrl).execute()
       }
 
-      if (tokenTry.isSuccess)
-        Right(tokenTry.get)
-      else
-        Left(ErrorResult("Google OAuth Access failed.", Some(tokenTry.failed.get.getLocalizedMessage)))
+      tokenTry match {
+        case Success(tokenResponse) => Right(tokenResponse)
+        case Failure(ex) => Left(ErrorResult("Google OAuth Access failed.", Some(ex.getLocalizedMessage)))
+      }
     }
   }
 }

@@ -1,0 +1,1479 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          services/AdminService.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package services
+</span>21 <span style=''>
+</span>22 <span style=''>
+</span>23 <span style=''>import java.time.{ZoneId, ZonedDateTime}
+</span>24 <span style=''>import java.util.UUID
+</span>25 <span style=''>import javax.inject._
+</span>26 <span style=''>
+</span>27 <span style=''>import controllers.ProfileJs
+</span>28 <span style=''>import models.db.DatabaseSessionHolder
+</span>29 <span style=''>import models.users._
+</span>30 <span style=''>import play.api.Configuration
+</span>31 <span style=''>import play.api.cache.CacheApi
+</span>32 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>33 <span style=''>
+</span>34 <span style=''>@Singleton
+</span>35 <span style=''>class AdminService @Inject()(dbSession: DatabaseSessionHolder,
+</span>36 <span style=''>                             val passwordHashing: PasswordHashing,
+</span>37 <span style=''>                             cache: CacheApi,
+</span>38 <span style=''>                             configuration: Configuration) extends ClassnameLogger {
+</span>39 <span style=''>
+</span>40 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
+</span>41 <span style=''>
+</span>42 <span style=''>  /**
+</span>43 <span style=''>    * list all users, of course (also for admin) must not see password
+</span>44 <span style=''>    *
+</span>45 <span style=''>    * @return
+</span>46 <span style=''>    */
+</span>47 <span style=''>  def getallUsers: Seq[ProfileJs] = {
+</span>48 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>49 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.getAllUsers.map(u =&gt; u.asProfileJs)
+</span>50 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>51 <span style=''>  }
+</span>52 <span style=''>
+</span>53 <span style=''>  def blockUnblockUsers(command: String, email: String): Option[User] = {
+</span>54 <span style=''>    val userOpt = </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>55 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(email)
+</span>56 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>57 <span style=''>    </span><span style='background: #F0ADAD'>userOpt.fold[Option[User]]{
+</span>58 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>59 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>60 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>61 <span style=''></span><span style='background: #F0ADAD'>        val statusToken = if (command.equalsIgnoreCase(&quot;BLOCK&quot;)) StatusToken.BLOCKED else StatusToken.ACTIVE
+</span>62 <span style=''></span><span style='background: #F0ADAD'>        val updateUser = User(
+</span>63 <span style=''></span><span style='background: #F0ADAD'>          user.email,
+</span>64 <span style=''></span><span style='background: #F0ADAD'>          user.accountSubject,
+</span>65 <span style=''></span><span style='background: #F0ADAD'>          user.firstname,
+</span>66 <span style=''></span><span style='background: #F0ADAD'>          user.lastname,
+</span>67 <span style=''></span><span style='background: #F0ADAD'>          &quot;***&quot;,
+</span>68 <span style=''></span><span style='background: #F0ADAD'>          s&quot;${statusToken.value}:BY-ADMIN&quot;,
+</span>69 <span style=''></span><span style='background: #F0ADAD'>          ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>70 <span style=''></span><span style='background: #F0ADAD'>
+</span>71 <span style=''></span><span style='background: #F0ADAD'>        // result of Option can be evaluated upstream in controller
+</span>72 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction { implicit connection =&gt;
+</span>73 <span style=''></span><span style='background: #F0ADAD'>          UserDAO.updateNoPass(updateUser)
+</span>74 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>75 <span style=''></span><span style='background: #F0ADAD'>
+</span>76 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>77 <span style=''>  }
+</span>78 <span style=''>
+</span>79 <span style=''>  /**
+</span>80 <span style=''>    * list all files uploaded by users (for admin)
+</span>81 <span style=''>    *
+</span>82 <span style=''>    * @return
+</span>83 <span style=''>    */
+</span>84 <span style=''>  def getallUserFiles: Seq[UserFile] = {
+</span>85 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>86 <span style=''></span><span style='background: #F0ADAD'>      UserFile.getAllUserFiles
+</span>87 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>88 <span style=''>  }
+</span>89 <span style=''>
+</span>90 <span style=''>  /**
+</span>91 <span style=''>    * list all csw meta entries uploaded by users (for admin)
+</span>92 <span style=''>    *
+</span>93 <span style=''>    * @return
+</span>94 <span style=''>    */
+</span>95 <span style=''>  def getallUserMetaRecords: Seq[UserMetaRecord] = {
+</span>96 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>97 <span style=''></span><span style='background: #F0ADAD'>      UserMetaRecord.getAllUserMetaRecords
+</span>98 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>99 <span style=''>  }
+</span>100 <span style=''>
+</span>101 <span style=''>  /**
+</span>102 <span style=''>    * list all file request loggings (for admin)
+</span>103 <span style=''>    *
+</span>104 <span style=''>    * @return
+</span>105 <span style=''>    */
+</span>106 <span style=''>  def getAllUserLinkLoggings: Seq[UserLinkLogging] = {
+</span>107 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>108 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.getAllUserLinkLoggings
+</span>109 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>110 <span style=''>  }
+</span>111 <span style=''>
+</span>112 <span style=''>  /**
+</span>113 <span style=''>    * find file request loggings (for admin)
+</span>114 <span style=''>    *
+</span>115 <span style=''>    * @return
+</span>116 <span style=''>    */
+</span>117 <span style=''>  def findUserLinkLoggingsByLink(link: String): Seq[UserLinkLogging] = {
+</span>118 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>119 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.findUserLinkLoggingsByLink(link)
+</span>120 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>121 <span style=''>  }
+</span>122 <span style=''>
+</span>123 <span style=''>  /**
+</span>124 <span style=''>    * The first 5 fuctions handle user groups overall,
+</span>125 <span style=''>    * user groups have users with certain level of right,
+</span>126 <span style=''>    * and related owc contexts with a certain level of visibility and regulation to be edited
+</span>127 <span style=''>    *
+</span>128 <span style=''>    * the second row (3) functions allow access/modification of user rights within a group
+</span>129 <span style=''>    *
+</span>130 <span style=''>    * and third row (3) of functions expose owccontext regultation level
+</span>131 <span style=''>    *
+</span>132 <span style=''>    * However, access is unified via UserGroup object which has cascading awareness of
+</span>133 <span style=''>    * its user rigths and owccontext visibilty dependents
+</span>134 <span style=''>    *
+</span>135 <span style=''>    */
+</span>136 <span style=''>
+</span>137 <span style=''>  def getAllUserGroups: Seq[UserGroup] = {
+</span>138 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>139 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.getAllUserGroups
+</span>140 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>141 <span style=''>  }
+</span>142 <span style=''>
+</span>143 <span style=''>  def findUserGroupsById(uuid: UUID): Option[UserGroup] = {
+</span>144 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>145 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsById(uuid)
+</span>146 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>147 <span style=''>  }
+</span>148 <span style=''>
+</span>149 <span style=''>  def createUserGroup(userGroup: UserGroup): Option[UserGroup] = {
+</span>150 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>151 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.createUserGroup(userGroup: UserGroup)
+</span>152 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>153 <span style=''>  }
+</span>154 <span style=''>
+</span>155 <span style=''>  def updateUserGroup(userGroup: UserGroup): Option[UserGroup] = {
+</span>156 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>157 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.updateUserGroup(userGroup: UserGroup)
+</span>158 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>159 <span style=''>  }
+</span>160 <span style=''>
+</span>161 <span style=''>  def deleteUserGroup(userGroup: UserGroup): Boolean = {
+</span>162 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>163 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.deleteUserGroup(userGroup: UserGroup)
+</span>164 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>165 <span style=''>  }
+</span>166 <span style=''>
+</span>167 <span style=''>  /**
+</span>168 <span style=''>    * access to user rights via userGroupUsersLevels
+</span>169 <span style=''>    *
+</span>170 <span style=''>    */
+</span>171 <span style=''>
+</span>172 <span style=''>  def createUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
+</span>173 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>174 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)
+</span>175 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>176 <span style=''>  }
+</span>177 <span style=''>
+</span>178 <span style=''>  def updateUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
+</span>179 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>180 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.updateUserGroupUsersLevel(userGroupUsersLevel)
+</span>181 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>182 <span style=''>  }
+</span>183 <span style=''>
+</span>184 <span style=''>  def deleteUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Boolean = {
+</span>185 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>186 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)
+</span>187 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>188 <span style=''>  }
+</span>189 <span style=''>
+</span>190 <span style=''>  /**
+</span>191 <span style=''>    * access to user rights via userGroupUsersLevels
+</span>192 <span style=''>    *
+</span>193 <span style=''>    */
+</span>194 <span style=''>
+</span>195 <span style=''>  def createUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
+</span>196 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>197 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.createUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>198 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>199 <span style=''>  }
+</span>200 <span style=''>
+</span>201 <span style=''>  def updateUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
+</span>202 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>203 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.updateUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>204 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>205 <span style=''>  }
+</span>206 <span style=''>
+</span>207 <span style=''>  def deleteUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Boolean = {
+</span>208 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>209 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>210 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>211 <span style=''>  }
+</span>212 <span style=''>
+</span>213 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8965
+        </td>
+        <td>
+          1497
+          -
+          1571
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.configuration.getString(&quot;datetime.timezone&quot;, AdminService.this.configuration.getString$default$2).getOrElse[String](&quot;Pacific/Auckland&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          8969
+        </td>
+        <td>
+          1719
+          -
+          1825
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Seq[controllers.ProfileJs]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.getAllUsers(connection).map[controllers.ProfileJs, Seq[controllers.ProfileJs]](((u: models.users.User) =&gt; u.asProfileJs))(collection.this.Seq.canBuildFrom[controllers.ProfileJs])))
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          8968
+        </td>
+        <td>
+          1775
+          -
+          1818
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.getAllUsers(connection).map[controllers.ProfileJs, Seq[controllers.ProfileJs]](((u: models.users.User) =&gt; u.asProfileJs))(collection.this.Seq.canBuildFrom[controllers.ProfileJs])
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          8967
+        </td>
+        <td>
+          1798
+          -
+          1798
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[controllers.ProfileJs]
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          8966
+        </td>
+        <td>
+          1804
+          -
+          1817
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.asProfileJs
+        </td>
+        <td style="background: #F0ADAD">
+          u.asProfileJs
+        </td>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          8971
+        </td>
+        <td>
+          1923
+          -
+          2024
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findUserByEmailAsString(email)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          8970
+        </td>
+        <td>
+          1979
+          -
+          2017
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.findUserByEmailAsString
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.findUserByEmailAsString(email)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          8972
+        </td>
+        <td>
+          2063
+          -
+          2067
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          8992
+        </td>
+        <td>
+          2029
+          -
+          2654
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          userOpt.fold[Option[models.users.User]](scala.None)(((user: models.users.User) =&gt; {
+  val statusToken: Product with Serializable with models.users.StatusToken = if (command.equalsIgnoreCase(&quot;BLOCK&quot;))
+    models.users.StatusToken.BLOCKED
+  else
+    models.users.StatusToken.ACTIVE;
+  val updateUser: models.users.User = models.users.User.apply(user.email, user.accountSubject, user.firstname, user.lastname, &quot;***&quot;, scala.StringContext.apply(&quot;&quot;, &quot;:BY-ADMIN&quot;).s(statusToken.value), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(AdminService.this.appTimeZone)));
+  AdminService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updateNoPass(updateUser)(connection)))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8977
+        </td>
+        <td>
+          2180
+          -
+          2198
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.users.StatusToken.ACTIVE
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.ACTIVE
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8974
+        </td>
+        <td>
+          2155
+          -
+          2174
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.BLOCKED
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.BLOCKED
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8973
+        </td>
+        <td>
+          2120
+          -
+          2153
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.equalsIgnoreCase
+        </td>
+        <td style="background: #F0ADAD">
+          command.equalsIgnoreCase(&quot;BLOCK&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8976
+        </td>
+        <td>
+          2180
+          -
+          2198
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.ACTIVE
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.ACTIVE
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8975
+        </td>
+        <td>
+          2155
+          -
+          2174
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.users.StatusToken.BLOCKED
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.BLOCKED
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8989
+        </td>
+        <td>
+          2224
+          -
+          2467
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.User.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.User.apply(user.email, user.accountSubject, user.firstname, user.lastname, &quot;***&quot;, scala.StringContext.apply(&quot;&quot;, &quot;:BY-ADMIN&quot;).s(statusToken.value), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(AdminService.this.appTimeZone)))
+        </td>
+      </tr><tr>
+        <td>
+          63
+        </td>
+        <td>
+          8978
+        </td>
+        <td>
+          2240
+          -
+          2250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.email
+        </td>
+        <td style="background: #F0ADAD">
+          user.email
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          8979
+        </td>
+        <td>
+          2262
+          -
+          2281
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.accountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          user.accountSubject
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          8980
+        </td>
+        <td>
+          2293
+          -
+          2307
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.firstname
+        </td>
+        <td style="background: #F0ADAD">
+          user.firstname
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          8981
+        </td>
+        <td>
+          2319
+          -
+          2332
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.lastname
+        </td>
+        <td style="background: #F0ADAD">
+          user.lastname
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          8982
+        </td>
+        <td>
+          2344
+          -
+          2349
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;***&quot;
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8986
+        </td>
+        <td>
+          2361
+          -
+          2393
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:BY-ADMIN&quot;).s(statusToken.value)
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8983
+        </td>
+        <td>
+          2363
+          -
+          2364
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8985
+        </td>
+        <td>
+          2365
+          -
+          2382
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.value
+        </td>
+        <td style="background: #F0ADAD">
+          statusToken.value
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8984
+        </td>
+        <td>
+          2383
+          -
+          2393
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;:BY-ADMIN&quot;
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8988
+        </td>
+        <td>
+          2405
+          -
+          2466
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZonedDateTime.withZoneSameInstant
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(AdminService.this.appTimeZone))
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8987
+        </td>
+        <td>
+          2443
+          -
+          2465
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZoneId.of(AdminService.this.appTimeZone)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          8991
+        </td>
+        <td>
+          2545
+          -
+          2647
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updateNoPass(updateUser)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          8990
+        </td>
+        <td>
+          2605
+          -
+          2637
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.updateNoPass
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.updateNoPass(updateUser)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          8994
+        </td>
+        <td>
+          2789
+          -
+          2876
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Seq[models.users.UserFile]](((implicit connection: java.sql.Connection) =&gt; models.users.UserFile.getAllUserFiles()(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8993
+        </td>
+        <td>
+          2845
+          -
+          2869
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserFile.getAllUserFiles
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserFile.getAllUserFiles()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8996
+        </td>
+        <td>
+          3034
+          -
+          3133
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Seq[models.users.UserMetaRecord]](((implicit connection: java.sql.Connection) =&gt; models.users.UserMetaRecord.getAllUserMetaRecords()(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8995
+        </td>
+        <td>
+          3090
+          -
+          3126
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserMetaRecord.getAllUserMetaRecords
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserMetaRecord.getAllUserMetaRecords()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          8998
+        </td>
+        <td>
+          3280
+          -
+          3381
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Seq[models.users.UserLinkLogging]](((implicit connection: java.sql.Connection) =&gt; models.users.UserLinkLogging.getAllUserLinkLoggings()(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8997
+        </td>
+        <td>
+          3336
+          -
+          3374
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserLinkLogging.getAllUserLinkLoggings
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserLinkLogging.getAllUserLinkLoggings()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          9000
+        </td>
+        <td>
+          3542
+          -
+          3653
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaConnection[Seq[models.users.UserLinkLogging]](((implicit connection: java.sql.Connection) =&gt; models.users.UserLinkLogging.findUserLinkLoggingsByLink(link)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          8999
+        </td>
+        <td>
+          3598
+          -
+          3646
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserLinkLogging.findUserLinkLoggingsByLink
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserLinkLogging.findUserLinkLoggingsByLink(link)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          9002
+        </td>
+        <td>
+          4260
+          -
+          4349
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Seq[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.getAllUserGroups(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          9001
+        </td>
+        <td>
+          4316
+          -
+          4342
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.getAllUserGroups
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.getAllUserGroups(connection)
+        </td>
+      </tr><tr>
+        <td>
+          144
+        </td>
+        <td>
+          9004
+        </td>
+        <td>
+          4419
+          -
+          4516
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.findUserGroupsById(uuid)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          9003
+        </td>
+        <td>
+          4475
+          -
+          4509
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.findUserGroupsById
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.findUserGroupsById(uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          9006
+        </td>
+        <td>
+          4593
+          -
+          4703
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.createUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          9005
+        </td>
+        <td>
+          4649
+          -
+          4696
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.createUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.createUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          9008
+        </td>
+        <td>
+          4780
+          -
+          4890
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.updateUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          9007
+        </td>
+        <td>
+          4836
+          -
+          4883
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.updateUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.updateUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          9010
+        </td>
+        <td>
+          4957
+          -
+          5067
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          9009
+        </td>
+        <td>
+          5013
+          -
+          5060
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.deleteUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          173
+        </td>
+        <td>
+          9012
+        </td>
+        <td>
+          5257
+          -
+          5386
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroupUsersLevel]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          9011
+        </td>
+        <td>
+          5313
+          -
+          5379
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupUsersLevel.createUserGroupUsersLevel
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          9014
+        </td>
+        <td>
+          5503
+          -
+          5632
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroupUsersLevel]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupUsersLevel.updateUserGroupUsersLevel(userGroupUsersLevel)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          9013
+        </td>
+        <td>
+          5559
+          -
+          5625
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupUsersLevel.updateUserGroupUsersLevel
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupUsersLevel.updateUserGroupUsersLevel(userGroupUsersLevel)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          185
+        </td>
+        <td>
+          9016
+        </td>
+        <td>
+          5729
+          -
+          5858
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          186
+        </td>
+        <td>
+          9015
+        </td>
+        <td>
+          5785
+          -
+          5851
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupUsersLevel.deleteUserGroupUsersLevel
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          9018
+        </td>
+        <td>
+          6080
+          -
+          6233
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroupContextsVisibility]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupContextsVisibility.createUserGroupContextsVisibility(userGroupContextsVisibility)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          197
+        </td>
+        <td>
+          9017
+        </td>
+        <td>
+          6136
+          -
+          6226
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupContextsVisibility.createUserGroupContextsVisibility
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupContextsVisibility.createUserGroupContextsVisibility(userGroupContextsVisibility)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          202
+        </td>
+        <td>
+          9020
+        </td>
+        <td>
+          6382
+          -
+          6535
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Option[models.users.UserGroupContextsVisibility]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupContextsVisibility.updateUserGroupContextsVisibility(userGroupContextsVisibility)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          203
+        </td>
+        <td>
+          9019
+        </td>
+        <td>
+          6438
+          -
+          6528
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupContextsVisibility.updateUserGroupContextsVisibility
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupContextsVisibility.updateUserGroupContextsVisibility(userGroupContextsVisibility)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          208
+        </td>
+        <td>
+          9022
+        </td>
+        <td>
+          6656
+          -
+          6809
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          AdminService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          209
+        </td>
+        <td>
+          9021
+        </td>
+        <td>
+          6712
+          -
+          6802
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroupContextsVisibility.deleteUserGroupContextsVisibility
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)(connection)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

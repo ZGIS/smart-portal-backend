@@ -1,0 +1,2799 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcStyleSetDAO.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.io.InvalidClassException
+</span>23 <span style=''>import java.net.URL
+</span>24 <span style=''>import java.sql.Connection
+</span>25 <span style=''>import java.util.UUID
+</span>26 <span style=''>
+</span>27 <span style=''>import anorm.SqlParser._
+</span>28 <span style=''>import anorm._
+</span>29 <span style=''>import info.smart.models.owc100._
+</span>30 <span style=''>import utils.ClassnameLogger
+</span>31 <span style=''>import utils.StringUtils.OptionUuidConverters
+</span>32 <span style=''>
+</span>33 <span style=''>/** ************
+</span>34 <span style=''>  * OwcStyleSet
+</span>35 <span style=''>  * ************/
+</span>36 <span style=''>object OwcStyleSetDAO extends ClassnameLogger {
+</span>37 <span style=''>
+</span>38 <span style=''>  /**
+</span>39 <span style=''>    * content_uuid.map(u =&gt; u.toUuidOption.map(findOwcContentByUuid(_)).getOrElse(None)).getOrElse(None)
+</span>40 <span style=''>    *
+</span>41 <span style=''>    * @return
+</span>42 <span style=''>    */
+</span>43 <span style=''>  private def owcStyleSetParser(implicit connection: Connection): RowParser[OwcStyleSet] = {
+</span>44 <span style=''>      </span><span style='background: #AEF1AE'>str(&quot;owc_stylesets.name&quot;) ~
+</span>45 <span style=''></span><span style='background: #AEF1AE'>        str(&quot;title&quot;) ~
+</span>46 <span style=''></span><span style='background: #AEF1AE'>        get[Option[String]](&quot;owc_stylesets.abstrakt&quot;) ~
+</span>47 <span style=''></span><span style='background: #AEF1AE'>        get[Option[Boolean]](&quot;owc_stylesets.is_default&quot;) ~
+</span>48 <span style=''></span><span style='background: #AEF1AE'>        get[Option[String]](&quot;owc_stylesets.legend_url&quot;) ~
+</span>49 <span style=''></span><span style='background: #AEF1AE'>        get[Option[String]](&quot;owc_stylesets.content_uuid&quot;) ~
+</span>50 <span style=''></span><span style='background: #AEF1AE'>        str(&quot;owc_stylesets.uuid&quot;) map {
+</span>51 <span style=''></span><span style='background: #AEF1AE'>        case name ~ title ~ abstrakt ~ isDefault ~ legendUrl ~ content_uuid ~ uuidstring =&gt;
+</span>52 <span style=''></span><span style='background: #AEF1AE'>          OwcStyleSet(name = name,
+</span>53 <span style=''></span><span style='background: #AEF1AE'>            legendUrl = legendUrl.map(new URL(_)),
+</span>54 <span style=''></span><span style='background: #AEF1AE'>            title = title,
+</span>55 <span style=''></span><span style='background: #AEF1AE'>            abstrakt = abstrakt,
+</span>56 <span style=''></span><span style='background: #AEF1AE'>            default = isDefault,
+</span>57 <span style=''></span><span style='background: #AEF1AE'>            content = content_uuid.map(u =&gt; u.toUuidOption.map(OwcContentDAO.findOwcContentByUuid(_)).getOrElse(</span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>)).getOrElse(None),
+</span>58 <span style=''></span><span style='background: #AEF1AE'>            uuid = UUID.fromString(uuidstring))
+</span>59 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>60 <span style=''>  }
+</span>61 <span style=''>
+</span>62 <span style=''>  /**
+</span>63 <span style=''>    * Retrieve all OwcStyleSet.
+</span>64 <span style=''>    *
+</span>65 <span style=''>    * @param connection implicit connection
+</span>66 <span style=''>    * @return
+</span>67 <span style=''>    */
+</span>68 <span style=''>  def getAllOwcStyleSets(implicit connection: Connection): Seq[OwcStyleSet] = {
+</span>69 <span style=''>      </span><span style='background: #AEF1AE'>SQL(s&quot;select owc_stylesets.* from $tableOwcStyleSets&quot;).as(owcStyleSetParser *)</span><span style=''>
+</span>70 <span style=''>  }
+</span>71 <span style=''>
+</span>72 <span style=''>  /**
+</span>73 <span style=''>    * Find OwcStyleSets by uuid
+</span>74 <span style=''>    *
+</span>75 <span style=''>    * @param uuid
+</span>76 <span style=''>    * @param connection implicit connection
+</span>77 <span style=''>    * @return
+</span>78 <span style=''>    */
+</span>79 <span style=''>  def findOwcStyleSetByUuid(uuid: UUID)(implicit connection: Connection): Option[OwcStyleSet] = {
+</span>80 <span style=''>      </span><span style='background: #AEF1AE'>SQL(s&quot;&quot;&quot;select owc_stylesets.* from $tableOwcStyleSets where uuid = '${uuid.toString}'&quot;&quot;&quot;).as(owcStyleSetParser.singleOpt)</span><span style=''>
+</span>81 <span style=''>  }
+</span>82 <span style=''>
+</span>83 <span style=''>  /**
+</span>84 <span style=''>    * Create an OwcStyleSet.
+</span>85 <span style=''>    *
+</span>86 <span style=''>    * @param owcStyleSet
+</span>87 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>88 <span style=''>    * @return
+</span>89 <span style=''>    */
+</span>90 <span style=''>  def createOwcStyleSet(owcStyleSet: OwcStyleSet)(implicit connection: Connection): Option[OwcStyleSet] = {
+</span>91 <span style=''>    val pre: Boolean = if (</span><span style='background: #AEF1AE'>owcStyleSet.content.isDefined</span><span style=''>) </span><span style='background: #AEF1AE'>{
+</span>92 <span style=''></span><span style='background: #AEF1AE'>      val exists = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid).isDefined
+</span>93 <span style=''></span><span style='background: #AEF1AE'>      if (exists) </span><span style='background: #F0ADAD'>{
+</span>94 <span style=''></span><span style='background: #F0ADAD'>        logger.error(s&quot;(createOwcStyleSet) OwcContent with UUID: ${owcStyleSet.content.get.uuid} exists already, won't create OwcStyleSet&quot;)
+</span>95 <span style=''></span><span style='background: #F0ADAD'>        false
+</span>96 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style='background: #AEF1AE'> else {
+</span>97 <span style=''></span><span style='background: #AEF1AE'>        val insert = OwcContentDAO.createOwcContent(owcStyleSet.content.get)
+</span>98 <span style=''></span><span style='background: #AEF1AE'>        insert.isDefined
+</span>99 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>100 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> else {
+</span>101 <span style=''>      </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>102 <span style=''>    }
+</span>103 <span style=''>
+</span>104 <span style=''>    if (pre) </span><span style='background: #AEF1AE'>{
+</span>105 <span style=''></span><span style='background: #AEF1AE'>          val rowCount = SQL(
+</span>106 <span style=''></span><span style='background: #AEF1AE'>            s&quot;&quot;&quot;insert into $tableOwcStyleSets values (
+</span>107 <span style=''></span><span style='background: #AEF1AE'>              {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}
+</span>108 <span style=''></span><span style='background: #AEF1AE'>            )&quot;&quot;&quot;).on(
+</span>109 <span style=''></span><span style='background: #AEF1AE'>            'uuid -&gt; owcStyleSet.uuid.toString,
+</span>110 <span style=''></span><span style='background: #AEF1AE'>            'name -&gt; owcStyleSet.name,
+</span>111 <span style=''></span><span style='background: #AEF1AE'>            'title -&gt; owcStyleSet.title,
+</span>112 <span style=''></span><span style='background: #AEF1AE'>            'abstrakt -&gt; owcStyleSet.abstrakt,
+</span>113 <span style=''></span><span style='background: #AEF1AE'>            'isDefault -&gt; owcStyleSet.default,
+</span>114 <span style=''></span><span style='background: #AEF1AE'>            'legendUrl -&gt; owcStyleSet.legendUrl.map(_.toString),
+</span>115 <span style=''></span><span style='background: #AEF1AE'>            'content -&gt; owcStyleSet.content.map(_.uuid.toString)
+</span>116 <span style=''></span><span style='background: #AEF1AE'>          ).executeUpdate()
+</span>117 <span style=''></span><span style='background: #AEF1AE'>
+</span>118 <span style=''></span><span style='background: #AEF1AE'>          rowCount match {
+</span>119 <span style=''></span><span style='background: #AEF1AE'>            case 1 =&gt; Some(owcStyleSet)
+</span>120 <span style=''></span><span style='background: #AEF1AE'>            case _ =&gt; {
+</span>121 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>logger.error(&quot;OwcStyleSet couldn't be created&quot;)</span><span style='background: #AEF1AE'>
+</span>122 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>123 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>124 <span style=''></span><span style='background: #AEF1AE'>          }
+</span>125 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> else </span><span style='background: #F0ADAD'>{
+</span>126 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;Precondition failed, won't create OwcStyleSet&quot;)
+</span>127 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>128 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>129 <span style=''>  }
+</span>130 <span style=''>
+</span>131 <span style=''>  /**
+</span>132 <span style=''>    * Update single OwcStyleSet
+</span>133 <span style=''>    *
+</span>134 <span style=''>    * @param owcStyleSet
+</span>135 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>136 <span style=''>    * @return
+</span>137 <span style=''>    */
+</span>138 <span style=''>  def updateOwcStyleSet(owcStyleSet: OwcStyleSet)(implicit connection: Connection): Option[OwcStyleSet] = {
+</span>139 <span style=''>    val pre: Boolean = if (</span><span style='background: #AEF1AE'>owcStyleSet.content.isDefined</span><span style=''>) </span><span style='background: #AEF1AE'>{
+</span>140 <span style=''></span><span style='background: #AEF1AE'>        val exists = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid).isDefined
+</span>141 <span style=''></span><span style='background: #AEF1AE'>        if (exists) {
+</span>142 <span style=''></span><span style='background: #AEF1AE'>          val update = OwcContentDAO.updateOwcContent(owcStyleSet.content.get)
+</span>143 <span style=''></span><span style='background: #AEF1AE'>          update.isDefined
+</span>144 <span style=''></span><span style='background: #AEF1AE'>        } else {
+</span>145 <span style=''></span><span style='background: #AEF1AE'>          val insert = OwcContentDAO.createOwcContent(owcStyleSet.content.get)
+</span>146 <span style=''></span><span style='background: #AEF1AE'>          insert.isDefined
+</span>147 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>148 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''> else </span><span style='background: #AEF1AE'>{
+</span>149 <span style=''></span><span style='background: #AEF1AE'>        val toBeDeleted = findOwcStyleSetByUuid(owcStyleSet.uuid).map(_.content).getOrElse(</span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>)
+</span>150 <span style=''></span><span style='background: #AEF1AE'>        if (toBeDeleted.isDefined) {
+</span>151 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>OwcContentDAO.deleteOwcContent(toBeDeleted.get)</span><span style='background: #AEF1AE'>
+</span>152 <span style=''></span><span style='background: #AEF1AE'>        } else {
+</span>153 <span style=''></span><span style='background: #AEF1AE'>          true
+</span>154 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>155 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''>
+</span>156 <span style=''>
+</span>157 <span style=''>      if (pre) </span><span style='background: #AEF1AE'>{
+</span>158 <span style=''></span><span style='background: #AEF1AE'>        val rowCount1 = SQL(
+</span>159 <span style=''></span><span style='background: #AEF1AE'>          s&quot;&quot;&quot;update $tableOwcStyleSets set
+</span>160 <span style=''></span><span style='background: #AEF1AE'>            name = {name},
+</span>161 <span style=''></span><span style='background: #AEF1AE'>            title = {title},
+</span>162 <span style=''></span><span style='background: #AEF1AE'>            abstrakt = {abstrakt},
+</span>163 <span style=''></span><span style='background: #AEF1AE'>            is_default = {isDefault},
+</span>164 <span style=''></span><span style='background: #AEF1AE'>            legend_url = {legendUrl},
+</span>165 <span style=''></span><span style='background: #AEF1AE'>            content_uuid = {content} where uuid = {uuid}&quot;&quot;&quot;).on(
+</span>166 <span style=''></span><span style='background: #AEF1AE'>          'name -&gt; owcStyleSet.name,
+</span>167 <span style=''></span><span style='background: #AEF1AE'>          'title -&gt; owcStyleSet.title,
+</span>168 <span style=''></span><span style='background: #AEF1AE'>          'abstrakt -&gt; owcStyleSet.abstrakt,
+</span>169 <span style=''></span><span style='background: #AEF1AE'>          'isDefault -&gt; owcStyleSet.default,
+</span>170 <span style=''></span><span style='background: #AEF1AE'>          'legendUrl -&gt; owcStyleSet.legendUrl.map(_.toString),
+</span>171 <span style=''></span><span style='background: #AEF1AE'>          'content -&gt; owcStyleSet.content.map(_.uuid.toString),
+</span>172 <span style=''></span><span style='background: #AEF1AE'>          'uuid -&gt; owcStyleSet.uuid.toString
+</span>173 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>174 <span style=''></span><span style='background: #AEF1AE'>
+</span>175 <span style=''></span><span style='background: #AEF1AE'>        rowCount1 match {
+</span>176 <span style=''></span><span style='background: #AEF1AE'>          case 1 =&gt; Some(owcStyleSet)
+</span>177 <span style=''></span><span style='background: #AEF1AE'>          case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;OwcStyleSet couldn't be updated&quot;)</span><span style='background: #AEF1AE'>
+</span>178 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>None</span><span style='background: #AEF1AE'>
+</span>179 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>180 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''> else </span><span style='background: #F0ADAD'>{
+</span>181 <span style=''></span><span style='background: #F0ADAD'>        logger.error(&quot;Precondition failed, won't update OwcStyleSet&quot;)
+</span>182 <span style=''></span><span style='background: #F0ADAD'>        None
+</span>183 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style=''>
+</span>184 <span style=''>  }
+</span>185 <span style=''>
+</span>186 <span style=''>  /**
+</span>187 <span style=''>    * delete an OwcStyleSet by uuid
+</span>188 <span style=''>    *
+</span>189 <span style=''>    * @param owcStyleSet
+</span>190 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>191 <span style=''>    * @return
+</span>192 <span style=''>    */
+</span>193 <span style=''>  def deleteOwcStyleSet(owcStyleSet: OwcStyleSet)(implicit connection: Connection): Boolean = {
+</span>194 <span style=''>      val pre: Boolean = if (</span><span style='background: #AEF1AE'>owcStyleSet.content.isDefined</span><span style=''>) </span><span style='background: #AEF1AE'>{
+</span>195 <span style=''></span><span style='background: #AEF1AE'>        val exists = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid).isDefined
+</span>196 <span style=''></span><span style='background: #AEF1AE'>        if (exists) {
+</span>197 <span style=''></span><span style='background: #AEF1AE'>          val delete = OwcContentDAO.deleteOwcContent(owcStyleSet.content.get)
+</span>198 <span style=''></span><span style='background: #AEF1AE'>          delete
+</span>199 <span style=''></span><span style='background: #AEF1AE'>        } else {
+</span>200 <span style=''></span><span style='background: #AEF1AE'>          true
+</span>201 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>202 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''> else {
+</span>203 <span style=''>        </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>204 <span style=''>      }
+</span>205 <span style=''>
+</span>206 <span style=''>      if (pre) </span><span style='background: #AEF1AE'>{
+</span>207 <span style=''></span><span style='background: #AEF1AE'>        val rowCount = SQL(s&quot;delete from $tableOwcStyleSets where uuid = {uuid}&quot;).on(
+</span>208 <span style=''></span><span style='background: #AEF1AE'>          'uuid -&gt; owcStyleSet.uuid.toString
+</span>209 <span style=''></span><span style='background: #AEF1AE'>        ).executeUpdate()
+</span>210 <span style=''></span><span style='background: #AEF1AE'>
+</span>211 <span style=''></span><span style='background: #AEF1AE'>        rowCount match {
+</span>212 <span style=''></span><span style='background: #AEF1AE'>          case 1 =&gt; true
+</span>213 <span style=''></span><span style='background: #AEF1AE'>          case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;OwcStyleSet couldn't be deleted&quot;)</span><span style='background: #AEF1AE'>
+</span>214 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>false</span><span style='background: #AEF1AE'>
+</span>215 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>216 <span style=''></span><span style='background: #AEF1AE'>      }</span><span style=''> else </span><span style='background: #F0ADAD'>{
+</span>217 <span style=''></span><span style='background: #F0ADAD'>        logger.error(&quot;Precondition failed, won't delete OwcStyleSet&quot;)
+</span>218 <span style=''></span><span style='background: #F0ADAD'>        false
+</span>219 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style=''>
+</span>220 <span style=''>  }
+</span>221 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          6987
+        </td>
+        <td>
+          1496
+          -
+          1496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          6986
+        </td>
+        <td>
+          1497
+          -
+          1517
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.name&quot;
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          6988
+        </td>
+        <td>
+          1533
+          -
+          1540
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;title&quot;
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          6990
+        </td>
+        <td>
+          1529
+          -
+          1541
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;title&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          45
+        </td>
+        <td>
+          6989
+        </td>
+        <td>
+          1532
+          -
+          1532
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          6991
+        </td>
+        <td>
+          1572
+          -
+          1596
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.abstrakt&quot;
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          6994
+        </td>
+        <td>
+          1552
+          -
+          1597
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.abstrakt&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          6993
+        </td>
+        <td>
+          1571
+          -
+          1571
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          6992
+        </td>
+        <td>
+          1571
+          -
+          1571
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          6997
+        </td>
+        <td>
+          1628
+          -
+          1628
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[Boolean](owc.this.`package`.columnToBoolean)
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          6996
+        </td>
+        <td>
+          1628
+          -
+          1628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.owc.columnToBoolean
+        </td>
+        <td style="background: #AEF1AE">
+          owc.this.`package`.columnToBoolean
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          6995
+        </td>
+        <td>
+          1629
+          -
+          1655
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.is_default&quot;
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          6998
+        </td>
+        <td>
+          1608
+          -
+          1656
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[Boolean]](&quot;owc_stylesets.is_default&quot;)(anorm.this.Column.columnToOption[Boolean](owc.this.`package`.columnToBoolean))
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          7000
+        </td>
+        <td>
+          1686
+          -
+          1686
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          7002
+        </td>
+        <td>
+          1667
+          -
+          1714
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.legend_url&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          6999
+        </td>
+        <td>
+          1687
+          -
+          1713
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.legend_url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          48
+        </td>
+        <td>
+          7001
+        </td>
+        <td>
+          1686
+          -
+          1686
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          7006
+        </td>
+        <td>
+          1725
+          -
+          1774
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.content_uuid&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          7003
+        </td>
+        <td>
+          1745
+          -
+          1773
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.content_uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          7005
+        </td>
+        <td>
+          1744
+          -
+          1744
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          7004
+        </td>
+        <td>
+          1744
+          -
+          1744
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          7009
+        </td>
+        <td>
+          1785
+          -
+          1810
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_stylesets.uuid&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          7008
+        </td>
+        <td>
+          1788
+          -
+          1788
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          7019
+        </td>
+        <td>
+          1493
+          -
+          2279
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_stylesets.name&quot;)(anorm.this.Column.columnToString).~[String](anorm.SqlParser.str(&quot;title&quot;)(anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.abstrakt&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[Boolean]](anorm.SqlParser.get[Option[Boolean]](&quot;owc_stylesets.is_default&quot;)(anorm.this.Column.columnToOption[Boolean](owc.this.`package`.columnToBoolean))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.legend_url&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;owc_stylesets.content_uuid&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[String](anorm.SqlParser.str(&quot;owc_stylesets.uuid&quot;)(anorm.this.Column.columnToString)).map[info.smart.models.owc100.OwcStyleSet](((x0$1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]],Option[String]],String]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]],Option[String]], _2: String)anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]],Option[String]],String]((_1: anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]],Option[String]]((_1: anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]],Option[String]]((_1: anorm.~[anorm.~[String,String],Option[String]], _2: Option[Boolean])anorm.~[anorm.~[anorm.~[String,String],Option[String]],Option[Boolean]]((_1: anorm.~[String,String], _2: Option[String])anorm.~[anorm.~[String,String],Option[String]]((_1: String, _2: String)anorm.~[String,String]((name @ _), (title @ _)), (abstrakt @ _)), (isDefault @ _)), (legendUrl @ _)), (content_uuid @ _)), (uuidstring @ _)) =&gt; {
+    &lt;artifact&gt; val x$8: String = name;
+    &lt;artifact&gt; val x$9: Option[java.net.URL] @scala.reflect.internal.annotations.uncheckedBounds = legendUrl.map[java.net.URL](((x$1: String) =&gt; new java.net.URL(x$1)));
+    &lt;artifact&gt; val x$10: String = title;
+    &lt;artifact&gt; val x$11: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = abstrakt;
+    &lt;artifact&gt; val x$12: Option[Boolean] @scala.reflect.internal.annotations.uncheckedBounds = isDefault;
+    &lt;artifact&gt; val x$13: Option[info.smart.models.owc100.OwcContent] @scala.reflect.internal.annotations.uncheckedBounds = content_uuid.map[Option[info.smart.models.owc100.OwcContent]](((u: String) =&gt; utils.StringUtils.OptionUuidConverters(u).toUuidOption.map[Option[info.smart.models.owc100.OwcContent]](((x$2: java.util.UUID) =&gt; OwcContentDAO.findOwcContentByUuid(x$2)(connection))).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None))).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None);
+    &lt;artifact&gt; val x$14: java.util.UUID = java.util.UUID.fromString(uuidstring);
+    info.smart.models.owc100.OwcStyleSet.apply(x$8, x$10, x$11, x$12, x$9, x$13, x$14)
+  }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          7007
+        </td>
+        <td>
+          1789
+          -
+          1809
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_stylesets.uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          52
+        </td>
+        <td>
+          7018
+        </td>
+        <td>
+          1919
+          -
+          2271
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcStyleSet.apply
+        </td>
+        <td style="background: #AEF1AE">
+          info.smart.models.owc100.OwcStyleSet.apply(x$8, x$10, x$11, x$12, x$9, x$13, x$14)
+        </td>
+      </tr><tr>
+        <td>
+          53
+        </td>
+        <td>
+          7011
+        </td>
+        <td>
+          1968
+          -
+          1993
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.map
+        </td>
+        <td style="background: #AEF1AE">
+          legendUrl.map[java.net.URL](((x$1: String) =&gt; new java.net.URL(x$1)))
+        </td>
+      </tr><tr>
+        <td>
+          53
+        </td>
+        <td>
+          7010
+        </td>
+        <td>
+          1982
+          -
+          1992
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.net.URL.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new java.net.URL(x$1)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          7015
+        </td>
+        <td>
+          2217
+          -
+          2221
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          7012
+        </td>
+        <td>
+          2151
+          -
+          2188
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.findOwcContentByUuid
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.findOwcContentByUuid(x$2)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          7014
+        </td>
+        <td>
+          2132
+          -
+          2205
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          utils.StringUtils.OptionUuidConverters(u).toUuidOption.map[Option[info.smart.models.owc100.OwcContent]](((x$2: java.util.UUID) =&gt; OwcContentDAO.findOwcContentByUuid(x$2)(connection))).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          7016
+        </td>
+        <td>
+          2110
+          -
+          2222
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          content_uuid.map[Option[info.smart.models.owc100.OwcContent]](((u: String) =&gt; utils.StringUtils.OptionUuidConverters(u).toUuidOption.map[Option[info.smart.models.owc100.OwcContent]](((x$2: java.util.UUID) =&gt; OwcContentDAO.findOwcContentByUuid(x$2)(connection))).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None))).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          57
+        </td>
+        <td>
+          7013
+        </td>
+        <td>
+          2200
+          -
+          2204
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          7017
+        </td>
+        <td>
+          2243
+          -
+          2270
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuidstring)
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          7020
+        </td>
+        <td>
+          2480
+          -
+          2558
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_stylesets.* from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcStyleSets))).as[List[info.smart.models.owc100.OwcStyleSet]](OwcStyleSetDAO.this.owcStyleSetParser(connection).*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          7021
+        </td>
+        <td>
+          2795
+          -
+          2917
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_stylesets.* from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcStyleSets, uuid.toString()))).as[Option[info.smart.models.owc100.OwcStyleSet]](OwcStyleSetDAO.this.owcStyleSetParser(connection).singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          7035
+        </td>
+        <td>
+          3274
+          -
+          3674
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val exists: Boolean = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined;
+  if (exists)
+    {
+      OwcStyleSetDAO.this.logger.error(scala.StringContext.apply(&quot;(createOwcStyleSet) OwcContent with UUID: &quot;, &quot; exists already, won\'t create OwcStyleSet&quot;).s(owcStyleSet.content.get.uuid));
+      false
+    }
+  else
+    {
+      val insert: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection);
+      insert.isDefined
+    }
+}
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          7022
+        </td>
+        <td>
+          3243
+          -
+          3272
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          7024
+        </td>
+        <td>
+          3295
+          -
+          3369
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          7023
+        </td>
+        <td>
+          3330
+          -
+          3358
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContent.uuid
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.get.uuid
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          7031
+        </td>
+        <td>
+          3388
+          -
+          3551
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  OwcStyleSetDAO.this.logger.error(scala.StringContext.apply(&quot;(createOwcStyleSet) OwcContent with UUID: &quot;, &quot; exists already, won\'t create OwcStyleSet&quot;).s(owcStyleSet.content.get.uuid));
+  false
+}
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          7027
+        </td>
+        <td>
+          3457
+          -
+          3485
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContent.uuid
+        </td>
+        <td style="background: #F0ADAD">
+          owcStyleSet.content.get.uuid
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          7029
+        </td>
+        <td>
+          3398
+          -
+          3529
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(scala.StringContext.apply(&quot;(createOwcStyleSet) OwcContent with UUID: &quot;, &quot; exists already, won\'t create OwcStyleSet&quot;).s(owcStyleSet.content.get.uuid))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          7026
+        </td>
+        <td>
+          3486
+          -
+          3528
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; exists already, won\'t create OwcStyleSet&quot;
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          7025
+        </td>
+        <td>
+          3413
+          -
+          3456
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;(createOwcStyleSet) OwcContent with UUID: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          7028
+        </td>
+        <td>
+          3411
+          -
+          3528
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;(createOwcStyleSet) OwcContent with UUID: &quot;, &quot; exists already, won\'t create OwcStyleSet&quot;).s(owcStyleSet.content.get.uuid)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          7030
+        </td>
+        <td>
+          3538
+          -
+          3543
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          7034
+        </td>
+        <td>
+          3557
+          -
+          3668
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val insert: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection);
+  insert.isDefined
+}
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          7032
+        </td>
+        <td>
+          3580
+          -
+          3635
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.createOwcContent
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          7033
+        </td>
+        <td>
+          3644
+          -
+          3660
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          insert.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          7036
+        </td>
+        <td>
+          3688
+          -
+          3692
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          7037
+        </td>
+        <td>
+          3688
+          -
+          3692
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          7042
+        </td>
+        <td>
+          3713
+          -
+          4494
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;insert into &quot;, &quot; values (\n              {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}\n            )&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$18: String = a;
+    &lt;artifact&gt; val x$19: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$20: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$18);
+    anorm.this.ParameterValue.toParameterValue[String](x$18)(x$20, x$19)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;name&quot;)).-&gt;[String](owcStyleSet.name))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$24: String = a;
+    &lt;artifact&gt; val x$25: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$26: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$24);
+    anorm.this.ParameterValue.toParameterValue[String](x$24)(x$26, x$25)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[String](owcStyleSet.title))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$30: String = a;
+    &lt;artifact&gt; val x$31: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$32: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$30);
+    anorm.this.ParameterValue.toParameterValue[String](x$30)(x$32, x$31)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;abstrakt&quot;)).-&gt;[Option[String]](owcStyleSet.abstrakt))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$36: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$37: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$38: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$36);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$36)(x$38, x$37)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Boolean]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;isDefault&quot;)).-&gt;[Option[Boolean]](owcStyleSet.default))({
+  ((a: Option[Boolean]) =&gt; {
+    &lt;artifact&gt; val x$42: Option[Boolean] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$43: anorm.ToStatement[Option[Boolean]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Boolean](anorm.this.ToStatement.booleanToStatement, anorm.this.ParameterMetaData.BooleanParameterMetaData);
+    &lt;artifact&gt; val x$44: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Boolean]](x$42);
+    anorm.this.ParameterValue.toParameterValue[Option[Boolean]](x$42)(x$44, x$43)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;legendUrl&quot;)).-&gt;[Option[String]](owcStyleSet.legendUrl.map[String](((x$3: java.net.URL) =&gt; x$3.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$49: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$50: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$48);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$48)(x$50, x$49)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcStyleSet.content.map[String](((x$4: info.smart.models.owc100.OwcContent) =&gt; x$4.uuid.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$55: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$56: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$54);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$54)(x$56, x$55)
+  })
+})).executeUpdate()(connection);
+  rowCount match {
+    case 1 =&gt; scala.Some.apply[info.smart.models.owc100.OwcStyleSet](owcStyleSet)
+    case _ =&gt; {
+      OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be created&quot;);
+      scala.None
+    }
+  }
+}
+        </td>
+      </tr><tr>
+        <td>
+          116
+        </td>
+        <td>
+          7038
+        </td>
+        <td>
+          3740
+          -
+          4289
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;insert into &quot;, &quot; values (\n              {uuid}, {name}, {title}, {abstrakt}, {isDefault}, {legendUrl}, {content}\n            )&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$18: String = a;
+    &lt;artifact&gt; val x$19: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$20: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$18);
+    anorm.this.ParameterValue.toParameterValue[String](x$18)(x$20, x$19)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;name&quot;)).-&gt;[String](owcStyleSet.name))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$24: String = a;
+    &lt;artifact&gt; val x$25: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$26: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$24);
+    anorm.this.ParameterValue.toParameterValue[String](x$24)(x$26, x$25)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[String](owcStyleSet.title))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$30: String = a;
+    &lt;artifact&gt; val x$31: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$32: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$30);
+    anorm.this.ParameterValue.toParameterValue[String](x$30)(x$32, x$31)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;abstrakt&quot;)).-&gt;[Option[String]](owcStyleSet.abstrakt))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$36: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$37: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$38: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$36);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$36)(x$38, x$37)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Boolean]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;isDefault&quot;)).-&gt;[Option[Boolean]](owcStyleSet.default))({
+  ((a: Option[Boolean]) =&gt; {
+    &lt;artifact&gt; val x$42: Option[Boolean] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$43: anorm.ToStatement[Option[Boolean]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Boolean](anorm.this.ToStatement.booleanToStatement, anorm.this.ParameterMetaData.BooleanParameterMetaData);
+    &lt;artifact&gt; val x$44: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Boolean]](x$42);
+    anorm.this.ParameterValue.toParameterValue[Option[Boolean]](x$42)(x$44, x$43)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;legendUrl&quot;)).-&gt;[Option[String]](owcStyleSet.legendUrl.map[String](((x$3: java.net.URL) =&gt; x$3.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$48: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$49: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$50: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$48);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$48)(x$50, x$49)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcStyleSet.content.map[String](((x$4: info.smart.models.owc100.OwcContent) =&gt; x$4.uuid.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$54: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$55: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$56: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$54);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$54)(x$56, x$55)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          7039
+        </td>
+        <td>
+          4340
+          -
+          4357
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcStyleSet](owcStyleSet)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          7040
+        </td>
+        <td>
+          4396
+          -
+          4443
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be created&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          7041
+        </td>
+        <td>
+          4458
+          -
+          4462
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          7045
+        </td>
+        <td>
+          4500
+          -
+          4586
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t create OwcStyleSet&quot;);
+  scala.None
+}
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          7043
+        </td>
+        <td>
+          4508
+          -
+          4569
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t create OwcStyleSet&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          7044
+        </td>
+        <td>
+          4576
+          -
+          4580
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          7046
+        </td>
+        <td>
+          4915
+          -
+          4944
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          7055
+        </td>
+        <td>
+          4946
+          -
+          5312
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val exists: Boolean = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined;
+  if (exists)
+    {
+      val update: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.updateOwcContent(owcStyleSet.content.get)(connection);
+      update.isDefined
+    }
+  else
+    {
+      val insert: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection);
+      insert.isDefined
+    }
+}
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          7048
+        </td>
+        <td>
+          4969
+          -
+          5043
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          7047
+        </td>
+        <td>
+          5004
+          -
+          5032
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContent.uuid
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.get.uuid
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          7051
+        </td>
+        <td>
+          5064
+          -
+          5181
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val update: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.updateOwcContent(owcStyleSet.content.get)(connection);
+  update.isDefined
+}
+        </td>
+      </tr><tr>
+        <td>
+          142
+        </td>
+        <td>
+          7049
+        </td>
+        <td>
+          5089
+          -
+          5144
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.updateOwcContent
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.updateOwcContent(owcStyleSet.content.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          7050
+        </td>
+        <td>
+          5155
+          -
+          5171
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          update.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          144
+        </td>
+        <td>
+          7054
+        </td>
+        <td>
+          5187
+          -
+          5304
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val insert: Option[info.smart.models.owc100.OwcContent] = OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection);
+  insert.isDefined
+}
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          7052
+        </td>
+        <td>
+          5212
+          -
+          5267
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.createOwcContent
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.createOwcContent(owcStyleSet.content.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          7053
+        </td>
+        <td>
+          5278
+          -
+          5294
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          insert.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          7065
+        </td>
+        <td>
+          5318
+          -
+          5561
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val toBeDeleted: Option[info.smart.models.owc100.OwcContent] = OwcStyleSetDAO.this.findOwcStyleSetByUuid(owcStyleSet.uuid)(connection).map[Option[info.smart.models.owc100.OwcContent]](((x$5: info.smart.models.owc100.OwcStyleSet) =&gt; x$5.content)).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None);
+  if (toBeDeleted.isDefined)
+    OwcContentDAO.deleteOwcContent(toBeDeleted.get)(connection)
+  else
+    true
+}
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          7057
+        </td>
+        <td>
+          5390
+          -
+          5399
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcStyleSet.content
+        </td>
+        <td style="background: #AEF1AE">
+          x$5.content
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          7056
+        </td>
+        <td>
+          5368
+          -
+          5384
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcStyleSet.uuid
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.uuid
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          7059
+        </td>
+        <td>
+          5346
+          -
+          5416
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          OwcStyleSetDAO.this.findOwcStyleSetByUuid(owcStyleSet.uuid)(connection).map[Option[info.smart.models.owc100.OwcContent]](((x$5: info.smart.models.owc100.OwcStyleSet) =&gt; x$5.content)).getOrElse[Option[info.smart.models.owc100.OwcContent]](scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          7058
+        </td>
+        <td>
+          5411
+          -
+          5415
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          7060
+        </td>
+        <td>
+          5429
+          -
+          5450
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          toBeDeleted.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          7062
+        </td>
+        <td>
+          5464
+          -
+          5511
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.owc.OwcContentDAO.deleteOwcContent
+        </td>
+        <td style="background: #F0ADAD">
+          OwcContentDAO.deleteOwcContent(toBeDeleted.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          7061
+        </td>
+        <td>
+          5464
+          -
+          5511
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.deleteOwcContent
+        </td>
+        <td style="background: #F0ADAD">
+          OwcContentDAO.deleteOwcContent(toBeDeleted.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          7063
+        </td>
+        <td>
+          5539
+          -
+          5543
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          7064
+        </td>
+        <td>
+          5539
+          -
+          5543
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          157
+        </td>
+        <td>
+          7070
+        </td>
+        <td>
+          5578
+          -
+          6416
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val rowCount1: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;update &quot;, &quot; set\n            name = {name},\n            title = {title},\n            abstrakt = {abstrakt},\n            is_default = {isDefault},\n            legend_url = {legendUrl},\n            content_uuid = {content} where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;name&quot;)).-&gt;[String](owcStyleSet.name))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$60: String = a;
+    &lt;artifact&gt; val x$61: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$62: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$60);
+    anorm.this.ParameterValue.toParameterValue[String](x$60)(x$62, x$61)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[String](owcStyleSet.title))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$66: String = a;
+    &lt;artifact&gt; val x$67: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$68: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$66);
+    anorm.this.ParameterValue.toParameterValue[String](x$66)(x$68, x$67)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;abstrakt&quot;)).-&gt;[Option[String]](owcStyleSet.abstrakt))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$72: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$73: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$74: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$72);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$72)(x$74, x$73)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Boolean]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;isDefault&quot;)).-&gt;[Option[Boolean]](owcStyleSet.default))({
+  ((a: Option[Boolean]) =&gt; {
+    &lt;artifact&gt; val x$78: Option[Boolean] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$79: anorm.ToStatement[Option[Boolean]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Boolean](anorm.this.ToStatement.booleanToStatement, anorm.this.ParameterMetaData.BooleanParameterMetaData);
+    &lt;artifact&gt; val x$80: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Boolean]](x$78);
+    anorm.this.ParameterValue.toParameterValue[Option[Boolean]](x$78)(x$80, x$79)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;legendUrl&quot;)).-&gt;[Option[String]](owcStyleSet.legendUrl.map[String](((x$6: java.net.URL) =&gt; x$6.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$84: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$85: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$86: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$84);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$84)(x$86, x$85)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcStyleSet.content.map[String](((x$7: info.smart.models.owc100.OwcContent) =&gt; x$7.uuid.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$90: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$91: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$92: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$90);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$90)(x$92, x$91)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$96: String = a;
+    &lt;artifact&gt; val x$97: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$98: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$96);
+    anorm.this.ParameterValue.toParameterValue[String](x$96)(x$98, x$97)
+  })
+})).executeUpdate()(connection);
+  rowCount1 match {
+    case 1 =&gt; scala.Some.apply[info.smart.models.owc100.OwcStyleSet](owcStyleSet)
+    case _ =&gt; {
+      OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be updated&quot;);
+      scala.None
+    }
+  }
+}
+        </td>
+      </tr><tr>
+        <td>
+          173
+        </td>
+        <td>
+          7066
+        </td>
+        <td>
+          5604
+          -
+          6248
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;update &quot;, &quot; set\n            name = {name},\n            title = {title},\n            abstrakt = {abstrakt},\n            is_default = {isDefault},\n            legend_url = {legendUrl},\n            content_uuid = {content} where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;name&quot;)).-&gt;[String](owcStyleSet.name))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$60: String = a;
+    &lt;artifact&gt; val x$61: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$62: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$60);
+    anorm.this.ParameterValue.toParameterValue[String](x$60)(x$62, x$61)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;title&quot;)).-&gt;[String](owcStyleSet.title))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$66: String = a;
+    &lt;artifact&gt; val x$67: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$68: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$66);
+    anorm.this.ParameterValue.toParameterValue[String](x$66)(x$68, x$67)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;abstrakt&quot;)).-&gt;[Option[String]](owcStyleSet.abstrakt))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$72: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$73: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$74: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$72);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$72)(x$74, x$73)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Boolean]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;isDefault&quot;)).-&gt;[Option[Boolean]](owcStyleSet.default))({
+  ((a: Option[Boolean]) =&gt; {
+    &lt;artifact&gt; val x$78: Option[Boolean] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$79: anorm.ToStatement[Option[Boolean]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Boolean](anorm.this.ToStatement.booleanToStatement, anorm.this.ParameterMetaData.BooleanParameterMetaData);
+    &lt;artifact&gt; val x$80: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Boolean]](x$78);
+    anorm.this.ParameterValue.toParameterValue[Option[Boolean]](x$78)(x$80, x$79)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;legendUrl&quot;)).-&gt;[Option[String]](owcStyleSet.legendUrl.map[String](((x$6: java.net.URL) =&gt; x$6.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$84: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$85: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$86: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$84);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$84)(x$86, x$85)
+  })
+}), anorm.this.NamedParameter.symbol[Option[String]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;content&quot;)).-&gt;[Option[String]](owcStyleSet.content.map[String](((x$7: info.smart.models.owc100.OwcContent) =&gt; x$7.uuid.toString()))))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$90: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$91: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$92: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$90);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$90)(x$92, x$91)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$96: String = a;
+    &lt;artifact&gt; val x$97: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$98: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$96);
+    anorm.this.ParameterValue.toParameterValue[String](x$96)(x$98, x$97)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          7067
+        </td>
+        <td>
+          6296
+          -
+          6313
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcStyleSet](owcStyleSet)
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          7068
+        </td>
+        <td>
+          6334
+          -
+          6381
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be updated&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          7069
+        </td>
+        <td>
+          6394
+          -
+          6398
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          180
+        </td>
+        <td>
+          7073
+        </td>
+        <td>
+          6422
+          -
+          6514
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t update OwcStyleSet&quot;);
+  scala.None
+}
+        </td>
+      </tr><tr>
+        <td>
+          181
+        </td>
+        <td>
+          7071
+        </td>
+        <td>
+          6432
+          -
+          6493
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t update OwcStyleSet&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          182
+        </td>
+        <td>
+          7072
+        </td>
+        <td>
+          6502
+          -
+          6506
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          7081
+        </td>
+        <td>
+          6868
+          -
+          7133
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val exists: Boolean = OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined;
+  if (exists)
+    {
+      val delete: Boolean = OwcContentDAO.deleteOwcContent(owcStyleSet.content.get)(connection);
+      delete
+    }
+  else
+    true
+}
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          7074
+        </td>
+        <td>
+          6837
+          -
+          6866
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.isDefined
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          7075
+        </td>
+        <td>
+          6926
+          -
+          6954
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcContent.uuid
+        </td>
+        <td style="background: #AEF1AE">
+          owcStyleSet.content.get.uuid
+        </td>
+      </tr><tr>
+        <td>
+          195
+        </td>
+        <td>
+          7076
+        </td>
+        <td>
+          6891
+          -
+          6965
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isDefined
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.findOwcContentByUuid(owcStyleSet.content.get.uuid)(connection).isDefined
+        </td>
+      </tr><tr>
+        <td>
+          196
+        </td>
+        <td>
+          7078
+        </td>
+        <td>
+          6986
+          -
+          7093
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val delete: Boolean = OwcContentDAO.deleteOwcContent(owcStyleSet.content.get)(connection);
+  delete
+}
+        </td>
+      </tr><tr>
+        <td>
+          197
+        </td>
+        <td>
+          7077
+        </td>
+        <td>
+          7011
+          -
+          7066
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcContentDAO.deleteOwcContent
+        </td>
+        <td style="background: #AEF1AE">
+          OwcContentDAO.deleteOwcContent(owcStyleSet.content.get)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          7080
+        </td>
+        <td>
+          7111
+          -
+          7115
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          7079
+        </td>
+        <td>
+          7111
+          -
+          7115
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          203
+        </td>
+        <td>
+          7083
+        </td>
+        <td>
+          7149
+          -
+          7153
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          203
+        </td>
+        <td>
+          7082
+        </td>
+        <td>
+          7149
+          -
+          7153
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          206
+        </td>
+        <td>
+          7088
+        </td>
+        <td>
+          7178
+          -
+          7491
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val rowCount: Int = anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$102: String = a;
+    &lt;artifact&gt; val x$103: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$104: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$102);
+    anorm.this.ParameterValue.toParameterValue[String](x$102)(x$104, x$103)
+  })
+})).executeUpdate()(connection);
+  rowCount match {
+    case 1 =&gt; true
+    case _ =&gt; {
+      OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be deleted&quot;);
+      false
+    }
+  }
+}
+        </td>
+      </tr><tr>
+        <td>
+          209
+        </td>
+        <td>
+          7084
+        </td>
+        <td>
+          7203
+          -
+          7336
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcStyleSets))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcStyleSet.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$102: String = a;
+    &lt;artifact&gt; val x$103: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$104: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$102);
+    anorm.this.ParameterValue.toParameterValue[String](x$102)(x$104, x$103)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          212
+        </td>
+        <td>
+          7085
+        </td>
+        <td>
+          7383
+          -
+          7387
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          213
+        </td>
+        <td>
+          7086
+        </td>
+        <td>
+          7408
+          -
+          7455
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;OwcStyleSet couldn\'t be deleted&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          214
+        </td>
+        <td>
+          7087
+        </td>
+        <td>
+          7468
+          -
+          7473
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          7091
+        </td>
+        <td>
+          7497
+          -
+          7590
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t delete OwcStyleSet&quot;);
+  false
+}
+        </td>
+      </tr><tr>
+        <td>
+          217
+        </td>
+        <td>
+          7089
+        </td>
+        <td>
+          7507
+          -
+          7568
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcStyleSetDAO.this.logger.error(&quot;Precondition failed, won\'t delete OwcStyleSet&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          218
+        </td>
+        <td>
+          7090
+        </td>
+        <td>
+          7577
+          -
+          7582
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

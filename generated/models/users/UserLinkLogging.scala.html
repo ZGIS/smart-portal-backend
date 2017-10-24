@@ -1,0 +1,2108 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/users/UserLinkLogging.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.users
+</span>21 <span style=''>
+</span>22 <span style=''>import java.sql.Connection
+</span>23 <span style=''>import java.time.ZonedDateTime
+</span>24 <span style=''>
+</span>25 <span style=''>import anorm.SqlParser.get
+</span>26 <span style=''>import anorm.{NamedParameter, SQL, ~}
+</span>27 <span style=''>import utils.ClassnameLogger
+</span>28 <span style=''>
+</span>29 <span style=''>/*
+</span>30 <span style=''>CREATE TABLE consentlogging (
+</span>31 <span style=''>id BIGINT SERIAL NOT NULL ,
+</span>32 <span style=''>timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+</span>33 <span style=''>ipaddress varchar(255),
+</span>34 <span style=''>useragent varchar(255),
+</span>35 <span style=''>email varchar(255),
+</span>36 <span style=''>accountsubject varchar(255),
+</span>37 <span style=''>link TEXT,
+</span>38 <span style=''>referrer TEXT,
+</span>39 <span style=''>PRIMARY KEY (id)
+</span>40 <span style=''>);
+</span>41 <span style=''>*/
+</span>42 <span style=''>
+</span>43 <span style=''>/**
+</span>44 <span style=''>  *
+</span>45 <span style=''>  * @param id
+</span>46 <span style=''>  * @param timestamp
+</span>47 <span style=''>  * @param ipaddress
+</span>48 <span style=''>  * @param useragent
+</span>49 <span style=''>  * @param email
+</span>50 <span style=''>  * @param link
+</span>51 <span style=''>  * @param referer
+</span>52 <span style=''>  */
+</span>53 <span style=''>case class UserLinkLogging(id: Option[Long],
+</span>54 <span style=''>                           timestamp: ZonedDateTime,
+</span>55 <span style=''>                           ipaddress: Option[String],
+</span>56 <span style=''>                           useragent: Option[String],
+</span>57 <span style=''>                           email: Option[String],
+</span>58 <span style=''>                           link: String,
+</span>59 <span style=''>                           referer: Option[String]) extends ClassnameLogger
+</span>60 <span style=''>
+</span>61 <span style=''>object UserLinkLogging extends ClassnameLogger {
+</span>62 <span style=''>
+</span>63 <span style=''>  val userLinkLoggingParser = {
+</span>64 <span style=''>    </span><span style='background: #F0ADAD'>get[Long](&quot;id&quot;) ~
+</span>65 <span style=''></span><span style='background: #F0ADAD'>      get[ZonedDateTime](&quot;timestamp&quot;) ~
+</span>66 <span style=''></span><span style='background: #F0ADAD'>      get[Option[String]](&quot;ipaddress&quot;) ~
+</span>67 <span style=''></span><span style='background: #F0ADAD'>      get[Option[String]](&quot;useragent&quot;) ~
+</span>68 <span style=''></span><span style='background: #F0ADAD'>      get[Option[String]](&quot;email&quot;) ~
+</span>69 <span style=''></span><span style='background: #F0ADAD'>      get[String](&quot;link&quot;) ~
+</span>70 <span style=''></span><span style='background: #F0ADAD'>      get[Option[String]](&quot;referer&quot;) map {
+</span>71 <span style=''></span><span style='background: #F0ADAD'>      case id ~ timestamp ~ ipaddress ~ useragent ~ email ~ link ~ referer =&gt;
+</span>72 <span style=''></span><span style='background: #F0ADAD'>        UserLinkLogging(Some(id), timestamp, ipaddress, useragent, email, link, referer)
+</span>73 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>74 <span style=''>  }
+</span>75 <span style=''>
+</span>76 <span style=''>  def getAllUserLinkLoggings()(implicit connection: Connection): Seq[UserLinkLogging] = {
+</span>77 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_consentlogging&quot;).as(userLinkLoggingParser *)</span><span style=''>
+</span>78 <span style=''>  }
+</span>79 <span style=''>
+</span>80 <span style=''>  def findUserLinkLoggingByEmail(email: String)(implicit connection: Connection): Seq[UserLinkLogging] = {
+</span>81 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_consentlogging where email = {email}&quot;).on(
+</span>82 <span style=''></span><span style='background: #F0ADAD'>      'email -&gt; email
+</span>83 <span style=''></span><span style='background: #F0ADAD'>    ).as(userLinkLoggingParser *)</span><span style=''>
+</span>84 <span style=''>  }
+</span>85 <span style=''>
+</span>86 <span style=''>  def findUserLinkLoggingById(id: Long)(implicit connection: Connection): Option[UserLinkLogging] = {
+</span>87 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_consentlogging where id = {id}&quot;).on(
+</span>88 <span style=''></span><span style='background: #F0ADAD'>      'id -&gt; id
+</span>89 <span style=''></span><span style='background: #F0ADAD'>    ).as(userLinkLoggingParser.singleOpt)</span><span style=''>
+</span>90 <span style=''>  }
+</span>91 <span style=''>
+</span>92 <span style=''>  def findUserLinkLoggingsByLink(link: String)(implicit connection: Connection): Seq[UserLinkLogging] = {
+</span>93 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_consentlogging where link LIKE '%{link}%'&quot;).on(
+</span>94 <span style=''></span><span style='background: #F0ADAD'>      'link -&gt; link
+</span>95 <span style=''></span><span style='background: #F0ADAD'>    ).as(userLinkLoggingParser *)</span><span style=''>
+</span>96 <span style=''>  }
+</span>97 <span style=''>
+</span>98 <span style=''>  def createUserLinkLogging(UserLinkLogging: UserLinkLogging)(implicit connection: Connection): Int = {
+</span>99 <span style=''>    val nps = </span><span style='background: #F0ADAD'>Seq[NamedParameter](
+</span>100 <span style=''></span><span style='background: #F0ADAD'>      &quot;timestamp&quot; -&gt; UserLinkLogging.timestamp,
+</span>101 <span style=''></span><span style='background: #F0ADAD'>      &quot;ipaddress&quot; -&gt; UserLinkLogging.ipaddress,
+</span>102 <span style=''></span><span style='background: #F0ADAD'>      &quot;useragent&quot; -&gt; UserLinkLogging.useragent,
+</span>103 <span style=''></span><span style='background: #F0ADAD'>      &quot;email&quot; -&gt; UserLinkLogging.email,
+</span>104 <span style=''></span><span style='background: #F0ADAD'>      &quot;link&quot; -&gt; UserLinkLogging.link,
+</span>105 <span style=''></span><span style='background: #F0ADAD'>      &quot;referer&quot; -&gt; UserLinkLogging.referer)</span><span style=''>
+</span>106 <span style=''>
+</span>107 <span style=''>    // we insert without ID because we want to have database auto increment
+</span>108 <span style=''>    </span><span style='background: #F0ADAD'>SQL(
+</span>109 <span style=''></span><span style='background: #F0ADAD'>      s&quot;&quot;&quot;
+</span>110 <span style=''></span><span style='background: #F0ADAD'>          insert into $table_consentlogging (timestamp, ipaddress, useragent, email, link, referer) values (
+</span>111 <span style=''></span><span style='background: #F0ADAD'>            {timestamp}, {ipaddress}, {useragent}, {email}, {link}, {referer}
+</span>112 <span style=''></span><span style='background: #F0ADAD'>          )
+</span>113 <span style=''></span><span style='background: #F0ADAD'>        &quot;&quot;&quot;).on(nps: _*).executeUpdate()</span><span style=''>
+</span>114 <span style=''>  }
+</span>115 <span style=''>
+</span>116 <span style=''>  def deleteUserLinkLogging(UserLinkLogging: UserLinkLogging)(implicit connection: Connection): Boolean = {
+</span>117 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>SQL(s&quot;delete from $table_consentlogging where id = {id}&quot;).on(
+</span>118 <span style=''></span><span style='background: #F0ADAD'>      'id -&gt; UserLinkLogging.id
+</span>119 <span style=''></span><span style='background: #F0ADAD'>    ).executeUpdate()</span><span style=''>
+</span>120 <span style=''>
+</span>121 <span style=''>    rowCount match {
+</span>122 <span style=''>      case 1 =&gt; </span><span style='background: #F0ADAD'>true</span><span style=''>
+</span>123 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>124 <span style=''>    }
+</span>125 <span style=''>  }
+</span>126 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          8729
+        </td>
+        <td>
+          1920
+          -
+          1924
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;id&quot;
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          8730
+        </td>
+        <td>
+          1919
+          -
+          1919
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToLong
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToLong
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          8732
+        </td>
+        <td>
+          1952
+          -
+          1952
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.JavaTimeColumn.columnToZonedDateTime
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToZonedDateTime
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          8731
+        </td>
+        <td>
+          1953
+          -
+          1964
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;timestamp&quot;
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          8733
+        </td>
+        <td>
+          1934
+          -
+          1965
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[java.time.ZonedDateTime](&quot;timestamp&quot;)(anorm.this.Column.columnToZonedDateTime)
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          8735
+        </td>
+        <td>
+          1993
+          -
+          1993
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          8737
+        </td>
+        <td>
+          1974
+          -
+          2006
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[Option[String]](&quot;ipaddress&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          8734
+        </td>
+        <td>
+          1994
+          -
+          2005
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ipaddress&quot;
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          8736
+        </td>
+        <td>
+          1993
+          -
+          1993
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          8741
+        </td>
+        <td>
+          2015
+          -
+          2047
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[Option[String]](&quot;useragent&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          8738
+        </td>
+        <td>
+          2035
+          -
+          2046
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;useragent&quot;
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          8740
+        </td>
+        <td>
+          2034
+          -
+          2034
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          8739
+        </td>
+        <td>
+          2034
+          -
+          2034
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8744
+        </td>
+        <td>
+          2075
+          -
+          2075
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8743
+        </td>
+        <td>
+          2075
+          -
+          2075
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8742
+        </td>
+        <td>
+          2076
+          -
+          2083
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;email&quot;
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          8745
+        </td>
+        <td>
+          2056
+          -
+          2084
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[Option[String]](&quot;email&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8746
+        </td>
+        <td>
+          2105
+          -
+          2111
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;link&quot;
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8748
+        </td>
+        <td>
+          2093
+          -
+          2112
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[String](&quot;link&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8747
+        </td>
+        <td>
+          2104
+          -
+          2104
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          8750
+        </td>
+        <td>
+          2140
+          -
+          2140
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          8755
+        </td>
+        <td>
+          1910
+          -
+          2330
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[Long](&quot;id&quot;)(anorm.this.Column.columnToLong).~[java.time.ZonedDateTime](anorm.SqlParser.get[java.time.ZonedDateTime](&quot;timestamp&quot;)(anorm.this.Column.columnToZonedDateTime)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;ipaddress&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;useragent&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;email&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).~[String](anorm.SqlParser.get[String](&quot;link&quot;)(anorm.this.Column.columnToString)).~[Option[String]](anorm.SqlParser.get[Option[String]](&quot;referer&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))).map[models.users.UserLinkLogging](((x0$1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]],String],Option[String]]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]],String], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]],String],Option[String]]((_1: anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]], _2: String)anorm.~[anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]],String]((_1: anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]],Option[String]]((_1: anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]], _2: Option[String])anorm.~[anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]],Option[String]]((_1: anorm.~[Long,java.time.ZonedDateTime], _2: Option[String])anorm.~[anorm.~[Long,java.time.ZonedDateTime],Option[String]]((_1: Long, _2: java.time.ZonedDateTime)anorm.~[Long,java.time.ZonedDateTime]((id @ _), (timestamp @ _)), (ipaddress @ _)), (useragent @ _)), (email @ _)), (link @ _)), (referer @ _)) =&gt; UserLinkLogging.apply(scala.Some.apply[Long](id), timestamp, ipaddress, useragent, email, link, referer)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          8749
+        </td>
+        <td>
+          2141
+          -
+          2150
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;referer&quot;
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          8752
+        </td>
+        <td>
+          2121
+          -
+          2151
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.SqlParser.get[Option[String]](&quot;referer&quot;)(anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString))
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          8751
+        </td>
+        <td>
+          2140
+          -
+          2140
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.Column.columnToOption[String](anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          8753
+        </td>
+        <td>
+          2260
+          -
+          2268
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[Long](id)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          8754
+        </td>
+        <td>
+          2244
+          -
+          2324
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.UserLinkLogging.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.apply(scala.Some.apply[Long](id), timestamp, ipaddress, useragent, email, link, referer)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          8756
+        </td>
+        <td>
+          2430
+          -
+          2501
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(users.this.`package`.table_consentlogging))).as[List[models.users.UserLinkLogging]](UserLinkLogging.this.userLinkLoggingParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          8757
+        </td>
+        <td>
+          2618
+          -
+          2743
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where email = {email}&quot;).s(users.this.`package`.table_consentlogging))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](email))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$4: String = a;
+    &lt;artifact&gt; val x$5: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$6: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$4);
+    anorm.this.ParameterValue.toParameterValue[String](x$4)(x$6, x$5)
+  })
+})).as[List[models.users.UserLinkLogging]](UserLinkLogging.this.userLinkLoggingParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8758
+        </td>
+        <td>
+          2855
+          -
+          2976
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where id = {id}&quot;).s(users.this.`package`.table_consentlogging))).on(anorm.this.NamedParameter.symbol[Long](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;id&quot;)).-&gt;[Long](id))({
+  ((a: Long) =&gt; {
+    &lt;artifact&gt; val x$10: Long = a;
+    &lt;artifact&gt; val x$11: anorm.ToStatement.longToStatement.type = anorm.this.ToStatement.longToStatement;
+    &lt;artifact&gt; val x$12: Null = anorm.this.ParameterValue.toParameterValue$default$2[Long](x$10);
+    anorm.this.ParameterValue.toParameterValue[Long](x$10)(x$12, x$11)
+  })
+})).as[Option[models.users.UserLinkLogging]](UserLinkLogging.this.userLinkLoggingParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          8759
+        </td>
+        <td>
+          3092
+          -
+          3220
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where link LIKE \'%{link}%\'&quot;).s(users.this.`package`.table_consentlogging))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;link&quot;)).-&gt;[String](link))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$16: String = a;
+    &lt;artifact&gt; val x$17: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$18: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$16);
+    anorm.this.ParameterValue.toParameterValue[String](x$16)(x$18, x$17)
+  })
+})).as[List[models.users.UserLinkLogging]](UserLinkLogging.this.userLinkLoggingParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8811
+        </td>
+        <td>
+          3344
+          -
+          3630
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.apply
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.apply[anorm.NamedParameter](anorm.this.NamedParameter.string[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[String](&quot;timestamp&quot;).-&gt;[java.time.ZonedDateTime](UserLinkLogging.timestamp))({
+  ((a: java.time.ZonedDateTime) =&gt; {
+    &lt;artifact&gt; val x$22: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$22);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$22)(x$24, x$23)
+  })
+}), anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;ipaddress&quot;).-&gt;[Option[String]](UserLinkLogging.ipaddress))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$28: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$28);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$28)(x$30, x$29)
+  })
+}), anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[Option[String]](UserLinkLogging.useragent))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$34: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$34);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$34)(x$36, x$35)
+  })
+}), anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[Option[String]](UserLinkLogging.email))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$40: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$40);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$40)(x$42, x$41)
+  })
+}), anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;link&quot;).-&gt;[String](UserLinkLogging.link))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$46: String = a;
+    &lt;artifact&gt; val x$47: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$48: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$46);
+    anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+  })
+}), anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;referer&quot;).-&gt;[Option[String]](UserLinkLogging.referer))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$52: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$53: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$54: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$52);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$52)(x$54, x$53)
+  })
+}))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8762
+        </td>
+        <td>
+          3371
+          -
+          3411
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;timestamp&quot;).-&gt;[java.time.ZonedDateTime](UserLinkLogging.timestamp)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8761
+        </td>
+        <td>
+          3386
+          -
+          3411
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.timestamp
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.timestamp
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8764
+        </td>
+        <td>
+          3383
+          -
+          3383
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.JavaTimeToStatement.zonedDateTimeToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8767
+        </td>
+        <td>
+          3371
+          -
+          3411
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[String](&quot;timestamp&quot;).-&gt;[java.time.ZonedDateTime](UserLinkLogging.timestamp))({
+  ((a: java.time.ZonedDateTime) =&gt; {
+    &lt;artifact&gt; val x$22: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$22);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$22)(x$24, x$23)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8760
+        </td>
+        <td>
+          3371
+          -
+          3382
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;timestamp&quot;
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8763
+        </td>
+        <td>
+          3383
+          -
+          3383
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.JavaTimeParameterMetaData.ZonedDateTimeParameterMetaData
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8766
+        </td>
+        <td>
+          3383
+          -
+          3383
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$22)(x$24, x$23)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8765
+        </td>
+        <td>
+          3383
+          -
+          3383
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$22)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8768
+        </td>
+        <td>
+          3419
+          -
+          3430
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;ipaddress&quot;
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8771
+        </td>
+        <td>
+          3431
+          -
+          3431
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8770
+        </td>
+        <td>
+          3419
+          -
+          3459
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;ipaddress&quot;).-&gt;[Option[String]](UserLinkLogging.ipaddress)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8773
+        </td>
+        <td>
+          3431
+          -
+          3431
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ToStatementPriority0.optionToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8776
+        </td>
+        <td>
+          3419
+          -
+          3459
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;ipaddress&quot;).-&gt;[Option[String]](UserLinkLogging.ipaddress))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$28: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$28);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$28)(x$30, x$29)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8769
+        </td>
+        <td>
+          3434
+          -
+          3459
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.ipaddress
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.ipaddress
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8772
+        </td>
+        <td>
+          3431
+          -
+          3431
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ParameterMetaData.StringParameterMetaData
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterMetaData.StringParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8775
+        </td>
+        <td>
+          3431
+          -
+          3431
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[Option[String]](x$28)(x$30, x$29)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8774
+        </td>
+        <td>
+          3431
+          -
+          3431
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$28)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8777
+        </td>
+        <td>
+          3467
+          -
+          3478
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;useragent&quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8780
+        </td>
+        <td>
+          3479
+          -
+          3479
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8779
+        </td>
+        <td>
+          3467
+          -
+          3507
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[Option[String]](UserLinkLogging.useragent)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8782
+        </td>
+        <td>
+          3479
+          -
+          3479
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ToStatementPriority0.optionToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8785
+        </td>
+        <td>
+          3467
+          -
+          3507
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[Option[String]](UserLinkLogging.useragent))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$34: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$34);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$34)(x$36, x$35)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8784
+        </td>
+        <td>
+          3479
+          -
+          3479
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[Option[String]](x$34)(x$36, x$35)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8778
+        </td>
+        <td>
+          3482
+          -
+          3507
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.useragent
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.useragent
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8781
+        </td>
+        <td>
+          3479
+          -
+          3479
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ParameterMetaData.StringParameterMetaData
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterMetaData.StringParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8783
+        </td>
+        <td>
+          3479
+          -
+          3479
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$34)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8786
+        </td>
+        <td>
+          3515
+          -
+          3522
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;email&quot;
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8789
+        </td>
+        <td>
+          3523
+          -
+          3523
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8788
+        </td>
+        <td>
+          3515
+          -
+          3547
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[Option[String]](UserLinkLogging.email)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8791
+        </td>
+        <td>
+          3523
+          -
+          3523
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ToStatementPriority0.optionToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8794
+        </td>
+        <td>
+          3515
+          -
+          3547
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[Option[String]](UserLinkLogging.email))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$40: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$40);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$40)(x$42, x$41)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8793
+        </td>
+        <td>
+          3523
+          -
+          3523
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[Option[String]](x$40)(x$42, x$41)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8787
+        </td>
+        <td>
+          3526
+          -
+          3547
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.email
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.email
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8790
+        </td>
+        <td>
+          3523
+          -
+          3523
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ParameterMetaData.StringParameterMetaData
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterMetaData.StringParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8792
+        </td>
+        <td>
+          3523
+          -
+          3523
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$40)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8795
+        </td>
+        <td>
+          3555
+          -
+          3561
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;link&quot;
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8798
+        </td>
+        <td>
+          3562
+          -
+          3562
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8797
+        </td>
+        <td>
+          3555
+          -
+          3585
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;link&quot;).-&gt;[String](UserLinkLogging.link)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8800
+        </td>
+        <td>
+          3562
+          -
+          3562
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8796
+        </td>
+        <td>
+          3565
+          -
+          3585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.link
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.link
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8799
+        </td>
+        <td>
+          3562
+          -
+          3562
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$46)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          8801
+        </td>
+        <td>
+          3555
+          -
+          3585
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;link&quot;).-&gt;[String](UserLinkLogging.link))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$46: String = a;
+    &lt;artifact&gt; val x$47: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$48: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$46);
+    anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8804
+        </td>
+        <td>
+          3593
+          -
+          3629
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;referer&quot;).-&gt;[Option[String]](UserLinkLogging.referer)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8806
+        </td>
+        <td>
+          3603
+          -
+          3603
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ParameterMetaData.StringParameterMetaData
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterMetaData.StringParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8809
+        </td>
+        <td>
+          3603
+          -
+          3603
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue[Option[String]](x$52)(x$54, x$53)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8803
+        </td>
+        <td>
+          3606
+          -
+          3629
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserLinkLogging.referer
+        </td>
+        <td style="background: #F0ADAD">
+          UserLinkLogging.referer
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8802
+        </td>
+        <td>
+          3593
+          -
+          3602
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;referer&quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8805
+        </td>
+        <td>
+          3603
+          -
+          3603
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8808
+        </td>
+        <td>
+          3603
+          -
+          3603
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$52)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8807
+        </td>
+        <td>
+          3603
+          -
+          3603
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ToStatementPriority0.optionToStatement
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          8810
+        </td>
+        <td>
+          3593
+          -
+          3629
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.this.NamedParameter.string[Option[String]](scala.this.Predef.ArrowAssoc[String](&quot;referer&quot;).-&gt;[Option[String]](UserLinkLogging.referer))({
+  ((a: Option[String]) =&gt; {
+    &lt;artifact&gt; val x$52: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$53: anorm.ToStatement[Option[String]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[String](anorm.this.ToStatement.stringToStatement, anorm.this.ParameterMetaData.StringParameterMetaData);
+    &lt;artifact&gt; val x$54: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[String]](x$52);
+    anorm.this.ParameterValue.toParameterValue[Option[String]](x$52)(x$54, x$53)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          113
+        </td>
+        <td>
+          8812
+        </td>
+        <td>
+          3712
+          -
+          3967
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; (timestamp, ipaddress, useragent, email, link, referer) values (\n            {timestamp}, {ipaddress}, {useragent}, {email}, {link}, {referer}\n          )\n        &quot;).s(users.this.`package`.table_consentlogging))).on((nps: _*)).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          8813
+        </td>
+        <td>
+          4100
+          -
+          4215
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where id = {id}&quot;).s(users.this.`package`.table_consentlogging))).on(anorm.this.NamedParameter.symbol[Option[Long]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;id&quot;)).-&gt;[Option[Long]](UserLinkLogging.id))({
+  ((a: Option[Long]) =&gt; {
+    &lt;artifact&gt; val x$58: Option[Long] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$59: anorm.ToStatement[Option[Long]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Long](anorm.this.ToStatement.longToStatement, anorm.this.ParameterMetaData.LongParameterMetaData);
+    &lt;artifact&gt; val x$60: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Long]](x$58);
+    anorm.this.ParameterValue.toParameterValue[Option[Long]](x$58)(x$60, x$59)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          8814
+        </td>
+        <td>
+          4254
+          -
+          4258
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          8815
+        </td>
+        <td>
+          4275
+          -
+          4280
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

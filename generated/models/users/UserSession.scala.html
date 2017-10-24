@@ -1,0 +1,1734 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/users/UserSession.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.users
+</span>21 <span style=''>
+</span>22 <span style=''>import java.sql.Connection
+</span>23 <span style=''>import java.time.ZonedDateTime
+</span>24 <span style=''>
+</span>25 <span style=''>import anorm.SqlParser.get
+</span>26 <span style=''>import anorm.{NamedParameter, SQL, ~}
+</span>27 <span style=''>import utils.ClassnameLogger
+</span>28 <span style=''>
+</span>29 <span style=''>/*
+</span>30 <span style=''>CREATE TABLE sessions (
+</span>31 <span style=''>token varchar(255) NOT NULL,
+</span>32 <span style=''>useragent varchar(255) NOT NULL,
+</span>33 <span style=''>email varchar(255) NOT NULL,
+</span>34 <span style=''>laststatustoken varchar(255) NOT NULL,
+</span>35 <span style=''>laststatuschange TIMESTAMP WITH TIME ZONE NOT NULL,
+</span>36 <span style=''>PRIMARY KEY (token)
+</span>37 <span style=''>);
+</span>38 <span style=''>*/
+</span>39 <span style=''>
+</span>40 <span style=''>/**
+</span>41 <span style=''>  * we move the sessions into DB
+</span>42 <span style=''>  *
+</span>43 <span style=''>  * @param token the security token for an active session
+</span>44 <span style=''>  * @param useragent informative, user for hashing and separating logins from different devices
+</span>45 <span style=''>  * @param email
+</span>46 <span style=''>  * @param laststatustoken session active/expire/deactivate
+</span>47 <span style=''>  * @param laststatuschange
+</span>48 <span style=''>  */
+</span>49 <span style=''>case class UserSession(token: String,
+</span>50 <span style=''>                       useragent: String,
+</span>51 <span style=''>                       email: String,
+</span>52 <span style=''>                       laststatustoken: String,
+</span>53 <span style=''>                       laststatuschange: ZonedDateTime) extends ClassnameLogger
+</span>54 <span style=''>
+</span>55 <span style=''>object UserSession extends ClassnameLogger {
+</span>56 <span style=''>
+</span>57 <span style=''>  val userSessionsParser = {
+</span>58 <span style=''>    </span><span style='background: #AEF1AE'>get[String](&quot;token&quot;) ~
+</span>59 <span style=''></span><span style='background: #AEF1AE'>      get[String](&quot;useragent&quot;) ~
+</span>60 <span style=''></span><span style='background: #AEF1AE'>      get[String](&quot;email&quot;) ~
+</span>61 <span style=''></span><span style='background: #AEF1AE'>      get[String](&quot;laststatustoken&quot;) ~
+</span>62 <span style=''></span><span style='background: #AEF1AE'>      get[ZonedDateTime](&quot;laststatuschange&quot;) map {
+</span>63 <span style=''></span><span style='background: #AEF1AE'>      case token ~ useragent ~ email ~ laststatustoken ~ laststatuschange =&gt;
+</span>64 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>UserSession(token, useragent, email, laststatustoken, laststatuschange)</span><span style='background: #AEF1AE'>
+</span>65 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>66 <span style=''>  }
+</span>67 <span style=''>
+</span>68 <span style=''>  def getAllUserSessions()(implicit connection: Connection): Seq[UserSession] = {
+</span>69 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_sessions&quot;).as(userSessionsParser *)</span><span style=''>
+</span>70 <span style=''>  }
+</span>71 <span style=''>
+</span>72 <span style=''>  def findUserSessionByEmail(email: String)(implicit connection: Connection): Seq[UserSession] = {
+</span>73 <span style=''>    </span><span style='background: #F0ADAD'>SQL(s&quot;select * from $table_sessions where email = {email}&quot;).on(
+</span>74 <span style=''></span><span style='background: #F0ADAD'>      'email -&gt; email
+</span>75 <span style=''></span><span style='background: #F0ADAD'>    ).as(userSessionsParser *)</span><span style=''>
+</span>76 <span style=''>  }
+</span>77 <span style=''>
+</span>78 <span style=''>  def findUserSessionByToken(token: String)(implicit connection: Connection): Option[UserSession] = {
+</span>79 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;select * from $table_sessions where token = {token}&quot;).on(
+</span>80 <span style=''></span><span style='background: #AEF1AE'>      'token -&gt; token
+</span>81 <span style=''></span><span style='background: #AEF1AE'>    ).as(userSessionsParser.singleOpt)</span><span style=''>
+</span>82 <span style=''>  }
+</span>83 <span style=''>
+</span>84 <span style=''>  def createUserSession(userSession: UserSession)(implicit connection: Connection): Option[UserSession] = {
+</span>85 <span style=''>    val nps = </span><span style='background: #AEF1AE'>Seq[NamedParameter](// Tuples as NamedParameter
+</span>86 <span style=''></span><span style='background: #AEF1AE'>      &quot;token&quot; -&gt; userSession.token,
+</span>87 <span style=''></span><span style='background: #AEF1AE'>      &quot;useragent&quot; -&gt; userSession.useragent,
+</span>88 <span style=''></span><span style='background: #AEF1AE'>      &quot;email&quot; -&gt; userSession.email,
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      &quot;laststatustoken&quot; -&gt; userSession.laststatustoken,
+</span>90 <span style=''></span><span style='background: #AEF1AE'>      &quot;laststatuschange&quot; -&gt; userSession.laststatuschange)</span><span style=''>
+</span>91 <span style=''>
+</span>92 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>93 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>94 <span style=''></span><span style='background: #AEF1AE'>          insert into $table_sessions values (
+</span>95 <span style=''></span><span style='background: #AEF1AE'>            {token}, {useragent}, {email}, {laststatustoken}, {laststatuschange}
+</span>96 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>97 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(nps: _*).executeUpdate()</span><span style=''>
+</span>98 <span style=''>
+</span>99 <span style=''>    rowCount match {
+</span>100 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(userSession)</span><span style=''>
+</span>101 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>102 <span style=''>    }
+</span>103 <span style=''>  }
+</span>104 <span style=''>
+</span>105 <span style=''>  def updateUserSessionStatus(userSession: UserSession)(implicit connection: Connection): Option[UserSession] = {
+</span>106 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>SQL(
+</span>107 <span style=''></span><span style='background: #F0ADAD'>      s&quot;&quot;&quot;
+</span>108 <span style=''></span><span style='background: #F0ADAD'>          update $table_sessions set
+</span>109 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = {laststatustoken},
+</span>110 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = {laststatuschange} where token = {token}
+</span>111 <span style=''></span><span style='background: #F0ADAD'>        &quot;&quot;&quot;).on(
+</span>112 <span style=''></span><span style='background: #F0ADAD'>      'laststatustoken -&gt; userSession.laststatustoken,
+</span>113 <span style=''></span><span style='background: #F0ADAD'>      'laststatuschange -&gt; userSession.laststatuschange,
+</span>114 <span style=''></span><span style='background: #F0ADAD'>      'token -&gt; userSession.token
+</span>115 <span style=''></span><span style='background: #F0ADAD'>    ).executeUpdate()</span><span style=''>
+</span>116 <span style=''>
+</span>117 <span style=''>    rowCount match {
+</span>118 <span style=''>      case 1 =&gt; </span><span style='background: #F0ADAD'>Some(userSession)</span><span style=''>
+</span>119 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>120 <span style=''>    }
+</span>121 <span style=''>  }
+</span>122 <span style=''>
+</span>123 <span style=''>  def deleteUserSessionByEmail(email: String)(implicit connection: Connection): Boolean = {
+</span>124 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>SQL(s&quot;delete from $table_sessions where email = {email}&quot;).on(
+</span>125 <span style=''></span><span style='background: #F0ADAD'>      'email -&gt; email
+</span>126 <span style=''></span><span style='background: #F0ADAD'>    ).executeUpdate()</span><span style=''>
+</span>127 <span style=''>
+</span>128 <span style=''>    rowCount match {
+</span>129 <span style=''>      case 1 =&gt; </span><span style='background: #F0ADAD'>true</span><span style=''>
+</span>130 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>131 <span style=''>    }
+</span>132 <span style=''>  }
+</span>133 <span style=''>
+</span>134 <span style=''>  def deleteUserSessionByToken(token: String)(implicit connection: Connection): Boolean = {
+</span>135 <span style=''>    val rowCount = </span><span style='background: #F0ADAD'>SQL(s&quot;delete from $table_sessions where token = {token}&quot;).on(
+</span>136 <span style=''></span><span style='background: #F0ADAD'>      'token -&gt; token
+</span>137 <span style=''></span><span style='background: #F0ADAD'>    ).executeUpdate()</span><span style=''>
+</span>138 <span style=''>
+</span>139 <span style=''>    rowCount match {
+</span>140 <span style=''>      case 1 =&gt; </span><span style='background: #F0ADAD'>true</span><span style=''>
+</span>141 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>142 <span style=''>    }
+</span>143 <span style=''>  }
+</span>144 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          8890
+        </td>
+        <td>
+          1933
+          -
+          1933
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          8889
+        </td>
+        <td>
+          1934
+          -
+          1941
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;token&quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          8893
+        </td>
+        <td>
+          1951
+          -
+          1975
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[String](&quot;useragent&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          8892
+        </td>
+        <td>
+          1962
+          -
+          1962
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          8891
+        </td>
+        <td>
+          1963
+          -
+          1974
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;useragent&quot;
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          8896
+        </td>
+        <td>
+          1984
+          -
+          2004
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[String](&quot;email&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          8895
+        </td>
+        <td>
+          1995
+          -
+          1995
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          8894
+        </td>
+        <td>
+          1996
+          -
+          2003
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;email&quot;
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8899
+        </td>
+        <td>
+          2013
+          -
+          2043
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[String](&quot;laststatustoken&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8898
+        </td>
+        <td>
+          2024
+          -
+          2024
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          8897
+        </td>
+        <td>
+          2025
+          -
+          2042
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;laststatustoken&quot;
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8902
+        </td>
+        <td>
+          2052
+          -
+          2090
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[java.time.ZonedDateTime](&quot;laststatuschange&quot;)(anorm.this.Column.columnToZonedDateTime)
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8904
+        </td>
+        <td>
+          1922
+          -
+          2259
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[String](&quot;token&quot;)(anorm.this.Column.columnToString).~[String](anorm.SqlParser.get[String](&quot;useragent&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.get[String](&quot;email&quot;)(anorm.this.Column.columnToString)).~[String](anorm.SqlParser.get[String](&quot;laststatustoken&quot;)(anorm.this.Column.columnToString)).~[java.time.ZonedDateTime](anorm.SqlParser.get[java.time.ZonedDateTime](&quot;laststatuschange&quot;)(anorm.this.Column.columnToZonedDateTime)).map[models.users.UserSession](((x0$1: anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],java.time.ZonedDateTime]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[anorm.~[String,String],String],String], _2: java.time.ZonedDateTime)anorm.~[anorm.~[anorm.~[anorm.~[String,String],String],String],java.time.ZonedDateTime]((_1: anorm.~[anorm.~[String,String],String], _2: String)anorm.~[anorm.~[anorm.~[String,String],String],String]((_1: anorm.~[String,String], _2: String)anorm.~[anorm.~[String,String],String]((_1: String, _2: String)anorm.~[String,String]((token @ _), (useragent @ _)), (email @ _)), (laststatustoken @ _)), (laststatuschange @ _)) =&gt; UserSession.apply(token, useragent, email, laststatustoken, laststatuschange)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8901
+        </td>
+        <td>
+          2070
+          -
+          2070
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.JavaTimeColumn.columnToZonedDateTime
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToZonedDateTime
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8900
+        </td>
+        <td>
+          2071
+          -
+          2089
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;laststatuschange&quot;
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          8903
+        </td>
+        <td>
+          2182
+          -
+          2253
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.UserSession.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserSession.apply(token, useragent, email, laststatustoken, laststatuschange)
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          8905
+        </td>
+        <td>
+          2351
+          -
+          2413
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot;&quot;).s(users.this.`package`.table_sessions))).as[List[models.users.UserSession]](UserSession.this.userSessionsParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          8906
+        </td>
+        <td>
+          2522
+          -
+          2638
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where email = {email}&quot;).s(users.this.`package`.table_sessions))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](email))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$4: String = a;
+    &lt;artifact&gt; val x$5: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$6: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$4);
+    anorm.this.ParameterValue.toParameterValue[String](x$4)(x$6, x$5)
+  })
+})).as[List[models.users.UserSession]](UserSession.this.userSessionsParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          8907
+        </td>
+        <td>
+          2750
+          -
+          2874
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select * from &quot;, &quot; where token = {token}&quot;).s(users.this.`package`.table_sessions))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;token&quot;)).-&gt;[String](token))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$10: String = a;
+    &lt;artifact&gt; val x$11: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$12: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$10);
+    anorm.this.ParameterValue.toParameterValue[String](x$10)(x$12, x$11)
+  })
+})).as[Option[models.users.UserSession]](UserSession.this.userSessionsParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          8944
+        </td>
+        <td>
+          3002
+          -
+          3279
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.generic.GenericCompanion.apply
+        </td>
+        <td style="background: #AEF1AE">
+          collection.this.Seq.apply[anorm.NamedParameter](anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[String](userSession.token))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$16: String = a;
+    &lt;artifact&gt; val x$17: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$18: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$16);
+    anorm.this.ParameterValue.toParameterValue[String](x$16)(x$18, x$17)
+  })
+}), anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[String](userSession.useragent))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$22: String = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$22);
+    anorm.this.ParameterValue.toParameterValue[String](x$22)(x$24, x$23)
+  })
+}), anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[String](userSession.email))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$28: String = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$28);
+    anorm.this.ParameterValue.toParameterValue[String](x$28)(x$30, x$29)
+  })
+}), anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;laststatustoken&quot;).-&gt;[String](userSession.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$34: String = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$34);
+    anorm.this.ParameterValue.toParameterValue[String](x$34)(x$36, x$35)
+  })
+}), anorm.this.NamedParameter.string[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[String](&quot;laststatuschange&quot;).-&gt;[java.time.ZonedDateTime](userSession.laststatuschange))({
+  ((a: java.time.ZonedDateTime) =&gt; {
+    &lt;artifact&gt; val x$40: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$40);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$40)(x$42, x$41)
+  })
+}))
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8908
+        </td>
+        <td>
+          3056
+          -
+          3063
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;token&quot;
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8911
+        </td>
+        <td>
+          3064
+          -
+          3064
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8914
+        </td>
+        <td>
+          3056
+          -
+          3084
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[String](userSession.token))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$16: String = a;
+    &lt;artifact&gt; val x$17: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$18: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$16);
+    anorm.this.ParameterValue.toParameterValue[String](x$16)(x$18, x$17)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8913
+        </td>
+        <td>
+          3064
+          -
+          3064
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$16)(x$18, x$17)
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8910
+        </td>
+        <td>
+          3056
+          -
+          3084
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[String](userSession.token)
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8912
+        </td>
+        <td>
+          3064
+          -
+          3064
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$16)
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8909
+        </td>
+        <td>
+          3067
+          -
+          3084
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.token
+        </td>
+        <td style="background: #AEF1AE">
+          userSession.token
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8917
+        </td>
+        <td>
+          3092
+          -
+          3128
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[String](userSession.useragent)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8920
+        </td>
+        <td>
+          3104
+          -
+          3104
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$22)(x$24, x$23)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8916
+        </td>
+        <td>
+          3107
+          -
+          3128
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.useragent
+        </td>
+        <td style="background: #AEF1AE">
+          userSession.useragent
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8919
+        </td>
+        <td>
+          3104
+          -
+          3104
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$22)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8921
+        </td>
+        <td>
+          3092
+          -
+          3128
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;useragent&quot;).-&gt;[String](userSession.useragent))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$22: String = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$22);
+    anorm.this.ParameterValue.toParameterValue[String](x$22)(x$24, x$23)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8915
+        </td>
+        <td>
+          3092
+          -
+          3103
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;useragent&quot;
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          8918
+        </td>
+        <td>
+          3104
+          -
+          3104
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8926
+        </td>
+        <td>
+          3144
+          -
+          3144
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$28)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8923
+        </td>
+        <td>
+          3147
+          -
+          3164
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.email
+        </td>
+        <td style="background: #AEF1AE">
+          userSession.email
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8922
+        </td>
+        <td>
+          3136
+          -
+          3143
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;email&quot;
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8925
+        </td>
+        <td>
+          3144
+          -
+          3144
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8928
+        </td>
+        <td>
+          3136
+          -
+          3164
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[String](userSession.email))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$28: String = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$28);
+    anorm.this.ParameterValue.toParameterValue[String](x$28)(x$30, x$29)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8927
+        </td>
+        <td>
+          3144
+          -
+          3144
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$28)(x$30, x$29)
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          8924
+        </td>
+        <td>
+          3136
+          -
+          3164
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[String](userSession.email)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8935
+        </td>
+        <td>
+          3172
+          -
+          3220
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.string[String](scala.this.Predef.ArrowAssoc[String](&quot;laststatustoken&quot;).-&gt;[String](userSession.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$34: String = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$34);
+    anorm.this.ParameterValue.toParameterValue[String](x$34)(x$36, x$35)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8929
+        </td>
+        <td>
+          3172
+          -
+          3189
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;laststatustoken&quot;
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8932
+        </td>
+        <td>
+          3190
+          -
+          3190
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.ToStatementPriority0.stringToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.stringToStatement
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8931
+        </td>
+        <td>
+          3172
+          -
+          3220
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;laststatustoken&quot;).-&gt;[String](userSession.laststatustoken)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8934
+        </td>
+        <td>
+          3190
+          -
+          3190
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[String](x$34)(x$36, x$35)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8930
+        </td>
+        <td>
+          3193
+          -
+          3220
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.laststatustoken
+        </td>
+        <td style="background: #AEF1AE">
+          userSession.laststatustoken
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8933
+        </td>
+        <td>
+          3190
+          -
+          3190
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[String](x$34)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8941
+        </td>
+        <td>
+          3247
+          -
+          3247
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$40)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8938
+        </td>
+        <td>
+          3228
+          -
+          3278
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;laststatuschange&quot;).-&gt;[java.time.ZonedDateTime](userSession.laststatuschange)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8940
+        </td>
+        <td>
+          3247
+          -
+          3247
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.JavaTimeToStatement.zonedDateTimeToStatement
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8943
+        </td>
+        <td>
+          3228
+          -
+          3278
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.NamedParameter.string
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.NamedParameter.string[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[String](&quot;laststatuschange&quot;).-&gt;[java.time.ZonedDateTime](userSession.laststatuschange))({
+  ((a: java.time.ZonedDateTime) =&gt; {
+    &lt;artifact&gt; val x$40: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$40);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$40)(x$42, x$41)
+  })
+})
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8937
+        </td>
+        <td>
+          3250
+          -
+          3278
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.laststatuschange
+        </td>
+        <td style="background: #AEF1AE">
+          userSession.laststatuschange
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8936
+        </td>
+        <td>
+          3228
+          -
+          3246
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;laststatuschange&quot;
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8939
+        </td>
+        <td>
+          3247
+          -
+          3247
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.JavaTimeParameterMetaData.ZonedDateTimeParameterMetaData
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8942
+        </td>
+        <td>
+          3247
+          -
+          3247
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.ParameterValue.toParameterValue
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$40)(x$42, x$41)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8945
+        </td>
+        <td>
+          3300
+          -
+          3496
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n            {token}, {useragent}, {email}, {laststatustoken}, {laststatuschange}\n          )\n        &quot;).s(users.this.`package`.table_sessions))).on((nps: _*)).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8946
+        </td>
+        <td>
+          3535
+          -
+          3552
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[models.users.UserSession](userSession)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8947
+        </td>
+        <td>
+          3569
+          -
+          3573
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          115
+        </td>
+        <td>
+          8948
+        </td>
+        <td>
+          3718
+          -
+          4076
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          update &quot;, &quot; set\n            laststatustoken = {laststatustoken},\n            laststatuschange = {laststatuschange} where token = {token}\n        &quot;).s(users.this.`package`.table_sessions))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatustoken&quot;)).-&gt;[String](userSession.laststatustoken))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$46: String = a;
+    &lt;artifact&gt; val x$47: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$48: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$46);
+    anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+  })
+}), anorm.this.NamedParameter.symbol[java.time.ZonedDateTime](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;laststatuschange&quot;)).-&gt;[java.time.ZonedDateTime](userSession.laststatuschange))({
+  ((a: java.time.ZonedDateTime) =&gt; {
+    &lt;artifact&gt; val x$52: java.time.ZonedDateTime = a;
+    &lt;artifact&gt; val x$53: anorm.ToStatement[java.time.ZonedDateTime] @scala.reflect.internal.annotations.uncheckedBounds = anorm.this.ToStatement.zonedDateTimeToStatement(anorm.this.ParameterMetaData.ZonedDateTimeParameterMetaData);
+    &lt;artifact&gt; val x$54: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.time.ZonedDateTime](x$52);
+    anorm.this.ParameterValue.toParameterValue[java.time.ZonedDateTime](x$52)(x$54, x$53)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;token&quot;)).-&gt;[String](userSession.token))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$58: String = a;
+    &lt;artifact&gt; val x$59: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$60: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$58);
+    anorm.this.ParameterValue.toParameterValue[String](x$58)(x$60, x$59)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          8949
+        </td>
+        <td>
+          4115
+          -
+          4132
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[models.users.UserSession](userSession)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          8950
+        </td>
+        <td>
+          4149
+          -
+          4153
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          8951
+        </td>
+        <td>
+          4276
+          -
+          4381
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where email = {email}&quot;).s(users.this.`package`.table_sessions))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;email&quot;)).-&gt;[String](email))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$64: String = a;
+    &lt;artifact&gt; val x$65: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$66: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$64);
+    anorm.this.ParameterValue.toParameterValue[String](x$64)(x$66, x$65)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          8952
+        </td>
+        <td>
+          4420
+          -
+          4424
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          130
+        </td>
+        <td>
+          8953
+        </td>
+        <td>
+          4441
+          -
+          4446
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          8954
+        </td>
+        <td>
+          4569
+          -
+          4674
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #F0ADAD">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where token = {token}&quot;).s(users.this.`package`.table_sessions))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;token&quot;)).-&gt;[String](token))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$70: String = a;
+    &lt;artifact&gt; val x$71: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$72: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$70);
+    anorm.this.ParameterValue.toParameterValue[String](x$70)(x$72, x$71)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          8955
+        </td>
+        <td>
+          4713
+          -
+          4717
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          141
+        </td>
+        <td>
+          8956
+        </td>
+        <td>
+          4734
+          -
+          4739
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

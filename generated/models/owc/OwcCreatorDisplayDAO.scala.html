@@ -1,0 +1,936 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/owc/OwcCreatorDisplayDAO.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.owc
+</span>21 <span style=''>
+</span>22 <span style=''>import java.sql.Connection
+</span>23 <span style=''>import java.util.UUID
+</span>24 <span style=''>
+</span>25 <span style=''>import anorm.SqlParser._
+</span>26 <span style=''>import anorm._
+</span>27 <span style=''>import info.smart.models.owc100._
+</span>28 <span style=''>import utils.ClassnameLogger
+</span>29 <span style=''>
+</span>30 <span style=''>/** *********
+</span>31 <span style=''>  * OwcCreatorDisplay
+</span>32 <span style=''>  * **********/
+</span>33 <span style=''>object OwcCreatorDisplayDAO extends ClassnameLogger {
+</span>34 <span style=''>
+</span>35 <span style=''>  /**
+</span>36 <span style=''>    * Parse a OwcCreatorDisplay from a ResultSet
+</span>37 <span style=''>    */
+</span>38 <span style=''>  private val owcCreatorDisplayParser = {
+</span>39 <span style=''>    </span><span style='background: #AEF1AE'>get[Option[Int]](&quot;owc_creator_displays.pixel_width&quot;) ~
+</span>40 <span style=''></span><span style='background: #AEF1AE'>      get[Option[Int]](&quot;owc_creator_displays.pixel_height&quot;) ~
+</span>41 <span style=''></span><span style='background: #AEF1AE'>      get[Option[Double]](&quot;owc_creator_displays.mm_per_pixel&quot;) ~
+</span>42 <span style=''></span><span style='background: #AEF1AE'>      str(&quot;owc_creator_displays.uuid&quot;) map {
+</span>43 <span style=''></span><span style='background: #AEF1AE'>      case pixelWidth ~ pixelHeight ~ mmPerPixel ~ uuid =&gt;
+</span>44 <span style=''></span><span style='background: #AEF1AE'>        OwcCreatorDisplay(pixelWidth = pixelWidth,
+</span>45 <span style=''></span><span style='background: #AEF1AE'>          pixelHeight = pixelHeight,
+</span>46 <span style=''></span><span style='background: #AEF1AE'>          mmPerPixel = mmPerPixel,
+</span>47 <span style=''></span><span style='background: #AEF1AE'>          uuid = UUID.fromString(uuid))
+</span>48 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>49 <span style=''>  }
+</span>50 <span style=''>
+</span>51 <span style=''>  /**
+</span>52 <span style=''>    * Retrieve all OwcCreatorDisplays.
+</span>53 <span style=''>    *
+</span>54 <span style=''>    * @param connection implicit connection
+</span>55 <span style=''>    * @return
+</span>56 <span style=''>    */
+</span>57 <span style=''>  def getAllOwcCreatorDisplays()(implicit connection: Connection): Seq[OwcCreatorDisplay] = {
+</span>58 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;select owc_creator_displays.* from $tableOwcCreatorDisplays&quot;).as(owcCreatorDisplayParser *)</span><span style=''>
+</span>59 <span style=''>  }
+</span>60 <span style=''>
+</span>61 <span style=''>  /**
+</span>62 <span style=''>    * Find specific OwcCreatorDisplay.
+</span>63 <span style=''>    *
+</span>64 <span style=''>    * @param uuid
+</span>65 <span style=''>    * @param connection implicit connection
+</span>66 <span style=''>    * @return
+</span>67 <span style=''>    */
+</span>68 <span style=''>  def findOwcCreatorDisplayByUuid(uuid: UUID)(implicit connection: Connection): Option[OwcCreatorDisplay] = {
+</span>69 <span style=''>    </span><span style='background: #AEF1AE'>SQL(s&quot;&quot;&quot;select owc_creator_displays.* from $tableOwcCreatorDisplays where uuid = '${uuid.toString}'&quot;&quot;&quot;).as(owcCreatorDisplayParser.singleOpt)</span><span style=''>
+</span>70 <span style=''>  }
+</span>71 <span style=''>
+</span>72 <span style=''>  /**
+</span>73 <span style=''>    * Create an owcCreatorDisplay.
+</span>74 <span style=''>    *
+</span>75 <span style=''>    * @param owcCreatorDisplay
+</span>76 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>77 <span style=''>    * @return
+</span>78 <span style=''>    */
+</span>79 <span style=''>  def createOwcCreatorDisplay(owcCreatorDisplay: OwcCreatorDisplay)(implicit connection: Connection): Option[OwcCreatorDisplay] = {
+</span>80 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>81 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>82 <span style=''></span><span style='background: #AEF1AE'>          insert into $tableOwcCreatorDisplays values (
+</span>83 <span style=''></span><span style='background: #AEF1AE'>           {uuid}, {pixelWidth}, {pixelHeight}, {mmPerPixel}
+</span>84 <span style=''></span><span style='background: #AEF1AE'>          )
+</span>85 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;.stripMargin).on(
+</span>86 <span style=''></span><span style='background: #AEF1AE'>      'pixelWidth -&gt; owcCreatorDisplay.pixelWidth,
+</span>87 <span style=''></span><span style='background: #AEF1AE'>      'pixelHeight -&gt; owcCreatorDisplay.pixelHeight,
+</span>88 <span style=''></span><span style='background: #AEF1AE'>      'mmPerPixel -&gt; owcCreatorDisplay.mmPerPixel,
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcCreatorDisplay.uuid
+</span>90 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>91 <span style=''>
+</span>92 <span style=''>    rowCount match {
+</span>93 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcCreatorDisplay)</span><span style=''>
+</span>94 <span style=''>      case _ =&gt; </span><span style='background: #F0ADAD'>logger.error(&quot;owcCreatorDisplay couldn't be created&quot;)</span><span style=''>
+</span>95 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>96 <span style=''>    }
+</span>97 <span style=''>  }
+</span>98 <span style=''>
+</span>99 <span style=''>  /**
+</span>100 <span style=''>    * Update single OwcCreatorDisplay
+</span>101 <span style=''>    *
+</span>102 <span style=''>    * @param owcCreatorDisplay
+</span>103 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>104 <span style=''>    * @return
+</span>105 <span style=''>    */
+</span>106 <span style=''>  def updateOwcCreatorDisplay(owcCreatorDisplay: OwcCreatorDisplay)(implicit connection: Connection): Option[OwcCreatorDisplay] = {
+</span>107 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(
+</span>108 <span style=''></span><span style='background: #AEF1AE'>      s&quot;&quot;&quot;
+</span>109 <span style=''></span><span style='background: #AEF1AE'>          update $tableOwcCreatorDisplays set
+</span>110 <span style=''></span><span style='background: #AEF1AE'>            pixel_width = {pixelWidth},
+</span>111 <span style=''></span><span style='background: #AEF1AE'>            pixel_height = {pixelHeight},
+</span>112 <span style=''></span><span style='background: #AEF1AE'>            mm_per_pixel = {mmPerPixel} where uuid = {uuid}
+</span>113 <span style=''></span><span style='background: #AEF1AE'>        &quot;&quot;&quot;).on(
+</span>114 <span style=''></span><span style='background: #AEF1AE'>      'pixelWidth -&gt; owcCreatorDisplay.pixelWidth,
+</span>115 <span style=''></span><span style='background: #AEF1AE'>      'pixelHeight -&gt; owcCreatorDisplay.pixelHeight,
+</span>116 <span style=''></span><span style='background: #AEF1AE'>      'mmPerPixel -&gt; owcCreatorDisplay.mmPerPixel,
+</span>117 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; owcCreatorDisplay.uuid.toString
+</span>118 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>119 <span style=''>
+</span>120 <span style=''>    rowCount match {
+</span>121 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>Some(owcCreatorDisplay)</span><span style=''>
+</span>122 <span style=''>      case _ =&gt; </span><span style='background: #AEF1AE'>logger.error(&quot;owcCreatorDisplay couldn't be updated&quot;)</span><span style=''>
+</span>123 <span style=''>        </span><span style='background: #AEF1AE'>None</span><span style=''>
+</span>124 <span style=''>    }
+</span>125 <span style=''>  }
+</span>126 <span style=''>
+</span>127 <span style=''>
+</span>128 <span style=''>  /**
+</span>129 <span style=''>    * delete an OwcCreatorDisplay
+</span>130 <span style=''>    *
+</span>131 <span style=''>    * @param owcCreatorDisplay
+</span>132 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>133 <span style=''>    * @return
+</span>134 <span style=''>    */
+</span>135 <span style=''>  def deleteOwcCreatorDisplay(owcCreatorDisplay: OwcCreatorDisplay)(implicit connection: Connection): Boolean = {
+</span>136 <span style=''>    </span><span style='background: #AEF1AE'>deleteOwcCreatorDisplayByUuid(owcCreatorDisplay.uuid)</span><span style=''>
+</span>137 <span style=''>  }
+</span>138 <span style=''>
+</span>139 <span style=''>  /**
+</span>140 <span style=''>    * delete an OwcCreatorDisplay
+</span>141 <span style=''>    *
+</span>142 <span style=''>    * @param uuid
+</span>143 <span style=''>    * @param connection implicit connection should be managed via transaction from calling entity
+</span>144 <span style=''>    * @return
+</span>145 <span style=''>    */
+</span>146 <span style=''>  def deleteOwcCreatorDisplayByUuid(uuid: UUID)(implicit connection: Connection): Boolean = {
+</span>147 <span style=''>    val rowCount = </span><span style='background: #AEF1AE'>SQL(s&quot;delete from $tableOwcCreatorDisplays where uuid = {uuid}&quot;).on(
+</span>148 <span style=''></span><span style='background: #AEF1AE'>      'uuid -&gt; uuid.toString
+</span>149 <span style=''></span><span style='background: #AEF1AE'>    ).executeUpdate()</span><span style=''>
+</span>150 <span style=''>
+</span>151 <span style=''>    rowCount match {
+</span>152 <span style=''>      case 1 =&gt; </span><span style='background: #AEF1AE'>true</span><span style=''>
+</span>153 <span style=''>      case _ =&gt;
+</span>154 <span style=''>        </span><span style='background: #F0ADAD'>logger.error(&quot;owcCreatorDisplay couldn't be deleted&quot;)</span><span style=''>
+</span>155 <span style=''>        </span><span style='background: #F0ADAD'>false</span><span style=''>
+</span>156 <span style=''>    }
+</span>157 <span style=''>  }
+</span>158 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          5962
+        </td>
+        <td>
+          1285
+          -
+          1319
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_displays.pixel_width&quot;
+        </td>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          5964
+        </td>
+        <td>
+          1284
+          -
+          1284
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt)
+        </td>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          5963
+        </td>
+        <td>
+          1284
+          -
+          1284
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToInt
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToInt
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          5968
+        </td>
+        <td>
+          1329
+          -
+          1382
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[Int]](&quot;owc_creator_displays.pixel_height&quot;)(anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt))
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          5965
+        </td>
+        <td>
+          1346
+          -
+          1381
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_displays.pixel_height&quot;
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          5967
+        </td>
+        <td>
+          1345
+          -
+          1345
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          5966
+        </td>
+        <td>
+          1345
+          -
+          1345
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToInt
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToInt
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          5969
+        </td>
+        <td>
+          1411
+          -
+          1446
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_displays.mm_per_pixel&quot;
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          5971
+        </td>
+        <td>
+          1410
+          -
+          1410
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Column.columnToOption
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToOption[Double](anorm.this.Column.columnToDouble)
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          5970
+        </td>
+        <td>
+          1410
+          -
+          1410
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToDouble
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToDouble
+        </td>
+      </tr><tr>
+        <td>
+          41
+        </td>
+        <td>
+          5972
+        </td>
+        <td>
+          1391
+          -
+          1447
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.get
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[Double]](&quot;owc_creator_displays.mm_per_pixel&quot;)(anorm.this.Column.columnToOption[Double](anorm.this.Column.columnToDouble))
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          5978
+        </td>
+        <td>
+          1268
+          -
+          1722
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          anorm.RowParser.map
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.get[Option[Int]](&quot;owc_creator_displays.pixel_width&quot;)(anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt)).~[Option[Int]](anorm.SqlParser.get[Option[Int]](&quot;owc_creator_displays.pixel_height&quot;)(anorm.this.Column.columnToOption[Int](anorm.this.Column.columnToInt))).~[Option[Double]](anorm.SqlParser.get[Option[Double]](&quot;owc_creator_displays.mm_per_pixel&quot;)(anorm.this.Column.columnToOption[Double](anorm.this.Column.columnToDouble))).~[String](anorm.SqlParser.str(&quot;owc_creator_displays.uuid&quot;)(anorm.this.Column.columnToString)).map[info.smart.models.owc100.OwcCreatorDisplay](((x0$1: anorm.~[anorm.~[anorm.~[Option[Int],Option[Int]],Option[Double]],String]) =&gt; x0$1 match {
+  case (_1: anorm.~[anorm.~[Option[Int],Option[Int]],Option[Double]], _2: String)anorm.~[anorm.~[anorm.~[Option[Int],Option[Int]],Option[Double]],String]((_1: anorm.~[Option[Int],Option[Int]], _2: Option[Double])anorm.~[anorm.~[Option[Int],Option[Int]],Option[Double]]((_1: Option[Int], _2: Option[Int])anorm.~[Option[Int],Option[Int]]((pixelWidth @ _), (pixelHeight @ _)), (mmPerPixel @ _)), (uuid @ _)) =&gt; info.smart.models.owc100.OwcCreatorDisplay.apply(pixelWidth, pixelHeight, mmPerPixel, java.util.UUID.fromString(uuid))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          5974
+        </td>
+        <td>
+          1459
+          -
+          1459
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          anorm.Column.columnToString
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.this.Column.columnToString
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          5973
+        </td>
+        <td>
+          1460
+          -
+          1487
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;owc_creator_displays.uuid&quot;
+        </td>
+      </tr><tr>
+        <td>
+          42
+        </td>
+        <td>
+          5975
+        </td>
+        <td>
+          1456
+          -
+          1488
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.SqlParser.str
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.SqlParser.str(&quot;owc_creator_displays.uuid&quot;)(anorm.this.Column.columnToString)
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          5977
+        </td>
+        <td>
+          1562
+          -
+          1716
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          info.smart.models.owc100.OwcCreatorDisplay.apply
+        </td>
+        <td style="background: #AEF1AE">
+          info.smart.models.owc100.OwcCreatorDisplay.apply(pixelWidth, pixelHeight, mmPerPixel, java.util.UUID.fromString(uuid))
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          5976
+        </td>
+        <td>
+          1694
+          -
+          1715
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          java.util.UUID.fromString(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          5979
+        </td>
+        <td>
+          1942
+          -
+          2039
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_creator_displays.* from &quot;, &quot;&quot;).s(owc.this.`package`.tableOwcCreatorDisplays))).as[List[info.smart.models.owc100.OwcCreatorDisplay]](OwcCreatorDisplayDAO.this.owcCreatorDisplayParser.*)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          69
+        </td>
+        <td>
+          5980
+        </td>
+        <td>
+          2293
+          -
+          2434
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.WithResult.as
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;select owc_creator_displays.* from &quot;, &quot; where uuid = \'&quot;, &quot;\'&quot;).s(owc.this.`package`.tableOwcCreatorDisplays, uuid.toString()))).as[Option[info.smart.models.owc100.OwcCreatorDisplay]](OwcCreatorDisplayDAO.this.owcCreatorDisplayParser.singleOpt)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          5981
+        </td>
+        <td>
+          2788
+          -
+          3176
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.this.Predef.augmentString(scala.StringContext.apply(&quot;\n          insert into &quot;, &quot; values (\n           {uuid}, {pixelWidth}, {pixelHeight}, {mmPerPixel}\n          )\n        &quot;).s(owc.this.`package`.tableOwcCreatorDisplays)).stripMargin)).on(anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;pixelWidth&quot;)).-&gt;[Option[Int]](owcCreatorDisplay.pixelWidth))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$4: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$5: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$6: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$4);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$4)(x$6, x$5)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;pixelHeight&quot;)).-&gt;[Option[Int]](owcCreatorDisplay.pixelHeight))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$10: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$11: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$12: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$10);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$10)(x$12, x$11)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Double]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;mmPerPixel&quot;)).-&gt;[Option[Double]](owcCreatorDisplay.mmPerPixel))({
+  ((a: Option[Double]) =&gt; {
+    &lt;artifact&gt; val x$16: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$17: anorm.ToStatement[Option[Double]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Double](anorm.this.ToStatement.doubleToStatement, anorm.this.ParameterMetaData.DoubleParameterMetaData);
+    &lt;artifact&gt; val x$18: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Double]](x$16);
+    anorm.this.ParameterValue.toParameterValue[Option[Double]](x$16)(x$18, x$17)
+  })
+}), anorm.this.NamedParameter.symbol[java.util.UUID](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[java.util.UUID](owcCreatorDisplay.uuid))({
+  ((a: java.util.UUID) =&gt; {
+    &lt;artifact&gt; val x$22: java.util.UUID = a;
+    &lt;artifact&gt; val x$23: anorm.ToStatement.uuidToStatement.type = anorm.this.ToStatement.uuidToStatement;
+    &lt;artifact&gt; val x$24: Null = anorm.this.ParameterValue.toParameterValue$default$2[java.util.UUID](x$22);
+    anorm.this.ParameterValue.toParameterValue[java.util.UUID](x$22)(x$24, x$23)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          5982
+        </td>
+        <td>
+          3215
+          -
+          3238
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcCreatorDisplay](owcCreatorDisplay)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          5983
+        </td>
+        <td>
+          3255
+          -
+          3308
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCreatorDisplayDAO.this.logger.error(&quot;owcCreatorDisplay couldn\'t be created&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          5984
+        </td>
+        <td>
+          3317
+          -
+          3321
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          5985
+        </td>
+        <td>
+          3684
+          -
+          4128
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;\n          update &quot;, &quot; set\n            pixel_width = {pixelWidth},\n            pixel_height = {pixelHeight},\n            mm_per_pixel = {mmPerPixel} where uuid = {uuid}\n        &quot;).s(owc.this.`package`.tableOwcCreatorDisplays))).on(anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;pixelWidth&quot;)).-&gt;[Option[Int]](owcCreatorDisplay.pixelWidth))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$28: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$29: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$30: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$28);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$28)(x$30, x$29)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Int]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;pixelHeight&quot;)).-&gt;[Option[Int]](owcCreatorDisplay.pixelHeight))({
+  ((a: Option[Int]) =&gt; {
+    &lt;artifact&gt; val x$34: Option[Int] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$35: anorm.ToStatement[Option[Int]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Int](anorm.this.ToStatement.intToStatement, anorm.this.ParameterMetaData.IntParameterMetaData);
+    &lt;artifact&gt; val x$36: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Int]](x$34);
+    anorm.this.ParameterValue.toParameterValue[Option[Int]](x$34)(x$36, x$35)
+  })
+}), anorm.this.NamedParameter.symbol[Option[Double]](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;mmPerPixel&quot;)).-&gt;[Option[Double]](owcCreatorDisplay.mmPerPixel))({
+  ((a: Option[Double]) =&gt; {
+    &lt;artifact&gt; val x$40: Option[Double] @scala.reflect.internal.annotations.uncheckedBounds = a;
+    &lt;artifact&gt; val x$41: anorm.ToStatement[Option[Double]] with anorm.NotNullGuard = anorm.this.ToStatement.optionToStatement[Double](anorm.this.ToStatement.doubleToStatement, anorm.this.ParameterMetaData.DoubleParameterMetaData);
+    &lt;artifact&gt; val x$42: Null = anorm.this.ParameterValue.toParameterValue$default$2[Option[Double]](x$40);
+    anorm.this.ParameterValue.toParameterValue[Option[Double]](x$40)(x$42, x$41)
+  })
+}), anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](owcCreatorDisplay.uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$46: String = a;
+    &lt;artifact&gt; val x$47: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$48: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$46);
+    anorm.this.ParameterValue.toParameterValue[String](x$46)(x$48, x$47)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          5986
+        </td>
+        <td>
+          4167
+          -
+          4190
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[info.smart.models.owc100.OwcCreatorDisplay](owcCreatorDisplay)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          5987
+        </td>
+        <td>
+          4207
+          -
+          4260
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #AEF1AE">
+          OwcCreatorDisplayDAO.this.logger.error(&quot;owcCreatorDisplay couldn\'t be updated&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          5988
+        </td>
+        <td>
+          4269
+          -
+          4273
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          5989
+        </td>
+        <td>
+          4600
+          -
+          4653
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.owc.OwcCreatorDisplayDAO.deleteOwcCreatorDisplayByUuid
+        </td>
+        <td style="background: #AEF1AE">
+          OwcCreatorDisplayDAO.this.deleteOwcCreatorDisplayByUuid(owcCreatorDisplay.uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          5990
+        </td>
+        <td>
+          4955
+          -
+          5074
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          anorm.Sql.executeUpdate
+        </td>
+        <td style="background: #AEF1AE">
+          anorm.`package`.sqlToSimple(anorm.`package`.SQL(scala.StringContext.apply(&quot;delete from &quot;, &quot; where uuid = {uuid}&quot;).s(owc.this.`package`.tableOwcCreatorDisplays))).on(anorm.this.NamedParameter.symbol[String](scala.this.Predef.ArrowAssoc[Symbol](scala.Symbol.apply(&quot;uuid&quot;)).-&gt;[String](uuid.toString()))({
+  ((a: String) =&gt; {
+    &lt;artifact&gt; val x$52: String = a;
+    &lt;artifact&gt; val x$53: anorm.ToStatement.stringToStatement.type = anorm.this.ToStatement.stringToStatement;
+    &lt;artifact&gt; val x$54: Null = anorm.this.ParameterValue.toParameterValue$default$2[String](x$52);
+    anorm.this.ParameterValue.toParameterValue[String](x$52)(x$54, x$53)
+  })
+})).executeUpdate()(connection)
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          5991
+        </td>
+        <td>
+          5113
+          -
+          5117
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          5992
+        </td>
+        <td>
+          5142
+          -
+          5195
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          OwcCreatorDisplayDAO.this.logger.error(&quot;owcCreatorDisplay couldn\'t be deleted&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          155
+        </td>
+        <td>
+          5993
+        </td>
+        <td>
+          5204
+          -
+          5209
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

@@ -1,0 +1,4304 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          controllers/HomeController.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package controllers
+</span>21 <span style=''>
+</span>22 <span style=''>import javax.inject._
+</span>23 <span style=''>
+</span>24 <span style=''>import models.ErrorResult
+</span>25 <span style=''>import models.db.DatabaseSessionHolder
+</span>26 <span style=''>import models.users._
+</span>27 <span style=''>import play.api.Configuration
+</span>28 <span style=''>import play.api.cache._
+</span>29 <span style=''>import play.api.libs.concurrent.Execution.Implicits.defaultContext
+</span>30 <span style=''>import play.api.libs.json.Writes._
+</span>31 <span style=''>import play.api.libs.json._
+</span>32 <span style=''>import play.api.libs.ws._
+</span>33 <span style=''>import play.api.mvc._
+</span>34 <span style=''>import services.UserService
+</span>35 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>36 <span style=''>
+</span>37 <span style=''>import scala.concurrent.duration._
+</span>38 <span style=''>
+</span>39 <span style=''>/**
+</span>40 <span style=''>  * HomeController, maybe rename? Provides login and logout
+</span>41 <span style=''>  *
+</span>42 <span style=''>  * @param configuration
+</span>43 <span style=''>  * @param userService
+</span>44 <span style=''>  * @param passwordHashing
+</span>45 <span style=''>  * @param ws
+</span>46 <span style=''>  */
+</span>47 <span style=''>@Singleton
+</span>48 <span style=''>class HomeController @Inject()(val configuration: Configuration,
+</span>49 <span style=''>                               val userService: UserService,
+</span>50 <span style=''>                               val passwordHashing: PasswordHashing,
+</span>51 <span style=''>                               ws: WSClient) extends Controller with Security with ClassnameLogger {
+</span>52 <span style=''>
+</span>53 <span style=''>  lazy private val reCaptchaSecret: String =
+</span>54 <span style=''>    </span><span style='background: #AEF1AE'>configuration.getString(&quot;google.recaptcha.secret&quot;).getOrElse(&quot;secret api key&quot;)</span><span style=''>
+</span>55 <span style=''>
+</span>56 <span style=''>  val recaptcaVerifyUrl = </span><span style='background: #AEF1AE'>&quot;https://www.google.com/recaptcha/api/siteverify&quot;</span><span style=''>
+</span>57 <span style=''>
+</span>58 <span style=''>  /**
+</span>59 <span style=''>    * CORS needs preflight OPTION
+</span>60 <span style=''>    *
+</span>61 <span style=''>    * @param all
+</span>62 <span style=''>    * @return
+</span>63 <span style=''>    */
+</span>64 <span style=''>  def preflight(all: String): Action[AnyContent] = </span><span style='background: #F0ADAD'>Action { request =&gt;
+</span>65 <span style=''></span><span style='background: #F0ADAD'>    NoContent.withHeaders(headers: _*)
+</span>66 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>67 <span style=''>
+</span>68 <span style=''>  /**
+</span>69 <span style=''>    * to handle CORS and HttpSecurity headers, maybe that is already managed through the Filters?!
+</span>70 <span style=''>    *
+</span>71 <span style=''>    * @return
+</span>72 <span style=''>    */
+</span>73 <span style=''>  def headers: List[(String, String)] = </span><span style='background: #F0ADAD'>List(
+</span>74 <span style=''></span><span style='background: #F0ADAD'>    &quot;Access-Control-Allow-Origin&quot; -&gt; &quot;*&quot;,
+</span>75 <span style=''></span><span style='background: #F0ADAD'>    &quot;Allow&quot; -&gt; &quot;*&quot;,
+</span>76 <span style=''></span><span style='background: #F0ADAD'>    &quot;Access-Control-Allow-Methods&quot; -&gt; &quot;GET, POST, OPTIONS&quot;,
+</span>77 <span style=''></span><span style='background: #F0ADAD'>    &quot;Access-Control-Allow-Headers&quot; -&gt;
+</span>78 <span style=''></span><span style='background: #F0ADAD'>      &quot;Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date&quot;,
+</span>79 <span style=''></span><span style='background: #F0ADAD'>    &quot;Access-Control-Allow-Credentials&quot; -&gt; &quot;true&quot;
+</span>80 <span style=''></span><span style='background: #F0ADAD'>  )</span><span style=''>
+</span>81 <span style=''>
+</span>82 <span style=''>  /**
+</span>83 <span style=''>    * idea is to provide a listing of api usable endpoints with some parameter description,selectable by the fields param
+</span>84 <span style=''>    *
+</span>85 <span style=''>    * the BuildInfo object is generated through sbt-buildinfo plugin, src under target/scala-2.11/src_managed
+</span>86 <span style=''>    * configuration of this in build.sbt buildinfokeys
+</span>87 <span style=''>    *
+</span>88 <span style=''>    * @param fields
+</span>89 <span style=''>    * @return
+</span>90 <span style=''>    */
+</span>91 <span style=''>  def discovery(fields: Option[String]): Action[AnyContent] = </span><span style='background: #AEF1AE'>Action { request =&gt;
+</span>92 <span style=''></span><span style='background: #AEF1AE'>    val appName = utils.BuildInfo.name
+</span>93 <span style=''></span><span style='background: #AEF1AE'>    val appVersion = utils.BuildInfo.version
+</span>94 <span style=''></span><span style='background: #AEF1AE'>    val buildNumber = utils.BuildInfo.buildNumber
+</span>95 <span style=''></span><span style='background: #AEF1AE'>    Ok(Json.obj(
+</span>96 <span style=''></span><span style='background: #AEF1AE'>      &quot;appName&quot; -&gt; appName,
+</span>97 <span style=''></span><span style='background: #AEF1AE'>      &quot;version&quot; -&gt; s&quot;$appVersion-$buildNumber&quot;
+</span>98 <span style=''></span><span style='background: #AEF1AE'>    ))
+</span>99 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>100 <span style=''>
+</span>101 <span style=''>  /**
+</span>102 <span style=''>    * just to have something on /
+</span>103 <span style=''>    */
+</span>104 <span style=''>  def index: Action[AnyContent] = </span><span style='background: #AEF1AE'>Action {
+</span>105 <span style=''></span><span style='background: #AEF1AE'>    Ok(Json.obj(
+</span>106 <span style=''></span><span style='background: #AEF1AE'>      &quot;status&quot; -&gt; &quot;Ok&quot;,
+</span>107 <span style=''></span><span style='background: #AEF1AE'>      &quot;message&quot; -&gt; &quot;application is ready&quot;
+</span>108 <span style=''></span><span style='background: #AEF1AE'>    ))
+</span>109 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>110 <span style=''>
+</span>111 <span style=''>  /**
+</span>112 <span style=''>    * login with JSON (from Angular / form)
+</span>113 <span style=''>    * {&quot;email&quot;:&quot;akmoch&quot;,&quot;password&quot;:&quot;testpass123&quot;}
+</span>114 <span style=''>    *
+</span>115 <span style=''>    * Create the authentication token and sets the cookie [[AuthTokenCookieKey]]
+</span>116 <span style=''>    * for AngularJS to use also in X-XSRF-TOKEN in HTTP header.
+</span>117 <span style=''>    *
+</span>118 <span style=''>    * @return
+</span>119 <span style=''>    */
+</span>120 <span style=''>  def login: Action[JsValue] = </span><span style='background: #AEF1AE'>Action(parse.json) { implicit request =&gt;
+</span>121 <span style=''></span><span style='background: #AEF1AE'>    request.body.validate[LoginCredentials].fold(
+</span>122 <span style=''></span><span style='background: #AEF1AE'>      errors =&gt; {
+</span>123 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>logger.error(JsError.toJson(errors).toString())</span><span style='background: #AEF1AE'>
+</span>124 <span style=''></span><span style='background: #AEF1AE'>        val error = </span><span style='background: #F0ADAD'>ErrorResult(&quot;Could not validate request.&quot;, Some(JsError.toJson(errors).toString()))</span><span style='background: #AEF1AE'>
+</span>125 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>BadRequest(Json.toJson(error)).as(JSON)</span><span style='background: #AEF1AE'>
+</span>126 <span style=''></span><span style='background: #AEF1AE'>      },
+</span>127 <span style=''></span><span style='background: #AEF1AE'>      valid = credentials =&gt; {
+</span>128 <span style=''></span><span style='background: #AEF1AE'>        // authenticate user in db
+</span>129 <span style=''></span><span style='background: #AEF1AE'>        userService.authenticateLocal(credentials) match {
+</span>130 <span style=''></span><span style='background: #AEF1AE'>          case Left(error) =&gt;
+</span>131 <span style=''></span><span style='background: #AEF1AE'>            logger.error(error.message)
+</span>132 <span style=''></span><span style='background: #AEF1AE'>            Unauthorized(Json.toJson(error)).as(JSON)
+</span>133 <span style=''></span><span style='background: #AEF1AE'>
+</span>134 <span style=''></span><span style='background: #AEF1AE'>          case Right(user) =&gt;
+</span>135 <span style=''></span><span style='background: #AEF1AE'>            val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+</span>136 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s&quot;Logging in email from $uaIdentifier&quot;</span><span style='background: #AEF1AE'>)
+</span>137 <span style=''></span><span style='background: #AEF1AE'>            val token = userService.upsertUserSessionCache(user.email.value, uaIdentifier)
+</span>138 <span style=''></span><span style='background: #AEF1AE'>            logger.trace(</span><span style='background: #F0ADAD'>s&quot;Logging in setting cache $token&quot;</span><span style='background: #AEF1AE'>)
+</span>139 <span style=''></span><span style='background: #AEF1AE'>            Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;token&quot; -&gt; token, &quot;email&quot; -&gt; user.email.value, &quot;userprofile&quot; -&gt; user.asProfileJs))
+</span>140 <span style=''></span><span style='background: #AEF1AE'>              .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
+</span>141 <span style=''></span><span style='background: #AEF1AE'>
+</span>142 <span style=''></span><span style='background: #AEF1AE'>          case _ =&gt;
+</span>143 <span style=''></span><span style='background: #AEF1AE'>            val error = </span><span style='background: #F0ADAD'>ErrorResult(&quot;Could not validate request.&quot;, None)</span><span style='background: #AEF1AE'>
+</span>144 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>logger.error(error.message)</span><span style='background: #AEF1AE'>
+</span>145 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>InternalServerError(Json.toJson(error)).as(JSON)</span><span style='background: #AEF1AE'>
+</span>146 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>147 <span style=''></span><span style='background: #AEF1AE'>      })
+</span>148 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>149 <span style=''>
+</span>150 <span style=''>  /**
+</span>151 <span style=''>    * https://developers.google.com/recaptcha/docs/verify
+</span>152 <span style=''>    *
+</span>153 <span style=''>    * @param recaptcaChallenge
+</span>154 <span style=''>    * @return
+</span>155 <span style=''>    */
+</span>156 <span style=''>  def recaptchaValidate(recaptcaChallenge: String): Action[AnyContent] = </span><span style='background: #AEF1AE'>Action.async { implicit request =&gt;
+</span>157 <span style=''></span><span style='background: #AEF1AE'>    // TODO check from where URL referer comes from
+</span>158 <span style=''></span><span style='background: #AEF1AE'>    ws.url(recaptcaVerifyUrl)
+</span>159 <span style=''></span><span style='background: #AEF1AE'>      .withHeaders(&quot;Accept&quot; -&gt; &quot;application/json&quot;)
+</span>160 <span style=''></span><span style='background: #AEF1AE'>      .withRequestTimeout(10000.millis)
+</span>161 <span style=''></span><span style='background: #AEF1AE'>      .withQueryString(&quot;secret&quot; -&gt; reCaptchaSecret,
+</span>162 <span style=''></span><span style='background: #AEF1AE'>        &quot;response&quot; -&gt; recaptcaChallenge).get().map {
+</span>163 <span style=''></span><span style='background: #AEF1AE'>      response =&gt;
+</span>164 <span style=''></span><span style='background: #AEF1AE'>        val success = (response.json \ &quot;success&quot;).as[Boolean]
+</span>165 <span style=''></span><span style='background: #AEF1AE'>        if (success) {
+</span>166 <span style=''></span><span style='background: #AEF1AE'>          Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;message&quot; -&gt; &quot;granted&quot;, &quot;success&quot; -&gt; JsBoolean(true)))
+</span>167 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>168 <span style=''></span><span style='background: #AEF1AE'>        else </span><span style='background: #F0ADAD'>{
+</span>169 <span style=''></span><span style='background: #F0ADAD'>          val errors = (response.json \ &quot;error-codes&quot;)
+</span>170 <span style=''></span><span style='background: #F0ADAD'>          val jsErrors = errors.getOrElse(JsString(&quot;No further errors&quot;))
+</span>171 <span style=''></span><span style='background: #F0ADAD'>          val error = ErrorResult(&quot;User email or password wrong.&quot;, Some(jsErrors.toString()))
+</span>172 <span style=''></span><span style='background: #F0ADAD'>          BadRequest(Json.toJson(error)).as(JSON)
+</span>173 <span style=''></span><span style='background: #F0ADAD'>        }</span><span style='background: #AEF1AE'>
+</span>174 <span style=''></span><span style='background: #AEF1AE'>    }.recover {
+</span>175 <span style=''></span><span style='background: #AEF1AE'>      case e: Exception =&gt;
+</span>176 <span style=''></span><span style='background: #AEF1AE'>        val error = </span><span style='background: #F0ADAD'>ErrorResult(&quot;Exception on validating captcha.&quot;, Some(e.getMessage))</span><span style='background: #AEF1AE'>
+</span>177 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>InternalServerError(Json.toJson(error)).as(JSON)</span><span style='background: #AEF1AE'>
+</span>178 <span style=''></span><span style='background: #AEF1AE'>    }
+</span>179 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>180 <span style=''>
+</span>181 <span style=''>  /**
+</span>182 <span style=''>    * Log-out a user. Invalidates the authentication token.
+</span>183 <span style=''>    *
+</span>184 <span style=''>    * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
+</span>185 <span style=''>    * X-XSRF-TOKEN in HTTP header.
+</span>186 <span style=''>    */
+</span>187 <span style=''>  def logout: Action[Unit] = </span><span style='background: #AEF1AE'>HasToken(parse.empty) {
+</span>188 <span style=''></span><span style='background: #AEF1AE'>    token =&gt;
+</span>189 <span style=''></span><span style='background: #AEF1AE'>      email =&gt;
+</span>190 <span style=''></span><span style='background: #AEF1AE'>        implicit request =&gt;
+</span>191 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>userService.removeUserSessionCache(email, token)</span><span style='background: #AEF1AE'>
+</span>192 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))</span><span style='background: #AEF1AE'>
+</span>193 <span style=''></span><span style='background: #AEF1AE'>  }</span><span style=''>
+</span>194 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          54
+        </td>
+        <td>
+          1372
+        </td>
+        <td>
+          1874
+          -
+          1952
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.configuration.getString(&quot;google.recaptcha.secret&quot;, HomeController.this.configuration.getString$default$2).getOrElse[String](&quot;secret api key&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          1373
+        </td>
+        <td>
+          1980
+          -
+          2029
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;https://www.google.com/recaptcha/api/siteverify&quot;
+        </td>
+      </tr><tr>
+        <td>
+          64
+        </td>
+        <td>
+          1376
+        </td>
+        <td>
+          2166
+          -
+          2228
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.Action.apply(((request: play.api.mvc.Request[play.api.mvc.AnyContent]) =&gt; HomeController.this.NoContent.withHeaders((HomeController.this.headers: _*))))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          1375
+        </td>
+        <td>
+          2190
+          -
+          2224
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.withHeaders
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.NoContent.withHeaders((HomeController.this.headers: _*))
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          1374
+        </td>
+        <td>
+          2212
+          -
+          2219
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.HomeController.headers
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.headers
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1382
+        </td>
+        <td>
+          2402
+          -
+          2755
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.immutable.List.apply
+        </td>
+        <td style="background: #F0ADAD">
+          immutable.this.List.apply[(String, String)](scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Origin&quot;).-&gt;[String](&quot;*&quot;), scala.this.Predef.ArrowAssoc[String](&quot;Allow&quot;).-&gt;[String](&quot;*&quot;), scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Methods&quot;).-&gt;[String](&quot;GET, POST, OPTIONS&quot;), scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Headers&quot;).-&gt;[String](&quot;Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date&quot;), scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Credentials&quot;).-&gt;[String](&quot;true&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1377
+        </td>
+        <td>
+          2412
+          -
+          2448
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Origin&quot;).-&gt;[String](&quot;*&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          1378
+        </td>
+        <td>
+          2454
+          -
+          2468
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;Allow&quot;).-&gt;[String](&quot;*&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          76
+        </td>
+        <td>
+          1379
+        </td>
+        <td>
+          2474
+          -
+          2528
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Methods&quot;).-&gt;[String](&quot;GET, POST, OPTIONS&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1380
+        </td>
+        <td>
+          2534
+          -
+          2701
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Headers&quot;).-&gt;[String](&quot;Origin, X-Requested-With, Content-Type, Accept, Referer, User-Agent, Authorization, X-XSRF-TOKEN, Cache-Control, Pragma, Date&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          79
+        </td>
+        <td>
+          1381
+        </td>
+        <td>
+          2707
+          -
+          2751
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;Access-Control-Allow-Credentials&quot;).-&gt;[String](&quot;true&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          91
+        </td>
+        <td>
+          1399
+        </td>
+        <td>
+          3165
+          -
+          3421
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Action.apply(((request: play.api.mvc.Request[play.api.mvc.AnyContent]) =&gt; {
+  val appName: String = utils.BuildInfo.name;
+  val appVersion: String = utils.BuildInfo.version;
+  val buildNumber: String = utils.BuildInfo.buildNumber;
+  HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;appName&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](appName)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;version&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber))(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1383
+        </td>
+        <td>
+          3203
+          -
+          3223
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          utils.BuildInfo.name
+        </td>
+        <td style="background: #AEF1AE">
+          utils.BuildInfo.name
+        </td>
+      </tr><tr>
+        <td>
+          93
+        </td>
+        <td>
+          1384
+        </td>
+        <td>
+          3245
+          -
+          3268
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          utils.BuildInfo.version
+        </td>
+        <td style="background: #AEF1AE">
+          utils.BuildInfo.version
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          1385
+        </td>
+        <td>
+          3291
+          -
+          3318
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          utils.BuildInfo.buildNumber
+        </td>
+        <td style="background: #AEF1AE">
+          utils.BuildInfo.buildNumber
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1396
+        </td>
+        <td>
+          3325
+          -
+          3325
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1398
+        </td>
+        <td>
+          3323
+          -
+          3417
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;appName&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](appName)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;version&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber))(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1395
+        </td>
+        <td>
+          3326
+          -
+          3416
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;appName&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](appName)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;version&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber))(play.api.libs.json.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1397
+        </td>
+        <td>
+          3325
+          -
+          3325
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1387
+        </td>
+        <td>
+          3355
+          -
+          3355
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1389
+        </td>
+        <td>
+          3342
+          -
+          3362
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;appName&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](appName)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1386
+        </td>
+        <td>
+          3342
+          -
+          3351
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;appName&quot;
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1388
+        </td>
+        <td>
+          3355
+          -
+          3362
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](appName)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1393
+        </td>
+        <td>
+          3383
+          -
+          3410
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber))(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1390
+        </td>
+        <td>
+          3370
+          -
+          3379
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;version&quot;
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1392
+        </td>
+        <td>
+          3383
+          -
+          3383
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1394
+        </td>
+        <td>
+          3370
+          -
+          3410
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;version&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber))(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          1391
+        </td>
+        <td>
+          3383
+          -
+          3410
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;&quot;, &quot;-&quot;, &quot;&quot;).s(appVersion, buildNumber)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          1414
+        </td>
+        <td>
+          3504
+          -
+          3606
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Action.apply(HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Ok&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;application is ready&quot;)(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1411
+        </td>
+        <td>
+          3519
+          -
+          3519
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1410
+        </td>
+        <td>
+          3520
+          -
+          3601
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Ok&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;application is ready&quot;)(play.api.libs.json.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1413
+        </td>
+        <td>
+          3517
+          -
+          3602
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Ok&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;application is ready&quot;)(play.api.libs.json.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          1412
+        </td>
+        <td>
+          3519
+          -
+          3519
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1402
+        </td>
+        <td>
+          3548
+          -
+          3548
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1401
+        </td>
+        <td>
+          3548
+          -
+          3552
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;Ok&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1404
+        </td>
+        <td>
+          3536
+          -
+          3552
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;Ok&quot;)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1403
+        </td>
+        <td>
+          3548
+          -
+          3552
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;Ok&quot;)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1400
+        </td>
+        <td>
+          3536
+          -
+          3544
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1405
+        </td>
+        <td>
+          3560
+          -
+          3569
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1408
+        </td>
+        <td>
+          3573
+          -
+          3595
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;application is ready&quot;)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1407
+        </td>
+        <td>
+          3573
+          -
+          3573
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1406
+        </td>
+        <td>
+          3573
+          -
+          3595
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;application is ready&quot;
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1409
+        </td>
+        <td>
+          3560
+          -
+          3595
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;application is ready&quot;)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1415
+        </td>
+        <td>
+          3924
+          -
+          3934
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          1489
+        </td>
+        <td>
+          3917
+          -
+          5278
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Action.apply[play.api.libs.json.JsValue](HomeController.this.parse.json)(((implicit request: play.api.mvc.Request[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.users.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJsonReads).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  HomeController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()));
+  HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+}), ((credentials: models.users.LoginCredentials) =&gt; HomeController.this.userService.authenticateLocal(credentials) match {
+  case (a: models.ErrorResult)scala.util.Left[models.ErrorResult,models.users.User]((error @ _)) =&gt; {
+    HomeController.this.logger.error(error.message);
+    HomeController.this.Unauthorized.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+  }
+  case (b: models.users.User)scala.util.Right[models.ErrorResult,models.users.User]((user @ _)) =&gt; {
+    val uaIdentifier: String = request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault);
+    HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in email from &quot;, &quot;&quot;).s(uaIdentifier));
+    val token: String = HomeController.this.userService.upsertUserSessionCache(user.email.value, uaIdentifier);
+    HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in setting cache &quot;, &quot;&quot;).s(token));
+    HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+      &lt;artifact&gt; val x$1: String = HomeController.this.AuthTokenCookieKey;
+      &lt;artifact&gt; val x$2: String = token;
+      &lt;artifact&gt; val x$3: None.type = scala.None;
+      &lt;artifact&gt; val x$4: Boolean = false;
+      &lt;artifact&gt; val x$5: String = play.api.mvc.Cookie.apply$default$4;
+      &lt;artifact&gt; val x$6: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+      &lt;artifact&gt; val x$7: Boolean = play.api.mvc.Cookie.apply$default$6;
+      play.api.mvc.Cookie.apply(x$1, x$2, x$3, x$5, x$6, x$7, x$4)
+    })
+  }
+  case _ =&gt; {
+    val error: models.ErrorResult = models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.None);
+    HomeController.this.logger.error(error.message);
+    HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+  }
+}))))
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1416
+        </td>
+        <td>
+          3983
+          -
+          3983
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.LoginCredentialsFromJsonReads
+        </td>
+        <td style="background: #AEF1AE">
+          controllers.this.`package`.LoginCredentialsFromJsonReads
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          1488
+        </td>
+        <td>
+          3962
+          -
+          5274
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsResult.fold
+        </td>
+        <td style="background: #AEF1AE">
+          request.body.validate[models.users.LoginCredentials](controllers.this.`package`.LoginCredentialsFromJsonReads).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  HomeController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()));
+  HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+}), ((credentials: models.users.LoginCredentials) =&gt; HomeController.this.userService.authenticateLocal(credentials) match {
+  case (a: models.ErrorResult)scala.util.Left[models.ErrorResult,models.users.User]((error @ _)) =&gt; {
+    HomeController.this.logger.error(error.message);
+    HomeController.this.Unauthorized.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+  }
+  case (b: models.users.User)scala.util.Right[models.ErrorResult,models.users.User]((user @ _)) =&gt; {
+    val uaIdentifier: String = request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault);
+    HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in email from &quot;, &quot;&quot;).s(uaIdentifier));
+    val token: String = HomeController.this.userService.upsertUserSessionCache(user.email.value, uaIdentifier);
+    HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in setting cache &quot;, &quot;&quot;).s(token));
+    HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+      &lt;artifact&gt; val x$1: String = HomeController.this.AuthTokenCookieKey;
+      &lt;artifact&gt; val x$2: String = token;
+      &lt;artifact&gt; val x$3: None.type = scala.None;
+      &lt;artifact&gt; val x$4: Boolean = false;
+      &lt;artifact&gt; val x$5: String = play.api.mvc.Cookie.apply$default$4;
+      &lt;artifact&gt; val x$6: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+      &lt;artifact&gt; val x$7: Boolean = play.api.mvc.Cookie.apply$default$6;
+      play.api.mvc.Cookie.apply(x$1, x$2, x$3, x$5, x$6, x$7, x$4)
+    })
+  }
+  case _ =&gt; {
+    val error: models.ErrorResult = models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.None);
+    HomeController.this.logger.error(error.message);
+    HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+  }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1418
+        </td>
+        <td>
+          4034
+          -
+          4081
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1417
+        </td>
+        <td>
+          4047
+          -
+          4080
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1420
+        </td>
+        <td>
+          4150
+          -
+          4183
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1419
+        </td>
+        <td>
+          4114
+          -
+          4143
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Could not validate request.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1422
+        </td>
+        <td>
+          4102
+          -
+          4185
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString()))
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1421
+        </td>
+        <td>
+          4145
+          -
+          4184
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1423
+        </td>
+        <td>
+          4216
+          -
+          4216
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1425
+        </td>
+        <td>
+          4204
+          -
+          4204
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1428
+        </td>
+        <td>
+          4194
+          -
+          4233
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1424
+        </td>
+        <td>
+          4205
+          -
+          4223
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1427
+        </td>
+        <td>
+          4228
+          -
+          4232
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          1426
+        </td>
+        <td>
+          4204
+          -
+          4204
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          129
+        </td>
+        <td>
+          1429
+        </td>
+        <td>
+          4317
+          -
+          4359
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserService.authenticateLocal
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.userService.authenticateLocal(credentials)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          1431
+        </td>
+        <td>
+          4410
+          -
+          4437
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.logger.error(error.message)
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          1430
+        </td>
+        <td>
+          4423
+          -
+          4436
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.message
+        </td>
+        <td style="background: #AEF1AE">
+          error.message
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1432
+        </td>
+        <td>
+          4474
+          -
+          4474
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #AEF1AE">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1434
+        </td>
+        <td>
+          4462
+          -
+          4462
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1437
+        </td>
+        <td>
+          4450
+          -
+          4491
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Unauthorized.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1433
+        </td>
+        <td>
+          4463
+          -
+          4481
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1436
+        </td>
+        <td>
+          4486
+          -
+          4490
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          1435
+        </td>
+        <td>
+          4462
+          -
+          4462
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          1438
+        </td>
+        <td>
+          4582
+          -
+          4597
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.UserAgentHeader
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.UserAgentHeader
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          1440
+        </td>
+        <td>
+          4562
+          -
+          4632
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          request.headers.get(HomeController.this.UserAgentHeader).getOrElse[String](HomeController.this.UserAgentHeaderDefault)
+        </td>
+      </tr><tr>
+        <td>
+          135
+        </td>
+        <td>
+          1439
+        </td>
+        <td>
+          4609
+          -
+          4631
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.UserAgentHeaderDefault
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.UserAgentHeaderDefault
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          1441
+        </td>
+        <td>
+          4658
+          -
+          4696
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Logging in email from &quot;, &quot;&quot;).s(uaIdentifier)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          1442
+        </td>
+        <td>
+          4645
+          -
+          4697
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in email from &quot;, &quot;&quot;).s(uaIdentifier))
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1443
+        </td>
+        <td>
+          4757
+          -
+          4773
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          uk.gov.hmrc.emailaddress.EmailAddress.value
+        </td>
+        <td style="background: #AEF1AE">
+          user.email.value
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1444
+        </td>
+        <td>
+          4722
+          -
+          4788
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserService.upsertUserSessionCache
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.userService.upsertUserSessionCache(user.email.value, uaIdentifier)
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          1446
+        </td>
+        <td>
+          4801
+          -
+          4849
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.logger.trace(scala.StringContext.apply(&quot;Logging in setting cache &quot;, &quot;&quot;).s(token))
+        </td>
+      </tr><tr>
+        <td>
+          138
+        </td>
+        <td>
+          1445
+        </td>
+        <td>
+          4814
+          -
+          4848
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Logging in setting cache &quot;, &quot;&quot;).s(token)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1456
+        </td>
+        <td>
+          4910
+          -
+          4917
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;email&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1465
+        </td>
+        <td>
+          4939
+          -
+          4972
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1447
+        </td>
+        <td>
+          4874
+          -
+          4882
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1459
+        </td>
+        <td>
+          4921
+          -
+          4937
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1468
+        </td>
+        <td>
+          4864
+          -
+          4864
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1450
+        </td>
+        <td>
+          4886
+          -
+          4890
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1449
+        </td>
+        <td>
+          4886
+          -
+          4886
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1458
+        </td>
+        <td>
+          4932
+          -
+          4932
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1467
+        </td>
+        <td>
+          4864
+          -
+          4864
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1461
+        </td>
+        <td>
+          4939
+          -
+          4952
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;userprofile&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1452
+        </td>
+        <td>
+          4892
+          -
+          4899
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;token&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1464
+        </td>
+        <td>
+          4956
+          -
+          4972
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1455
+        </td>
+        <td>
+          4892
+          -
+          4908
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1454
+        </td>
+        <td>
+          4903
+          -
+          4908
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1463
+        </td>
+        <td>
+          4961
+          -
+          4961
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.profileJsWrites
+        </td>
+        <td style="background: #AEF1AE">
+          controllers.this.`package`.profileJsWrites
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1448
+        </td>
+        <td>
+          4886
+          -
+          4890
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1457
+        </td>
+        <td>
+          4921
+          -
+          4937
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          uk.gov.hmrc.emailaddress.EmailAddress.value
+        </td>
+        <td style="background: #AEF1AE">
+          user.email.value
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1466
+        </td>
+        <td>
+          4865
+          -
+          4973
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1451
+        </td>
+        <td>
+          4874
+          -
+          4890
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1460
+        </td>
+        <td>
+          4910
+          -
+          4937
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1462
+        </td>
+        <td>
+          4956
+          -
+          4972
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.asProfileJs
+        </td>
+        <td style="background: #AEF1AE">
+          user.asProfileJs
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          1453
+        </td>
+        <td>
+          4903
+          -
+          4903
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1474
+        </td>
+        <td>
+          5002
+          -
+          5002
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Cookie.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1476
+        </td>
+        <td>
+          4862
+          -
+          5060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.withCookies
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;token&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](token)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;email&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](user.email.value)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;userprofile&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[controllers.ProfileJs](user.asProfileJs)(controllers.this.`package`.profileJsWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).withCookies({
+  &lt;artifact&gt; val x$1: String = HomeController.this.AuthTokenCookieKey;
+  &lt;artifact&gt; val x$2: String = token;
+  &lt;artifact&gt; val x$3: None.type = scala.None;
+  &lt;artifact&gt; val x$4: Boolean = false;
+  &lt;artifact&gt; val x$5: String = play.api.mvc.Cookie.apply$default$4;
+  &lt;artifact&gt; val x$6: Option[String] @scala.reflect.internal.annotations.uncheckedBounds = play.api.mvc.Cookie.apply$default$5;
+  &lt;artifact&gt; val x$7: Boolean = play.api.mvc.Cookie.apply$default$6;
+  play.api.mvc.Cookie.apply(x$1, x$2, x$3, x$5, x$6, x$7, x$4)
+})
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1470
+        </td>
+        <td>
+          5036
+          -
+          5040
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1473
+        </td>
+        <td>
+          5002
+          -
+          5002
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Cookie.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1472
+        </td>
+        <td>
+          5002
+          -
+          5002
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Cookie.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1475
+        </td>
+        <td>
+          5002
+          -
+          5059
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Cookie.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Cookie.apply(x$1, x$2, x$3, x$5, x$6, x$7, x$4)
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1469
+        </td>
+        <td>
+          5009
+          -
+          5027
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.AuthTokenCookieKey
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.AuthTokenCookieKey
+        </td>
+      </tr><tr>
+        <td>
+          140
+        </td>
+        <td>
+          1471
+        </td>
+        <td>
+          5053
+          -
+          5058
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          1479
+        </td>
+        <td>
+          5106
+          -
+          5154
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Could not validate request.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          1478
+        </td>
+        <td>
+          5149
+          -
+          5153
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          143
+        </td>
+        <td>
+          1477
+        </td>
+        <td>
+          5118
+          -
+          5147
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Could not validate request.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          144
+        </td>
+        <td>
+          1481
+        </td>
+        <td>
+          5167
+          -
+          5194
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.logger.error(error.message)
+        </td>
+      </tr><tr>
+        <td>
+          144
+        </td>
+        <td>
+          1480
+        </td>
+        <td>
+          5180
+          -
+          5193
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.message
+        </td>
+        <td style="background: #F0ADAD">
+          error.message
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1483
+        </td>
+        <td>
+          5227
+          -
+          5245
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1485
+        </td>
+        <td>
+          5226
+          -
+          5226
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1482
+        </td>
+        <td>
+          5238
+          -
+          5238
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1484
+        </td>
+        <td>
+          5226
+          -
+          5226
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1487
+        </td>
+        <td>
+          5207
+          -
+          5255
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          145
+        </td>
+        <td>
+          1486
+        </td>
+        <td>
+          5250
+          -
+          5254
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          156
+        </td>
+        <td>
+          1549
+        </td>
+        <td>
+          5475
+          -
+          6490
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.async
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.mvc.Action.async(((implicit request: play.api.mvc.Request[play.api.mvc.AnyContent]) =&gt; HomeController.this.ws.url(HomeController.this.recaptcaVerifyUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](&quot;Accept&quot;).-&gt;[String](&quot;application/json&quot;)).withRequestTimeout(scala.concurrent.duration.`package`.DurationInt(10000).millis).withQueryString(scala.this.Predef.ArrowAssoc[String](&quot;secret&quot;).-&gt;[String](HomeController.this.reCaptchaSecret), scala.this.Predef.ArrowAssoc[String](&quot;response&quot;).-&gt;[String](recaptcaChallenge)).get().map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; {
+  val success: Boolean = json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;success&quot;).as[Boolean](json.this.Reads.BooleanReads);
+  if (success)
+    HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  else
+    {
+      val errors: play.api.libs.json.JsLookupResult = json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;error-codes&quot;);
+      val jsErrors: play.api.libs.json.JsValue = errors.getOrElse(play.api.libs.json.JsString.apply(&quot;No further errors&quot;));
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.Some.apply[String](jsErrors.toString()));
+      HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+    }
+}))(play.api.libs.concurrent.Execution.Implicits.defaultContext).recover[play.api.mvc.Result](({
+  @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+    def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+      $anonfun.super.&lt;init&gt;();
+      ()
+    };
+    final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x1: A1, default: A1 =&gt; B1): B1 = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; {
+        val error: models.ErrorResult = models.ErrorResult.apply(&quot;Exception on validating captcha.&quot;, scala.Some.apply[String](e.getMessage()));
+        HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+      }
+      case (defaultCase$ @ _) =&gt; default.apply(x1)
+    };
+    final def isDefinedAt(x1: Throwable): Boolean = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; true
+      case (defaultCase$ @ _) =&gt; false
+    }
+  };
+  new $anonfun()
+}: PartialFunction[Throwable,play.api.mvc.Result]))(play.api.libs.concurrent.Execution.Implicits.defaultContext)))
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1490
+        </td>
+        <td>
+          5573
+          -
+          5590
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.HomeController.recaptcaVerifyUrl
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.recaptcaVerifyUrl
+        </td>
+      </tr><tr>
+        <td>
+          159
+        </td>
+        <td>
+          1491
+        </td>
+        <td>
+          5611
+          -
+          5641
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;Accept&quot;).-&gt;[String](&quot;application/json&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          1492
+        </td>
+        <td>
+          5669
+          -
+          5674
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          10000
+        </td>
+      </tr><tr>
+        <td>
+          160
+        </td>
+        <td>
+          1493
+        </td>
+        <td>
+          5669
+          -
+          5681
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.concurrent.duration.DurationConversions.millis
+        </td>
+        <td style="background: #AEF1AE">
+          scala.concurrent.duration.`package`.DurationInt(10000).millis
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          1494
+        </td>
+        <td>
+          5706
+          -
+          5714
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;secret&quot;
+        </td>
+      </tr><tr>
+        <td>
+          161
+        </td>
+        <td>
+          1495
+        </td>
+        <td>
+          5706
+          -
+          5733
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;secret&quot;).-&gt;[String](HomeController.this.reCaptchaSecret)
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1535
+        </td>
+        <td>
+          5786
+          -
+          5786
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.concurrent.Execution.Implicits.defaultContext
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.concurrent.Execution.Implicits.defaultContext
+        </td>
+      </tr><tr>
+        <td>
+          162
+        </td>
+        <td>
+          1496
+        </td>
+        <td>
+          5743
+          -
+          5774
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;response&quot;).-&gt;[String](recaptcaChallenge)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1500
+        </td>
+        <td>
+          5829
+          -
+          5867
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.JsReadable.as
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;success&quot;).as[Boolean](json.this.Reads.BooleanReads)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1497
+        </td>
+        <td>
+          5829
+          -
+          5842
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.ws.WSResponse.json
+        </td>
+        <td style="background: #AEF1AE">
+          response.json
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1499
+        </td>
+        <td>
+          5858
+          -
+          5858
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultReads.BooleanReads
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Reads.BooleanReads
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1498
+        </td>
+        <td>
+          5845
+          -
+          5854
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;success&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1501
+        </td>
+        <td>
+          5913
+          -
+          5921
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1519
+        </td>
+        <td>
+          5901
+          -
+          5985
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1510
+        </td>
+        <td>
+          5931
+          -
+          5953
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1509
+        </td>
+        <td>
+          5944
+          -
+          5953
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1518
+        </td>
+        <td>
+          5903
+          -
+          5903
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #AEF1AE">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1503
+        </td>
+        <td>
+          5925
+          -
+          5925
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1512
+        </td>
+        <td>
+          5968
+          -
+          5983
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsBoolean.apply
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.JsBoolean.apply(true)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1506
+        </td>
+        <td>
+          5931
+          -
+          5940
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1515
+        </td>
+        <td>
+          5955
+          -
+          5983
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1514
+        </td>
+        <td>
+          5968
+          -
+          5983
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1508
+        </td>
+        <td>
+          5944
+          -
+          5944
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1517
+        </td>
+        <td>
+          5903
+          -
+          5903
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #AEF1AE">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1502
+        </td>
+        <td>
+          5925
+          -
+          5929
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1520
+        </td>
+        <td>
+          5901
+          -
+          5985
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1511
+        </td>
+        <td>
+          5955
+          -
+          5964
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;success&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1505
+        </td>
+        <td>
+          5913
+          -
+          5929
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1504
+        </td>
+        <td>
+          5925
+          -
+          5929
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #AEF1AE">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1513
+        </td>
+        <td>
+          5977
+          -
+          5977
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1507
+        </td>
+        <td>
+          5944
+          -
+          5953
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;granted&quot;
+        </td>
+      </tr><tr>
+        <td>
+          166
+        </td>
+        <td>
+          1516
+        </td>
+        <td>
+          5904
+          -
+          5984
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          168
+        </td>
+        <td>
+          1534
+        </td>
+        <td>
+          6009
+          -
+          6292
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  val errors: play.api.libs.json.JsLookupResult = json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;error-codes&quot;);
+  val jsErrors: play.api.libs.json.JsValue = errors.getOrElse(play.api.libs.json.JsString.apply(&quot;No further errors&quot;));
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.Some.apply[String](jsErrors.toString()));
+  HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          169
+        </td>
+        <td>
+          1521
+        </td>
+        <td>
+          6035
+          -
+          6064
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsLookup.\
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;error-codes&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1523
+        </td>
+        <td>
+          6091
+          -
+          6138
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsLookupResult.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          errors.getOrElse(play.api.libs.json.JsString.apply(&quot;No further errors&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          170
+        </td>
+        <td>
+          1522
+        </td>
+        <td>
+          6108
+          -
+          6137
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsString.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsString.apply(&quot;No further errors&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1527
+        </td>
+        <td>
+          6161
+          -
+          6232
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.Some.apply[String](jsErrors.toString()))
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1524
+        </td>
+        <td>
+          6173
+          -
+          6204
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;User email or password wrong.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1526
+        </td>
+        <td>
+          6206
+          -
+          6231
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](jsErrors.toString())
+        </td>
+      </tr><tr>
+        <td>
+          171
+        </td>
+        <td>
+          1525
+        </td>
+        <td>
+          6211
+          -
+          6230
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          jsErrors.toString()
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1528
+        </td>
+        <td>
+          6265
+          -
+          6265
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1530
+        </td>
+        <td>
+          6253
+          -
+          6253
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1533
+        </td>
+        <td>
+          6243
+          -
+          6282
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1532
+        </td>
+        <td>
+          6277
+          -
+          6281
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1529
+        </td>
+        <td>
+          6254
+          -
+          6272
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          1531
+        </td>
+        <td>
+          6253
+          -
+          6253
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1548
+        </td>
+        <td>
+          5566
+          -
+          6486
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.concurrent.Future.recover
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.ws.url(HomeController.this.recaptcaVerifyUrl).withHeaders(scala.this.Predef.ArrowAssoc[String](&quot;Accept&quot;).-&gt;[String](&quot;application/json&quot;)).withRequestTimeout(scala.concurrent.duration.`package`.DurationInt(10000).millis).withQueryString(scala.this.Predef.ArrowAssoc[String](&quot;secret&quot;).-&gt;[String](HomeController.this.reCaptchaSecret), scala.this.Predef.ArrowAssoc[String](&quot;response&quot;).-&gt;[String](recaptcaChallenge)).get().map[play.api.mvc.Result](((response: play.api.libs.ws.WSResponse) =&gt; {
+  val success: Boolean = json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;success&quot;).as[Boolean](json.this.Reads.BooleanReads);
+  if (success)
+    HomeController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;granted&quot;)(play.api.libs.json.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;success&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsBoolean](play.api.libs.json.JsBoolean.apply(true))(play.api.libs.json.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  else
+    {
+      val errors: play.api.libs.json.JsLookupResult = json.this.JsValue.jsValueToJsLookup(response.json).\(&quot;error-codes&quot;);
+      val jsErrors: play.api.libs.json.JsValue = errors.getOrElse(play.api.libs.json.JsString.apply(&quot;No further errors&quot;));
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.Some.apply[String](jsErrors.toString()));
+      HomeController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+    }
+}))(play.api.libs.concurrent.Execution.Implicits.defaultContext).recover[play.api.mvc.Result](({
+  @SerialVersionUID(value = 0) final &lt;synthetic&gt; class $anonfun extends scala.runtime.AbstractPartialFunction[Throwable,play.api.mvc.Result] with Serializable {
+    def &lt;init&gt;(): &lt;$anon: Throwable =&gt; play.api.mvc.Result&gt; = {
+      $anonfun.super.&lt;init&gt;();
+      ()
+    };
+    final override def applyOrElse[A1 &lt;: Throwable, B1 &gt;: play.api.mvc.Result](x1: A1, default: A1 =&gt; B1): B1 = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; {
+        val error: models.ErrorResult = models.ErrorResult.apply(&quot;Exception on validating captcha.&quot;, scala.Some.apply[String](e.getMessage()));
+        HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+      }
+      case (defaultCase$ @ _) =&gt; default.apply(x1)
+    };
+    final def isDefinedAt(x1: Throwable): Boolean = ((x1.asInstanceOf[Throwable]: Throwable): Throwable @unchecked) match {
+      case (e @ (_: Exception)) =&gt; true
+      case (defaultCase$ @ _) =&gt; false
+    }
+  };
+  new $anonfun()
+}: PartialFunction[Throwable,play.api.mvc.Result]))(play.api.libs.concurrent.Execution.Implicits.defaultContext)
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1547
+        </td>
+        <td>
+          6307
+          -
+          6307
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.concurrent.Execution.Implicits.defaultContext
+        </td>
+        <td style="background: #AEF1AE">
+          play.api.libs.concurrent.Execution.Implicits.defaultContext
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          1546
+        </td>
+        <td>
+          6307
+          -
+          6307
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.HomeController.$anonfun.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new $anonfun()
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          1536
+        </td>
+        <td>
+          6368
+          -
+          6402
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Exception on validating captcha.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          1539
+        </td>
+        <td>
+          6356
+          -
+          6423
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Exception on validating captcha.&quot;, scala.Some.apply[String](e.getMessage()))
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          1538
+        </td>
+        <td>
+          6404
+          -
+          6422
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](e.getMessage())
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          1537
+        </td>
+        <td>
+          6409
+          -
+          6421
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.Throwable.getMessage
+        </td>
+        <td style="background: #F0ADAD">
+          e.getMessage()
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1545
+        </td>
+        <td>
+          6432
+          -
+          6480
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(HomeController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1542
+        </td>
+        <td>
+          6451
+          -
+          6451
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1541
+        </td>
+        <td>
+          6452
+          -
+          6470
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1544
+        </td>
+        <td>
+          6475
+          -
+          6479
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1540
+        </td>
+        <td>
+          6463
+          -
+          6463
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          1543
+        </td>
+        <td>
+          6451
+          -
+          6451
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          1550
+        </td>
+        <td>
+          6728
+          -
+          6739
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          1558
+        </td>
+        <td>
+          6719
+          -
+          6937
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          controllers.Security.HasToken
+        </td>
+        <td style="background: #AEF1AE">
+          HomeController.this.HasToken[Unit](HomeController.this.parse.empty)(((token: String) =&gt; ((email: String) =&gt; ((implicit request: play.api.mvc.Request[Unit]) =&gt; {
+  HomeController.this.userService.removeUserSessionCache(email, token);
+  HomeController.this.Ok.discardingCookies(play.api.mvc.DiscardingCookie.apply(HomeController.this.AuthTokenCookieKey, play.api.mvc.DiscardingCookie.apply$default$2, play.api.mvc.DiscardingCookie.apply$default$3, play.api.mvc.DiscardingCookie.apply$default$4))
+}))))
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1551
+        </td>
+        <td>
+          6809
+          -
+          6857
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserService.removeUserSessionCache
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.userService.removeUserSessionCache(email, token)
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1554
+        </td>
+        <td>
+          6889
+          -
+          6889
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.DiscardingCookie.apply$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.DiscardingCookie.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1557
+        </td>
+        <td>
+          6868
+          -
+          6933
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.discardingCookies
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.Ok.discardingCookies(play.api.mvc.DiscardingCookie.apply(HomeController.this.AuthTokenCookieKey, play.api.mvc.DiscardingCookie.apply$default$2, play.api.mvc.DiscardingCookie.apply$default$3, play.api.mvc.DiscardingCookie.apply$default$4))
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1553
+        </td>
+        <td>
+          6889
+          -
+          6889
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.DiscardingCookie.apply$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.DiscardingCookie.apply$default$2
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1556
+        </td>
+        <td>
+          6889
+          -
+          6932
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.DiscardingCookie.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.DiscardingCookie.apply(HomeController.this.AuthTokenCookieKey, play.api.mvc.DiscardingCookie.apply$default$2, play.api.mvc.DiscardingCookie.apply$default$3, play.api.mvc.DiscardingCookie.apply$default$4)
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1555
+        </td>
+        <td>
+          6889
+          -
+          6889
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.DiscardingCookie.apply$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.mvc.DiscardingCookie.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          192
+        </td>
+        <td>
+          1552
+        </td>
+        <td>
+          6913
+          -
+          6931
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.Security.AuthTokenCookieKey
+        </td>
+        <td style="background: #F0ADAD">
+          HomeController.this.AuthTokenCookieKey
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

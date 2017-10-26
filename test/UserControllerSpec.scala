@@ -52,6 +52,7 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       route(app, FakeRequest(POST, "/api/v1/login/gconnect").withJsonBody(Json.parse(LOGIN))).map(
         status(_)) mustBe Some(BAD_REQUEST)
       route(app, FakeRequest(GET, "/api/v1/logout/gdisconnect")).map(status(_)) mustBe Some(UNAUTHORIZED)
+      route(app, FakeRequest(GET, "/api/v1/logout")).map(status(_)) mustBe Some(UNAUTHORIZED)
     }
 
     "send 415 unsupported media type when JSON is required but not provided" in {
@@ -387,5 +388,32 @@ class UserControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
+    // GET  /api/v1/logout controllers.HomeController.logout
+    // POST /api/v1/logout controllers.HomeController.logout
+    "request to logout" in {
+      val testRequest1 = FakeRequest(GET, routes.UserController.logout().url)
+      val testRequest2 = FakeRequest(POST, routes.UserController.logout().url)
+
+      val testRequest3 = FakeRequest(routes.UserController.logout())
+        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be 401 without cookie and token")
+      status(response) must be(UNAUTHORIZED)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+      // contentAsJson(response) mustEqual Json.parse("""{"status": "Ok", "message": "application is ready"}""")
+
+      Then("status must be 401 also for POST")
+      val response2 = route(app, testRequest2).get
+      status(response2) must be(UNAUTHORIZED)
+
+      Then("status must be 401 also for GET with wrong AUTH token")
+      val response3 = route(app, testRequest3).get
+      status(response3) must be(UNAUTHORIZED)
+    }
+
   }
 }

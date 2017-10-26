@@ -19,6 +19,7 @@
 
 package controllers
 
+import models.ErrorResult
 import play.api.Configuration
 import play.api.libs.json._
 import play.api.mvc._
@@ -41,13 +42,17 @@ trait Security extends ClassnameLogger {
   val configuration: Configuration
   val passwordHashing: PasswordHashing
 
-  val AuthTokenCookieKey = "XSRF-TOKEN"
-  val AuthTokenHeader = "X-XSRF-TOKEN"
-  val AuthTokenUrlKey = "auth"
-
-  val UserAgentHeader = "User-Agent"
-  val UserAgentHeaderDefault = "Default-UA/1.0"
-  val RefererHeader = "Referer"
+  def userAction(userService: UserService) = new ActionRefiner[AuthenticatedRequest, UserRequest] {
+    def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
+      userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
+        .map(user => new UserRequest(user, authenticatedRequest))
+        .toRight{
+          logger.error("User email not found.")
+          val error = ErrorResult("User email not found.", None)
+          Results.BadRequest(Json.toJson(error)).as(JSON)
+        }
+    }
+  }
 
   /**
     * Checks that the token is:
@@ -77,7 +82,7 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           // val cacheOpt: Option[String] = cache.get[String](headerToken)
-          val cacheOpt: Option[String] = userService.checkUserSessionCacheByToken(
+          val cacheOpt: Option[String] = userService.findUserSessionByToken(
             headerToken, xsrfTokenCookie.value, uaIdentifier)
           val result = cacheOpt.fold {
             Unauthorized(Json.obj("status" -> "ERR", "message" -> "No server-side session"))
@@ -133,7 +138,7 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           // val cacheOpt: Option[String] = cache.get[String](headerToken)
-          val cacheOpt: Option[String] = userService.checkUserSessionCacheByToken(
+          val cacheOpt: Option[String] = userService.findUserSessionByToken(
             headerToken, xsrfTokenCookie.value, uaIdentifier)
           val result = cacheOpt.fold {
             logger.trace("optional cookie: No server-side session")
@@ -192,7 +197,7 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           // cache.get[String](token) map {
-          userService.checkUserSessionCacheByToken(
+          userService.findUserSessionByToken(
             token, xsrfTokenCookie.value, uaIdentifier) map {
             email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)
@@ -241,7 +246,7 @@ trait Security extends ClassnameLogger {
           logger.trace(s"ua: $uaIdentifier")
           // cache token -> maps to a String email
           // cache.get[String](token) map {
-          userService.checkUserSessionCacheByToken(
+          userService.findUserSessionByToken(
             token, xsrfTokenCookie.value, uaIdentifier) map {
             email =>
             // lazy val passwordHashing = new PasswordHashing(configuration)

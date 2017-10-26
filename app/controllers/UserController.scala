@@ -63,7 +63,7 @@ case class RegisterJs(email: EmailAddress,
                       password: String)
 
 /**
-  * 
+  *
   * @param configuration
   * @param userService
   * @param passwordHashing
@@ -77,7 +77,8 @@ class UserController @Inject()(val configuration: Configuration,
                                val passwordHashing: PasswordHashing,
                                emailService: EmailService,
                                collectionsService: OwcCollectionsService,
-                               googleService: GoogleServicesDAO)
+                               googleService: GoogleServicesDAO,
+                               authenticationAction: AuthenticationAction)
   extends Controller with ClassnameLogger with Security {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
@@ -200,18 +201,20 @@ class UserController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def userSelf: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
-          userService.findUserByEmailAsString(cachedSecUserEmail).fold {
-            logger.error("User email not found.")
-            val error = ErrorResult("User email not found.", None)
-            BadRequest(Json.toJson(error)).as(JSON)
-          } { user =>
-            Ok(Json.toJson(user.asProfileJs))
-          }
+  def userSelf2: Action[Unit] = authenticationAction(parse.empty) {
+    request =>
+      userService.findUserByEmailAsString(request.userSession.email).fold {
+        logger.error("User email not found.")
+        val error = ErrorResult("User email not found.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      } { user =>
+        Ok(Json.toJson(user.asProfileJs))
+      }
+  }
 
+  def userSelf: Action[AnyContent] = (authenticationAction andThen userAction(userService)) {
+    implicit request =>
+      Ok(Json.toJson(request.user.asProfileJs))
   }
 
   /**
@@ -386,7 +389,7 @@ class UserController @Inject()(val configuration: Configuration,
                     emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
                     // val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
                     // cache.set(newtoken, user.email.value)
-                    val newtoken = userService.upsertUserSessionCache(user.email.value, uaIdentifier)
+                    val newtoken = userService.upsertUserSession(user.email.value, uaIdentifier)
                     Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email.value))
                       .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
                   }
@@ -496,6 +499,20 @@ class UserController @Inject()(val configuration: Configuration,
 
 
   /**
+    * Log-out a user. Invalidates the authentication token.
+    *
+    * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
+    * X-XSRF-TOKEN in HTTP header.
+    */
+  def logout: Action[Unit] = HasToken(parse.empty) {
+    token =>
+      email =>
+        implicit request =>
+          userService.removeUserSessionCache(email, token)
+          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+  }
+
+  /**
     * part of OAuth2 Flow for Google Login in
     *
     * @return
@@ -569,7 +586,7 @@ class UserController @Inject()(val configuration: Configuration,
                     // logger.debug(s"Logging in email from $uaIdentifier")
                     // val token = passwordHashing.createSessionCookie(createdUser.email, uaIdentifier)
                     // cache.set(token, createdUser.email.value)
-                    val token = userService.upsertUserSessionCache(createdUser.email.value, uaIdentifier)
+                    val token = userService.upsertUserSession(createdUser.email.value, uaIdentifier)
                     Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> createdUser.email.value, "userprofile" -> createdUser.asProfileJs))
                       .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
                   }
@@ -579,7 +596,7 @@ class UserController @Inject()(val configuration: Configuration,
                 // logger.debug(s"Logging in email from $uaIdentifier")
                 // val token = passwordHashing.createSessionCookie(existingUser.email.value, uaIdentifier)
                 // cache.set(token, existingUser.email.value)
-                val token = userService.upsertUserSessionCache(existingUser.email.value, uaIdentifier)
+                val token = userService.upsertUserSession(existingUser.email.value, uaIdentifier)
                 Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> existingUser.email.value, "userprofile" -> existingUser.asProfileJs))
                   .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
               }

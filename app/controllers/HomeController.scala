@@ -22,10 +22,8 @@ package controllers
 import javax.inject._
 
 import models.ErrorResult
-import models.db.DatabaseSessionHolder
 import models.users._
 import play.api.Configuration
-import play.api.cache._
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.libs.json.Writes._
 import play.api.libs.json._
@@ -48,7 +46,7 @@ import scala.concurrent.duration._
 class HomeController @Inject()(val configuration: Configuration,
                                val userService: UserService,
                                val passwordHashing: PasswordHashing,
-                               ws: WSClient) extends Controller with Security with ClassnameLogger {
+                               ws: WSClient) extends Controller with ClassnameLogger {
 
   lazy private val reCaptchaSecret: String =
     configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
@@ -134,7 +132,7 @@ class HomeController @Inject()(val configuration: Configuration,
           case Right(user) =>
             val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
             logger.trace(s"Logging in email from $uaIdentifier")
-            val token = userService.upsertUserSessionCache(user.email.value, uaIdentifier)
+            val token = userService.upsertUserSession(user.email.value, uaIdentifier)
             logger.trace(s"Logging in setting cache $token")
             Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> user.email.value, "userprofile" -> user.asProfileJs))
               .withCookies(Cookie(AuthTokenCookieKey, token, None, httpOnly = false))
@@ -178,17 +176,4 @@ class HomeController @Inject()(val configuration: Configuration,
     }
   }
 
-  /**
-    * Log-out a user. Invalidates the authentication token.
-    *
-    * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
-    * X-XSRF-TOKEN in HTTP header.
-    */
-  def logout: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      email =>
-        implicit request =>
-          userService.removeUserSessionCache(email, token)
-          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-  }
 }

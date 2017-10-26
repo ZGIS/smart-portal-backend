@@ -27,6 +27,7 @@ import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
 import play.api.Configuration
+import play.api.http.MimeTypes
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc._
@@ -40,7 +41,9 @@ class AdminController @Inject()(val configuration: Configuration,
                                 emailService: EmailService,
                                 adminService: AdminService,
                                 collectionsService: OwcCollectionsService,
-                                googleService: GoogleServicesDAO)
+                                googleService: GoogleServicesDAO,
+                                authenticationAction: AuthenticationAction,
+                                adminPermissionCheckAction: AdminPermissionCheckAction)
   extends Controller with ClassnameLogger with Security {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
@@ -48,32 +51,20 @@ class AdminController @Inject()(val configuration: Configuration,
     .getOrElse("/tmp")
 
   /**
-    * check if email is allowed in configured admin list
-    *
-    * @param email
-    * @return
-    */
-  def isAdmin(email: String): Boolean = {
-    configuration.getStringList("smart.admin.emails").fold(false)(
-      adminList => if (adminList.contains(email)) true else false)
-  }
-
-  /**
     * Am I Admin? conf value compared with logged-in user based on security token, as Angular guard
     *
     * @return
     */
-  def amiAdmin: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
-            logger.error("User email not Admin.")
-            val error = ErrorResult("User email not Admin.", None)
-            Unauthorized(Json.toJson(error)).as(JSON)
-          } else {
-            Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> cachedSecUserEmail))
-          }
+  def amiAdmin: Action[Unit] =
+    (authenticationAction
+      andThen userAction(userService)
+      andThen adminPermissionCheckAction)(parse.empty) {
+
+      request =>
+        Ok(Json.obj("status" -> "OK",
+          "token" -> request.authenticatedRequest.userSession.token,
+          "email" -> request.user.email.value))
+
   }
 
   /**
@@ -85,7 +76,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -99,7 +90,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -128,7 +119,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -157,7 +148,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -192,7 +183,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -232,7 +223,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -251,7 +242,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -270,7 +261,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -289,7 +280,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -308,7 +299,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)
@@ -329,7 +320,7 @@ class AdminController @Inject()(val configuration: Configuration,
     token =>
       cachedSecUserEmail =>
         implicit request =>
-          if (!isAdmin(cachedSecUserEmail)) {
+          if (!adminService.isAdmin(cachedSecUserEmail)) {
             logger.error("User email not Admin.")
             val error = ErrorResult("User email not Admin.", None)
             Unauthorized(Json.toJson(error)).as(JSON)

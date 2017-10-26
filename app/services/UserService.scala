@@ -168,11 +168,8 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @param userAgentHeader
     * @return
     */
-  def upsertUserSessionCache(userEmail: String, userAgentHeader: String): String = {
+  def upsertUserSession(userEmail: String, userAgentHeader: String): String = {
     val token = passwordHashing.createSessionCookie(userEmail, userAgentHeader)
-
-    // TODO here replace cache access with DB
-    // cache.set(token, userEmail)
     val sessionOpt = dbSession.viaConnection(implicit connection => {
       UserSession.findUserSessionByToken(token).fold{
         UserSession.createUserSession(UserSession(
@@ -205,29 +202,37 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @param userAgentHeader
     * @return
     */
-  def checkUserSessionCacheByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[String] = {
-
-    // TODO here replace cache access with DB
-    // val userEmailOpt = cache.get[String](xsrfToken)
-    val userEmailOpt = dbSession.viaConnection(implicit connection => {
+  def getUserSessionByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[UserSession] = {
+    dbSession.viaConnection(implicit connection => {
       UserSession.findUserSessionByToken(xsrfToken)
     })
-
-    userEmailOpt.fold[Option[String]] {
-      logger.debug(s"no session for xsrfToken: $xsrfToken")
-      None
-    } {
-      session =>
-      val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
-      logger.trace(s"testcookie: $cookieForUSerAndUserAgent")
-      if (xsrfToken == xsrfTokenCookie && cookieForUSerAndUserAgent) {
-        logger.trace(s"request for active session: ${session.email} / $xsrfToken / $userAgentHeader")
-        Some(session.email)
-      } else {
-        logger.error("Invalid Token")
+      .fold[Option[UserSession]] {
+        logger.debug(s"no session for xsrfToken: $xsrfToken")
         None
-      }
+      } {
+        session =>
+          val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
+          logger.trace(s"testcookie: $cookieForUSerAndUserAgent")
+          if (xsrfToken == xsrfTokenCookie && cookieForUSerAndUserAgent) {
+            logger.trace(s"request for active session: ${session.email} / $xsrfToken / $userAgentHeader")
+            Some(session)
+          } else {
+            logger.error("Invalid Token")
+            None
+          }
     }
+  }
+
+  /**
+    * auxiliary intermediate for above function
+    *
+    * @param xsrfToken
+    * @param xsrfTokenCookie
+    * @param userAgentHeader
+    * @return
+    */
+  def findUserSessionByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[String] = {
+    getUserSessionByToken(xsrfToken, xsrfTokenCookie, userAgentHeader).map(_.email)
   }
 
   /**
@@ -237,8 +242,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @param xsrfToken
     */
   def removeUserSessionCache(userEmail: String, xsrfToken: String): Unit = {
-    // TODO here replace with DB cache
-    // cache.remove(xsrfToken)
     dbSession.viaConnection(implicit connection => {
       UserSession.deleteUserSessionByToken(xsrfToken)
     })
@@ -253,7 +256,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def insertUserFileEntry(filename: String, authUser: String, filelink: String): Option[UserFile] = {
-
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findUserByEmailAsString(authUser)
     }
@@ -264,7 +266,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
       None
     } {
       user =>
-
         val userFile = UserFile(
           uuid = UUID.randomUUID(),
           users_accountsubject = user.accountSubject,
@@ -279,7 +280,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
-
   /**
     * unambiguous keep track of user metadata records and owning them
     *
@@ -289,7 +289,6 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def insertUserMetaRecordEntry(CSW_URL: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
-
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findUserByEmailAsString(authUser)
     }

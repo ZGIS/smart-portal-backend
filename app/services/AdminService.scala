@@ -40,6 +40,17 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   /**
+    * check if email is allowed in configured admin list
+    *
+    * @param email
+    * @return
+    */
+  def isAdmin(email: String): Boolean = {
+    configuration.getStringList("smart.admin.emails").fold(false)(
+      adminList => if (adminList.contains(email)) true else false)
+  }
+
+  /**
     * list all users, of course (also for admin) must not see password
     *
     * @return

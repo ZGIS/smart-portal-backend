@@ -17,20 +17,18 @@
  * limitations under the License.
  */
 
-package controllers
+package controllers.security
 
 import javax.inject.{Inject, Singleton}
 
 import models.ErrorResult
 import models.users.{User, UserSession}
-import play.api.http.MimeTypes
 import play.api.libs.json._
 import play.api.mvc.{ActionRefiner, _}
 import services.{AdminService, UserService}
 import utils.ClassnameLogger
 
 import scala.concurrent.Future
-import scala.util.parsing.json.JSON
 
 /**
   * Use [[ActionBuilder]] when you want to add before/after logic in your actions.
@@ -42,40 +40,12 @@ import scala.util.parsing.json.JSON
   * Use the andThen combinator to compose multiple ActionFunctions together.
   */
 
-class AuthenticatedRequest[A](val userSession: UserSession, val request: Request[A])
-  extends WrappedRequest[A](request)
-
-@Singleton
-class AuthenticatedPlainAction @Inject()(val userService: UserService)
-  extends ActionBuilder[AuthenticatedRequest] with ClassnameLogger {
-
-  def invokeBlock[A](request: Request[A],
-                     block: AuthenticatedRequest[A] => Future[Result]): Future[Result] = {
-
-    request.cookies.get(AuthTokenCookieKey).fold {
-      Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie")))
-    } { xsrfTokenCookie =>
-      logger.trace(s"cookie ${xsrfTokenCookie.value}")
-      request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey)).map {
-        headerToken =>
-          // ua needed to differentiate between different devices/sessions
-          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-          logger.trace(s"headerToken: $headerToken")
-          logger.trace(s"ua: $uaIdentifier")
-          userService.getUserSessionByToken(headerToken, xsrfTokenCookie.value, uaIdentifier).fold {
-            Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "No server-side session"))
-              .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey)))
-          } {
-            userSession =>
-              block(new AuthenticatedRequest(userSession, request))
-          }
-
-      }.getOrElse(Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "No token header found"))
-        .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))))
-    }
-  }
-}
-
+/**
+  * the action checks if the incoming requets is for a valid server-side session (our original HasToken),
+  * right for an incoming UserRequest, for direct securing of a controller function (compose per function as required)
+  *
+  * @param userService
+  */
 @Singleton
 class AuthenticationAction @Inject()(val userService: UserService) extends ActionBuilder[AuthenticatedRequest]
   with ActionRefiner[Request, AuthenticatedRequest] with ClassnameLogger {
@@ -107,9 +77,43 @@ class AuthenticationAction @Inject()(val userService: UserService) extends Actio
   }
 }
 
-class UserRequest[A](val user: User, val authenticatedRequest: AuthenticatedRequest[A])
-  extends WrappedRequest[A](authenticatedRequest)
+@Singleton
+@deprecated
+class AuthenticatedPlainAction @Inject()(val userService: UserService)
+  extends ActionBuilder[AuthenticatedRequest] with ClassnameLogger {
 
+  def invokeBlock[A](request: Request[A],
+                     block: AuthenticatedRequest[A] => Future[Result]): Future[Result] = {
+
+    request.cookies.get(AuthTokenCookieKey).fold {
+      Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie")))
+    } { xsrfTokenCookie =>
+      logger.trace(s"cookie ${xsrfTokenCookie.value}")
+      request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey)).map {
+        headerToken =>
+          // ua needed to differentiate between different devices/sessions
+          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+          logger.trace(s"headerToken: $headerToken")
+          logger.trace(s"ua: $uaIdentifier")
+          userService.getUserSessionByToken(headerToken, xsrfTokenCookie.value, uaIdentifier).fold {
+            Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "No server-side session"))
+              .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey)))
+          } {
+            userSession =>
+              block(new AuthenticatedRequest(userSession, request))
+          }
+
+      }.getOrElse(Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "No token header found"))
+        .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))))
+    }
+  }
+}
+
+/**
+  * the action checks admin right for an incoming UserRequest, for direct securing of a controller function (compose per function as required)
+  *
+  * @param adminService
+  */
 @Singleton
 class AdminPermissionCheckAction @Inject()(val adminService: AdminService) extends ActionFilter[UserRequest] with ClassnameLogger {
   def filter[A](input: UserRequest[A]) = Future.successful {

@@ -21,6 +21,7 @@ package controllers
 
 import javax.inject.{Inject, Provider}
 
+import controllers.security.Secured
 import models.ErrorResult
 import models.gmd.MdMetadata
 import play.api.libs.json._
@@ -70,7 +71,7 @@ class CswController @Inject()(val configuration: Configuration,
                               metadataService: MetadataService,
                               collectionsService: OwcCollectionsService
                              )
-  extends Controller with ClassnameLogger with Security {
+  extends Controller with ClassnameLogger with Secured {
 
   lazy val app = appProvider.get()
   lazy val cswtInsertResource = app.resource("csw/transaction.insert.xml").get

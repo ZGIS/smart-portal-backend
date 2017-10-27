@@ -1,33 +1,35 @@
-/*
- * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
- * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
- * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
- * Ministry of Business, Innovation and Employment (MBIE)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package controllers
+package controllers.security
 
 import models.ErrorResult
+import models.users.{User, UserSession}
 import play.api.Configuration
-import play.api.libs.json._
+import play.api.libs.json.Json
 import play.api.mvc._
 import services.UserService
-import models.users.UserSession
 import utils.{ClassnameLogger, PasswordHashing}
 
 import scala.concurrent.Future
+
+/**
+  * base extension of Request object, adds a userSession to the request for the controller to use immediately
+  *
+  * @param userSession
+  * @param request
+  * @tparam A
+  */
+class AuthenticatedRequest[A](val userSession: UserSession, val request: Request[A])
+  extends WrappedRequest[A](request)
+
+/**
+  * 2nd level extension of Request object, adds the user obecjt to the request for the controller to use immediately,
+  * is based on the AuthenticatedRequest, so only if theres a valid session
+  *
+  * @param user
+  * @param authenticatedRequest
+  * @tparam A
+  */
+class UserRequest[A](val user: User, val authenticatedRequest: AuthenticatedRequest[A])
+  extends WrappedRequest[A](authenticatedRequest)
 
 /**
   * Security actions that should be used by all controllers that need to protect their actions.
@@ -35,24 +37,24 @@ import scala.concurrent.Future
   *
   * from https://github.com/mariussoutier/play-angular-require-seed/blob/master/app/controllers/Security.scala
   */
-trait Security extends ClassnameLogger {
+trait Secured extends ClassnameLogger {
   self: Controller =>
 
   val userService: UserService
   val configuration: Configuration
   val passwordHashing: PasswordHashing
 
-  def userAction(userService: UserService) = new ActionRefiner[AuthenticatedRequest, UserRequest] {
-    def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
-      userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
-        .map(user => new UserRequest(user, authenticatedRequest))
-        .toRight{
-          logger.error("User email not found.")
-          val error = ErrorResult("User email not found.", None)
-          Results.BadRequest(Json.toJson(error)).as(JSON)
-        }
-    }
-  }
+//  def userAction(userService: UserService) = new ActionRefiner[AuthenticatedRequest, UserRequest] {
+//    def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
+//      userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
+//        .map(user => new UserRequest(user, authenticatedRequest))
+//        .toRight{
+//          logger.error("User email not found.")
+//          val error = ErrorResult("User email not found.", None)
+//          Results.BadRequest(Json.toJson(error)).as(JSON)
+//        }
+//    }
+//  }
 
   /**
     * Checks that the token is:

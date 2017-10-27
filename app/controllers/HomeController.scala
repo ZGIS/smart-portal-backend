@@ -20,7 +20,7 @@
 package controllers
 
 import javax.inject._
-
+import controllers.security.{AuthTokenCookieKey, UserAgentHeader, UserAgentHeaderDefault}
 import models.ErrorResult
 import models.users._
 import play.api.Configuration

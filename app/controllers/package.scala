@@ -28,14 +28,6 @@ import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}
 
 package object controllers {
 
-  val AuthTokenCookieKey = "XSRF-TOKEN"
-  val AuthTokenHeader = "X-XSRF-TOKEN"
-  val AuthTokenUrlKey = "auth"
-
-  val UserAgentHeader = "User-Agent"
-  val UserAgentHeaderDefault = "Default-UA/1.0"
-  val RefererHeader = "Referer"
-
   implicit val LoginCredentialsFromJsonReads: Reads[LoginCredentials] = (
     (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
       (JsPath \ "password").read[String](minLength[String](8))) (LoginCredentials.apply _)

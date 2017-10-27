@@ -22,6 +22,7 @@ package controllers
 import java.time.format.DateTimeFormatter
 import javax.inject._
 
+import controllers.security.Secured
 import info.smart.models.owc100._
 import models.ErrorResult
 import org.apache.commons.lang3.StringEscapeUtils
@@ -37,7 +38,7 @@ class CollectionsController @Inject()(val configuration: Configuration,
                                       val passwordHashing: PasswordHashing,
                                       emailService: EmailService,
                                       collectionsService: OwcCollectionsService)
-  extends Controller with Security with ClassnameLogger {
+  extends Controller with Secured with ClassnameLogger {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 

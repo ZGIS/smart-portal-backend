@@ -24,6 +24,7 @@ import java.nio.file.{Files, Paths}
 import java.time.{ZoneId, ZonedDateTime}
 import javax.inject.Inject
 
+import controllers.security.{RefererHeader, Secured, UserAgentHeader}
 import models.ErrorResult
 import models.users.UserLinkLogging
 import play.api.Configuration
@@ -47,7 +48,7 @@ class FilesController @Inject()(val configuration: Configuration,
                                 val passwordHashing: PasswordHashing,
                                 googleService: GoogleServicesDAO,
                                 collectionsService: OwcCollectionsService
-                               ) extends Controller with ClassnameLogger with Security {
+                               ) extends Controller with ClassnameLogger with Secured {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")

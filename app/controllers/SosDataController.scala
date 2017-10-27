@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId, ZonedDateTime}
 import javax.inject.Inject
 
+import controllers.security.{RefererHeader, Secured, UserAgentHeader}
 import models.ErrorResult
 import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData, Wml2Export}
 import models.tvp.XmlTvpParser
@@ -49,7 +50,7 @@ class SosDataController @Inject()(val configuration: Configuration,
                                   val userService: UserService,
                                   val passwordHashing: PasswordHashing,
                                   wsClient: WSClient)
-  extends Controller with ClassnameLogger with Security {
+  extends Controller with ClassnameLogger with Secured {
 
   lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
     .getOrElse("/tmp")

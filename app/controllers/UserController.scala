@@ -23,6 +23,7 @@ import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 import javax.inject._
 
+import controllers.security._
 import models.ErrorResult
 import models.users._
 import play.api.Configuration
@@ -79,7 +80,7 @@ class UserController @Inject()(val configuration: Configuration,
                                collectionsService: OwcCollectionsService,
                                googleService: GoogleServicesDAO,
                                authenticationAction: AuthenticationAction)
-  extends Controller with ClassnameLogger with Security {
+  extends Controller with ClassnameLogger with Secured {
 
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 

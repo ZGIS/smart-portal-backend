@@ -23,7 +23,7 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import javax.inject._
 
-import controllers.security.{AdminPermissionCheckAction, AuthenticationAction, Secured, userAction}
+import controllers.security._
 import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
@@ -36,30 +36,28 @@ import services._
 import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
-class AdminController @Inject()(configuration: Configuration,
+class AdminController @Inject()(implicit configuration: Configuration,
                                 userService: UserService,
                                 emailService: EmailService,
                                 adminService: AdminService,
                                 collectionsService: OwcCollectionsService,
                                 googleService: GoogleServicesDAO,
                                 authenticationAction: AuthenticationAction,
+                                userAction: UserAction,
                                 adminPermissionCheckAction: AdminPermissionCheckAction)
   extends Controller with ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
-  lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
-    .getOrElse("/tmp")
+  /**
+    * the eawesome action composition, be aware that some perform DB queries
+    */
+  private val defaultAdminAction = authenticationAction andThen userAction andThen adminPermissionCheckAction
 
   /**
     * Am I Admin? conf value compared with logged-in user based on security token, as Angular guard
     *
     * @return
     */
-  def amiAdmin: Action[Unit] =
-    (authenticationAction
-      andThen userAction(userService)
-      andThen adminPermissionCheckAction) (parse.empty) {
-
+  def amiAdmin: Action[Unit] = defaultAdminAction(parse.empty) {
       request =>
         Ok(Json.obj("status" -> "OK",
           "token" -> request.authenticatedRequest.userSession.token,
@@ -72,17 +70,14 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def getAllUserGroups: Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def getAllUserGroups: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val userGroupList = adminService.getAllUserGroups.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(userGroupList)))
   }
 
   def createUserGroupAsAdmin: Action[JsValue] = (authenticationAction
-    andThen userAction(userService)
+    andThen userAction
     andThen adminPermissionCheckAction) (parse.json) {
 
     request =>
@@ -105,10 +100,7 @@ class AdminController @Inject()(configuration: Configuration,
         })
   }
 
-  def updateUserGroupAsAdmin: Action[JsValue] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.json) {
-
+  def updateUserGroupAsAdmin: Action[JsValue] = defaultAdminAction(parse.json) {
     request =>
       request.body.validate[UserGroup].fold(
         errors => {
@@ -129,10 +121,7 @@ class AdminController @Inject()(configuration: Configuration,
         })
   }
 
-  def deleteUserGroupAsAdmin: Action[JsValue] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.json) {
-
+  def deleteUserGroupAsAdmin: Action[JsValue] = defaultAdminAction(parse.json) {
     request =>
       request.body.validate[UserGroup].fold(
         errors => {
@@ -160,10 +149,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def sparqleUpdateCollection: Action[MultipartFormData[TemporaryFile]] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.multipartFormData) {
-
+  def sparqleUpdateCollection: Action[MultipartFormData[TemporaryFile]] = defaultAdminAction(parse.multipartFormData) {
     request =>
       request.body.file("file").map { theFile =>
 
@@ -194,10 +180,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def getAllUsers: Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def getAllUsers: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val userList = adminService.getallUsers.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "users" -> JsArray(userList)))
@@ -209,10 +192,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def getAllUserFiles: Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def getAllUserFiles: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val userList = adminService.getallUserFiles.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userList)))
@@ -223,10 +203,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def getallUserMetaRecords: Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def getallUserMetaRecords: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val userList = adminService.getallUserMetaRecords.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "metarecords" -> JsArray(userList)))
@@ -237,10 +214,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def getallUserLinkLoggings: Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def getallUserLinkLoggings: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val loglist = adminService.getAllUserLinkLoggings.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
@@ -251,10 +225,7 @@ class AdminController @Inject()(configuration: Configuration,
     *
     * @return
     */
-  def findUserLinkLoggingsByLink(link: String): Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def findUserLinkLoggingsByLink(link: String): Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       val loglist = adminService.findUserLinkLoggingsByLink(link).map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
@@ -267,10 +238,7 @@ class AdminController @Inject()(configuration: Configuration,
     * @param email
     * @return
     */
-  def blockUnblockUsers(command: String, email: String): Action[Unit] = (authenticationAction
-    andThen userAction(userService)
-    andThen adminPermissionCheckAction) (parse.empty) {
-
+  def blockUnblockUsers(command: String, email: String): Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
       adminService.blockUnblockUsers(command, email).fold {
         logger.error(s"User $email : status update ($command) failed.")

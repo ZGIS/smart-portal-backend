@@ -68,6 +68,18 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   /**
     * passing findUserByEmailAsString request through from controller
     *
+    * @param accountSubject
+    * @return
+    */
+  def findUserByAccountSubject(accountSubject: String): Option[User] = {
+    dbSession.viaConnection(implicit connection => {
+      UserDAO.findByAccountSubject(accountSubject)
+    })
+  }
+
+  /**
+    * passing findUserByEmailAsString request through from controller
+    *
     * @param email
     * @return
     */
@@ -279,6 +291,31 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
         })
     }
   }
+
+  /**
+    * for reverse mapping finding the file
+    *
+    * @param uuid
+    * @return
+    */
+  def findUserFileByUuid(uuid: UUID): Option[UserFile] = {
+    dbSession.viaConnection( implicit connection =>
+      UserFile.findUserFileByUuid(uuid)
+    )
+  }
+
+  /**
+    * deleting, needs upstream auth logic who is allowed and who not
+    *
+    * @param uuid
+    * @return
+    */
+  def deleteUserFile(uuid: UUID): Boolean = {
+    dbSession.viaTransaction( implicit connection =>
+      UserFile.deleteUserFile(uuid)
+    )
+  }
+
 
   /**
     * unambiguous keep track of user metadata records and owning them

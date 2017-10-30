@@ -23,6 +23,7 @@ import javax.inject.{Inject, Singleton}
 
 import models.ErrorResult
 import models.users.{User, UserSession}
+import play.api.http.MimeTypes
 import play.api.libs.json._
 import play.api.mvc.{ActionRefiner, _}
 import services.{AdminService, UserService}
@@ -77,6 +78,48 @@ class AuthenticationAction @Inject()(val userService: UserService) extends Actio
   }
 }
 
+/**
+  * the action checks if the incoming requets is for a valid server-side session,
+  * adds an optional userSession to the request (our former HasOptionalToken thing)
+  *
+  * @param userService
+  */
+@Singleton
+class OptionalAuthenticationAction @Inject()(val userService: UserService) extends ActionBuilder[OptionalAuthenticatedRequest]
+  with ActionTransformer[Request, OptionalAuthenticatedRequest] with ClassnameLogger {
+
+  def transform[A](request: Request[A]): Future[OptionalAuthenticatedRequest[A]] = {
+
+    val result = request.cookies.get(AuthTokenCookieKey).fold[OptionalAuthenticatedRequest[A]] {
+      // Left(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "Invalid XSRF Token cookie")))
+      new OptionalAuthenticatedRequest[A](None, request)
+    } { xsrfTokenCookie =>
+      logger.trace(s"cookie ${xsrfTokenCookie.value}")
+      request.headers.get(AuthTokenHeader).orElse(request.getQueryString(AuthTokenUrlKey)).map {
+        headerToken =>
+          // ua needed to differentiate between different devices/sessions
+          val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+          logger.trace(s"headerToken: $headerToken")
+          logger.trace(s"ua: $uaIdentifier")
+          userService.getUserSessionByToken(headerToken, xsrfTokenCookie.value, uaIdentifier).fold[OptionalAuthenticatedRequest[A]] {
+            new OptionalAuthenticatedRequest[A](None, request)
+          } {
+            userSession =>
+              new OptionalAuthenticatedRequest[A](Some(userSession), request)
+          }
+
+      }.getOrElse(new OptionalAuthenticatedRequest[A](None, request))
+    }
+    Future.successful(result)
+  }
+}
+
+/**
+  * this is "just" an ActionBuilder, without differentiation to Refiner, Filter or Transformer,
+  * supposedly we should always try to build upon the more differentiated Action generators instead of just ActionBuilder
+  *
+  * @param userService
+  */
 @Singleton
 @deprecated
 class AuthenticatedPlainAction @Inject()(val userService: UserService)
@@ -106,6 +149,26 @@ class AuthenticatedPlainAction @Inject()(val userService: UserService)
       }.getOrElse(Future.successful(Results.Unauthorized(Json.obj("status" -> "ERR", "message" -> "No token header found"))
         .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))))
     }
+  }
+}
+
+/**
+  * the action looks the corresponsind full user object up from the database for an incoming AuthenticatedRequest,
+  * if user is found extends the the request to a UserRequest and adds the user object to the request object,
+  * for direct securing of a controller function (compose per function as required)
+  *
+  * @param userService
+  */
+@Singleton
+class UserAction @Inject()(val userService: UserService) extends ActionRefiner[AuthenticatedRequest, UserRequest] with ClassnameLogger {
+  def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
+    userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
+      .map(user => new UserRequest(user, authenticatedRequest))
+      .toRight{
+        logger.error("User email not found.")
+        val error = ErrorResult("User email not found.", None)
+        Results.BadRequest(Json.toJson(error)).as(MimeTypes.JSON)
+      }
   }
 }
 

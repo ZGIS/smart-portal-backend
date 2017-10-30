@@ -19,15 +19,7 @@
 
 package controllers
 
-import models.ErrorResult
-import models.users.UserSession
-import play.api.http.MimeTypes
-import play.api.libs.json.Json
-import play.api.mvc.{ActionRefiner, Request, Results, WrappedRequest}
-import services.UserService
 import utils.ClassnameLogger
-
-import scala.concurrent.Future
 
 package object security extends ClassnameLogger {
 
@@ -38,25 +30,5 @@ package object security extends ClassnameLogger {
   val UserAgentHeader = "User-Agent"
   val UserAgentHeaderDefault = "Default-UA/1.0"
   val RefererHeader = "Referer"
-
-  /**
-    * the action looks the corresponsind full user object up from the database for an incoming AuthenticatedRequest,
-    * if user is found extends the the request to a UserRequest and adds the user object to the request object,
-    * for direct securing of a controller function (compose per function as required)
-    *
-    * @param userService
-    * @return
-    */
-  def userAction(userService: UserService) = new ActionRefiner[AuthenticatedRequest, UserRequest] {
-    def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
-      userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
-        .map(user => new UserRequest(user, authenticatedRequest))
-        .toRight{
-          logger.error("User email not found.")
-          val error = ErrorResult("User email not found.", None)
-          Results.BadRequest(Json.toJson(error)).as(MimeTypes.JSON)
-        }
-    }
-  }
 
 }

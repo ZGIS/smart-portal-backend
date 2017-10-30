@@ -39,17 +39,14 @@ import scala.concurrent.duration._
   *
   * @param configuration
   * @param userService
-  * @param passwordHashing
   * @param ws
   */
 @Singleton
-class HomeController @Inject()(val configuration: Configuration,
-                               val userService: UserService,
-                               val passwordHashing: PasswordHashing,
+class HomeController @Inject()(implicit configuration: Configuration,
+                               userService: UserService,
                                ws: WSClient) extends Controller with ClassnameLogger {
 
-  lazy private val reCaptchaSecret: String =
-    configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
+  lazy private val reCaptchaSecret: String = configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
 
   val recaptcaVerifyUrl = "https://www.google.com/recaptcha/api/siteverify"
 
@@ -175,5 +172,4 @@ class HomeController @Inject()(val configuration: Configuration,
         InternalServerError(Json.toJson(error)).as(JSON)
     }
   }
-
 }

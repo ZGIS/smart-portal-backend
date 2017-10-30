@@ -71,18 +71,24 @@ case class RegisterJs(email: EmailAddress,
   * @param emailService
   * @param collectionsService
   * @param googleService
+  * @param authenticationAction
+  * @param userAction
   */
 @Singleton
-class UserController @Inject()(val configuration: Configuration,
-                               val userService: UserService,
-                               val passwordHashing: PasswordHashing,
+class UserController @Inject()(implicit configuration: Configuration,
+                               userService: UserService,
+                               passwordHashing: PasswordHashing,
                                emailService: EmailService,
                                collectionsService: OwcCollectionsService,
                                googleService: GoogleServicesDAO,
-                               authenticationAction: AuthenticationAction)
-  extends Controller with ClassnameLogger with Secured {
+                               authenticationAction: AuthenticationAction,
+                               userAction: UserAction)
+  extends Controller with ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  /**
+    * default actions composition, much more readable and "composable than original HasToken style implementation
+    */
+  private val defaultAuthAction = authenticationAction andThen userAction
 
   /**
     * self registering for user accounts
@@ -197,23 +203,7 @@ class UserController @Inject()(val configuration: Configuration,
     }
   }
 
-  /**
-    * get own profile based on security token
-    *
-    * @return
-    */
-  def userSelf2: Action[Unit] = authenticationAction(parse.empty) {
-    request =>
-      userService.findUserByEmailAsString(request.userSession.email).fold {
-        logger.error("User email not found.")
-        val error = ErrorResult("User email not found.", None)
-        BadRequest(Json.toJson(error)).as(JSON)
-      } { user =>
-        Ok(Json.toJson(user.asProfileJs))
-      }
-  }
-
-  def userSelf: Action[AnyContent] = (authenticationAction andThen userAction(userService)) {
+  def userSelf: Action[Unit] = defaultAuthAction(parse.empty) {
     implicit request =>
       Ok(Json.toJson(request.user.asProfileJs))
   }
@@ -223,27 +213,19 @@ class UserController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def deleteSelf: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
-          userService.findUserByEmailAsString(cachedSecUserEmail).fold {
-            logger.error("User email not found.")
-            val error = ErrorResult("User email not found.", None)
-            BadRequest(Json.toJson(error)).as(JSON)
-          } { user =>
-            val result = userService.deleteUser(user)
-            if (result) {
-              // cache.remove(token)
-              userService.removeUserSessionCache(cachedSecUserEmail, token)
-              Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
-            } else {
-              logger.error(s"User ${user.accountSubject} could not be deleted.")
-              val error = ErrorResult("Sorry, we could not delete your account.", None)
-              BadRequest(Json.toJson(error)).as(JSON)
-            }
-          }
-
+  def deleteSelf: Action[Unit] = defaultAuthAction(parse.empty) {
+    implicit request =>
+      val user = request.user
+      val result = userService.deleteUser(user)
+      if (result) {
+        // cache.remove(token)
+        userService.removeUserSessionCache(user.email, request.authenticatedRequest.userSession.token)
+        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+      } else {
+        logger.error(s"User ${user.accountSubject} could not be deleted.")
+        val error = ErrorResult("Sorry, we could not delete your account.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      }
   }
 
   /**
@@ -252,25 +234,23 @@ class UserController @Inject()(val configuration: Configuration,
     * @param email
     * @return
     */
-  def getProfile(email: String): Action[Unit] = HasToken(parse.empty) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
-          userService.findUserByEmailAsString(email).fold {
-            logger.error("User email not found.")
-            val error = ErrorResult("User email not found.", None)
-            BadRequest(Json.toJson(error)).as(JSON)
-          } { user =>
-            // too much checking here?
-            if (user.email.value.equals(email) && cachedSecUserEmail.equals(email)) {
-              Ok(Json.toJson(user.asProfileJs))
-            } else {
-              logger.error("User email Security Token mismatch.")
-              val error = ErrorResult("User email Security Token mismatch.", None)
-              Forbidden(Json.toJson(error)).as(JSON)
-            }
-          }
-
+  @deprecated
+  def getProfile(email: String): Action[Unit] = defaultAuthAction(parse.empty) {
+    implicit request =>
+      userService.findUserByEmailAsString(email).fold {
+        logger.error("User email not found.")
+        val error = ErrorResult("User email not found.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      } { user =>
+        // currently only if it's the own user email matching with token.
+        if (user.equals(request.user)) {
+          Ok(Json.toJson(user.asProfileJs))
+        } else {
+          logger.error("User email Security Token mismatch.")
+          val error = ErrorResult("User email Security Token mismatch.", None)
+          Forbidden(Json.toJson(error)).as(JSON)
+        }
+      }
   }
 
   /**
@@ -278,75 +258,63 @@ class UserController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def updateProfile: Action[JsValue] = HasToken(parse.json) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
+  def updateProfile: Action[JsValue] = defaultAuthAction(parse.json) {
+    request =>
+      val profileResult = request.body.validate[ProfileJs]
+      profileResult.fold(
+        errors => {
+          val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+          BadRequest(Json.toJson(error)).as(JSON)
+        },
+        incomingProfileJs => {
+          val hasTokenDbUser = request.user
+          // This should be you. we don't change the accountSubject. email change is ok but needs to be extra validated
+          if (hasTokenDbUser.email.equals(incomingProfileJs.email)) {
+            // email didn't change, good, let's update your profile in the database (but not password nor accountsubject)
+            val updateUser = hasTokenDbUser.copy(email = incomingProfileJs.email,
+              firstname = incomingProfileJs.firstname,
+              lastname = incomingProfileJs.lastname,
+              laststatustoken = s"${StatusToken.ACTIVE}:PROFILEUPDATE",
+              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-          val profileResult = request.body.validate[ProfileJs]
-          profileResult.fold(
-            errors => {
-              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+            userService.updateNoPass(updateUser).fold {
+              logger.error("Could not update User.")
+              val error = ErrorResult("Could not update user.", None)
               BadRequest(Json.toJson(error)).as(JSON)
-            },
-            incomingProfileJs => {
+            } { user =>
+              val emailWentOut = emailService.sendProfileUpdateInfoEmail(user.email, "Your account profile information was updated", user.firstname)
+              logger.info(s"User profile updated. Email went out $emailWentOut")
+              Ok(Json.toJson(user.asProfileJs))
+            }
+          } else {
+            // check if new email is used already by another user than yourself
+            userService.findUserByEmailAddress(incomingProfileJs.email).fold {
 
-              // looking first for the HasToken auth subject
-              userService.findUserByEmailAsString(cachedSecUserEmail).fold {
-                logger.error("User Security Token mismatch.")
-                val error = ErrorResult("User Security Token mismatch.", None)
-                Forbidden(Json.toJson(error)).as(JSON)
-              } { hasTokenDbUser =>
-                // This should be you. we don't change the accountSubject. email change is ok but needs to be extra validated
-                if (hasTokenDbUser.email.equals(incomingProfileJs.email)) {
-                  // email didn't change, good, let's update your profile in the database (but not password nor accountsubject)
-                  val updateUser = hasTokenDbUser.copy(email = incomingProfileJs.email,
-                    firstname = incomingProfileJs.firstname,
-                    lastname = incomingProfileJs.lastname,
-                    laststatustoken = s"${StatusToken.ACTIVE}:PROFILEUPDATE",
-                    laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+              // found none, good, let's update your profile in the database (but not password nor accountsubject)
+              val regLinkId = java.util.UUID.randomUUID().toString()
+              val updateUser = hasTokenDbUser.copy(email = incomingProfileJs.email,
+                firstname = incomingProfileJs.firstname,
+                lastname = incomingProfileJs.lastname,
+                laststatustoken = s"${StatusToken.EMAILVALIDATION}:$regLinkId",
+                laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 
-                  userService.updateNoPass(updateUser).fold {
-                    logger.error("Could not update User.")
-                    val error = ErrorResult("Could not update user.", None)
-                    BadRequest(Json.toJson(error)).as(JSON)
-                  } { user =>
-                    val emailWentOut = emailService.sendProfileUpdateInfoEmail(user.email, "Your account profile information was updated", user.firstname)
-                    logger.info(s"User profile updated. Email went out $emailWentOut")
-                    Ok(Json.toJson(user.asProfileJs))
-                  }
-                } else {
-                  // check if new email is used already by another user than yourself
-                  userService.findUserByEmailAddress(incomingProfileJs.email).fold {
-
-                    // found none, good, let's update your profile in the database (but not password nor accountsubject)
-                    val regLinkId = java.util.UUID.randomUUID().toString()
-                    val updateUser = hasTokenDbUser.copy(email = incomingProfileJs.email,
-                      firstname = incomingProfileJs.firstname,
-                      lastname = incomingProfileJs.lastname,
-                      laststatustoken = s"${StatusToken.EMAILVALIDATION}:$regLinkId",
-                      laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-                    userService.updateNoPass(updateUser).fold {
-                      logger.error("Could not update User.")
-                      val error = ErrorResult("Could not update user.", None)
-                      BadRequest(Json.toJson(error)).as(JSON)
-                    } { user =>
-                      val emailWentOut = emailService.sendNewEmailValidationEmail(user.email, "Please confirm your new email address", user.firstname, regLinkId)
-                      logger.info(s"User profile updated with email change. Email went out $emailWentOut with reglink: $regLinkId")
-                      Ok(Json.toJson(user.asProfileJs))
-                    }
-                  } { dbuser =>
-                    // found one, that means the email is already in use, ABORT
-                    logger.error("Email already in use.")
-                    val error = ErrorResult("Email already in use.", None)
-                    BadRequest(Json.toJson(error)).as(JSON)
-                  }
-                }
+              userService.updateNoPass(updateUser).fold {
+                logger.error("Could not update User.")
+                val error = ErrorResult("Could not update user.", None)
+                BadRequest(Json.toJson(error)).as(JSON)
+              } { user =>
+                val emailWentOut = emailService.sendNewEmailValidationEmail(user.email, "Please confirm your new email address", user.firstname, regLinkId)
+                logger.info(s"User profile updated with email change. Email went out $emailWentOut with reglink: $regLinkId")
+                Ok(Json.toJson(user.asProfileJs))
               }
-
-            })
-
+            } { dbuser =>
+              // found one, that means the email is already in use, ABORT
+              logger.error("Email already in use.")
+              val error = ErrorResult("Email already in use.", None)
+              BadRequest(Json.toJson(error)).as(JSON)
+            }
+          }
+        })
   }
 
   /**
@@ -354,54 +322,46 @@ class UserController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def updatePassword(): Action[JsValue] = HasToken(parse.json) {
-    token =>
-      cachedSecUserEmail =>
-        implicit request =>
-          request.body.validate[PasswordUpdateCredentials].fold(
-            errors => {
-              logger.error(JsError.toJson(errors).toString())
-              val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+  def updatePassword(): Action[JsValue] = defaultAuthAction(parse.json) {
+    request =>
+      request.body.validate[PasswordUpdateCredentials].fold(
+        errors => {
+          logger.error(JsError.toJson(errors).toString())
+          val error = ErrorResult("Could not validate request.", Some(JsError.toJson(errors).toString()))
+          BadRequest(Json.toJson(error)).as(JSON)
+        },
+        valid = credentials => {
+          // find user in db
+          val dbuser = request.user
+          // compare password
+          if (passwordHashing.validatePassword(credentials.oldPassword, dbuser.password)) {
+            val newCryptPass = passwordHashing.createHash(credentials.newPassword)
+            val updateUser = dbuser.copy(
+              password = newCryptPass,
+              laststatustoken = s"${StatusToken.ACTIVE}:PASSWORDUPDATE",
+              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+            userService.updatePassword(updateUser).fold {
+              logger.error("Password update error.")
+              val error = ErrorResult("Password update error.", None)
               BadRequest(Json.toJson(error)).as(JSON)
-            },
-            valid = credentials => {
-              // find user in db
-              userService.findUserByEmailAddress(credentials.email).fold {
-                logger.error("User not found.")
-                val error = ErrorResult("User not found", None)
-                BadRequest(Json.toJson(error)).as(JSON)
-              } { dbuser =>
-                // compare password
-                if (passwordHashing.validatePassword(credentials.oldPassword, dbuser.password)) {
-                  val newCryptPass = passwordHashing.createHash(credentials.newPassword)
-                  val updateUser = dbuser.copy(
-                    password = newCryptPass,
-                    laststatustoken = s"${StatusToken.ACTIVE}:PASSWORDUPDATE",
-                    laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-
-                  userService.updatePassword(updateUser).fold {
-                    logger.error("Password update error.")
-                    val error = ErrorResult("Password update error.", None)
-                    BadRequest(Json.toJson(error)).as(JSON)
-                  } { user =>
-                    val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
-                    // cache.remove(token)
-                    userService.removeUserSessionCache(cachedSecUserEmail, token)
-                    emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
-                    // val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
-                    // cache.set(newtoken, user.email.value)
-                    val newtoken = userService.upsertUserSession(user.email.value, uaIdentifier)
-                    Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email.value))
-                      .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
-                  }
-                } else {
-                  logger.error("Password update error, not matching.")
-                  val error = ErrorResult("Password update error, not matching.", None)
-                  BadRequest(Json.toJson(error)).as(JSON)
-                }
-              }
-
-            })
+            } { user =>
+              val uaIdentifier: String = request.headers.get(UserAgentHeader).getOrElse(UserAgentHeaderDefault)
+              // cache.remove(token)
+              userService.removeUserSessionCache(request.user.email, request.authenticatedRequest.userSession.token)
+              emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
+              // val newtoken = passwordHashing.createSessionCookie(user.email, uaIdentifier)
+              // cache.set(newtoken, user.email.value)
+              val newtoken = userService.upsertUserSession(user.email.value, uaIdentifier)
+              Ok(Json.obj("status" -> "OK", "token" -> newtoken, "email" -> user.email.value))
+                .withCookies(Cookie(AuthTokenCookieKey, newtoken, None, httpOnly = false))
+            }
+          } else {
+            logger.error("Password update error, not matching.")
+            val error = ErrorResult("Password update error, not matching.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
+          }
+        })
   }
 
   /**
@@ -505,12 +465,10 @@ class UserController @Inject()(val configuration: Configuration,
     * Discard the cookie [[AuthTokenCookieKey]] to have AngularJS no longer set the
     * X-XSRF-TOKEN in HTTP header.
     */
-  def logout: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      email =>
-        implicit request =>
-          userService.removeUserSessionCache(email, token)
-          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+  def logout: Action[Unit] = authenticationAction(parse.empty) {
+    request =>
+      userService.removeUserSessionCache(request.userSession.email, request.userSession.token)
+      Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 
   /**
@@ -618,20 +576,17 @@ class UserController @Inject()(val configuration: Configuration,
     )
   }
 
-
   /**
     * Disconnect the Google login
     *
     * @return
     */
-  def gdisconnect: Action[Unit] = HasToken(parse.empty) {
-    token =>
-      email =>
-        implicit request =>
-          // cache.remove(token)
-          userService.removeUserSessionCache(email, token)
-          // do some Google OAuth2 unregisteR
-          Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+  def gdisconnect: Action[Unit] = authenticationAction(parse.empty) {
+    request =>
+      // cache.remove(token)
+      userService.removeUserSessionCache(request.userSession.email, request.userSession.token)
+      // do some Google OAuth2 unregisteR
+      Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
   }
 
   /**

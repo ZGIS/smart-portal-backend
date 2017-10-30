@@ -26,7 +26,7 @@ import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId, ZonedDateTime}
 import javax.inject.Inject
 
-import controllers.security.{RefererHeader, Secured, UserAgentHeader}
+import controllers.security.{OptionalAuthenticationAction, RefererHeader, UserAgentHeader}
 import models.ErrorResult
 import models.sosdata.{SosCapabilities, Timeseries, TimeseriesData, Wml2Export}
 import models.tvp.XmlTvpParser
@@ -36,7 +36,7 @@ import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller}
 import services.UserService
-import utils.{ClassnameLogger, PasswordHashing}
+import utils.ClassnameLogger
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -46,15 +46,12 @@ import scala.util.Try
 /**
   * Controller to access SOS server and return parsed time series to frontend.
   */
-class SosDataController @Inject()(val configuration: Configuration,
+class SosDataController @Inject()(implicit configuration: Configuration,
                                   val userService: UserService,
-                                  val passwordHashing: PasswordHashing,
+                                  optionalAuthenticationAction: OptionalAuthenticationAction,
                                   wsClient: WSClient)
-  extends Controller with ClassnameLogger with Secured {
+  extends Controller with ClassnameLogger {
 
-  lazy private val uploadDataPath: String = configuration.getString("smart.upload.datapath")
-    .getOrElse("/tmp")
-  private lazy val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
   private lazy val wml2Exporter = new Wml2Export(appTimeZone)
   lazy val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -85,10 +82,8 @@ class SosDataController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def getTimeseries: Action[JsValue] = HasOptionalTokenAsync(parse.json) {
-    authUserOption =>
-      implicit request =>
-
+  def getTimeseries: Action[JsValue] = optionalAuthenticationAction.async(parse.json) {
+    request =>
         request.body.validate[Timeseries].fold(
           errors => {
             logger.error(JsError.toJson(errors).toString())
@@ -112,7 +107,7 @@ class SosDataController @Inject()(val configuration: Configuration,
                 InternalServerError(Json.toJson(error)).as(JSON)
             }
 
-            responseFuture.map(response => {
+            responseFuture.map { response =>
               if (response.status != 200) {
                 logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
                 val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
@@ -163,7 +158,7 @@ class SosDataController @Inject()(val configuration: Configuration,
                   timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
                   ipaddress = Some(request.remoteAddress),
                   useragent = request.headers.get(UserAgentHeader),
-                  email = authUserOption,
+                  email = request.optionalSession.map(_.email),
                   link = sosXmlRequest,
                   referer = request.headers.get(RefererHeader))
 
@@ -172,7 +167,7 @@ class SosDataController @Inject()(val configuration: Configuration,
                 logger.trace(logRequest.toString)
                 Ok(result.toJson()).as(JSON)
               }
-            })
+            }
           }
         )
   }
@@ -183,10 +178,8 @@ class SosDataController @Inject()(val configuration: Configuration,
     *
     * @return
     */
-  def exportTimeseries = HasOptionalTokenAsync(parse.json) {
-    authUserOption =>
-      implicit request =>
-
+  def exportTimeseries = optionalAuthenticationAction.async(parse.json) {
+    request =>
         request.body.validate[Timeseries].fold(
           errors => {
             logger.error(JsError.toJson(errors).toString())
@@ -283,7 +276,7 @@ class SosDataController @Inject()(val configuration: Configuration,
                         timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
                         ipaddress = Some(request.remoteAddress),
                         useragent = request.headers.get(UserAgentHeader),
-                        email = authUserOption,
+                        email = request.optionalSession.map(_.email),
                         link = sosXmlRequest,
                         referer = request.headers.get(RefererHeader))
 

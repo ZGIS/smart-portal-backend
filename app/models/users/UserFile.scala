@@ -119,8 +119,12 @@ CREATE TABLE userfiles (
   }
 
   def deleteUserFile(userFile: UserFile)(implicit connection: Connection): Boolean = {
+    deleteUserFile(userFile.uuid)
+  }
+
+  def deleteUserFile(uuid: UUID)(implicit connection: Connection): Boolean = {
     val rowCount = SQL(s"delete from $table_userfiles where uuid = {uuid}").on(
-      'uuid -> userFile.uuid.toString
+      'uuid -> uuid.toString
     ).executeUpdate()
 
     rowCount match {

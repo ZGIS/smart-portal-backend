@@ -17,11 +17,15 @@
  * limitations under the License.
  */
 
+import java.time.{ZoneId, ZonedDateTime}
+
 import akka.stream.Materializer
 import com.google.inject.AbstractModule
 import com.typesafe.config.ConfigFactory
+import controllers.security.{AuthenticationAction, OptionalAuthenticationAction, UserAction}
 import controllers.{CollectionsController, routes}
 import info.smart.models.owc100.OwcContext
+import models.users.UserSession
 import org.scalatest.TestData
 import org.scalatestplus.play.OneAppPerTest
 import org.specs2.mock._
@@ -38,9 +42,12 @@ import utils.PasswordHashing
 class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with Results with Mockito {
 
   // creating mock instances for underlying required services for this controller
-  private lazy val mockCollectionsService = mock[OwcCollectionsService]
+  private lazy val mockCollectionsService = mock[OwcCollectionsService].defaultReturn(Seq[OwcContext]())
   private lazy val mockEmailService = mock[EmailService]
-  private lazy val mockUserService = mock[UserService]
+  private lazy val mockUserService = mock[UserService].defaultReturn(None)
+  private lazy val mockAuthenticationAction = mock[AuthenticationAction]
+  private lazy val mockOptionalAuthenticationAction = mock[OptionalAuthenticationAction]
+  private lazy val mockUserAction = mock[UserAction]
 
   // creating "fake" Guice Module to inject mock service instances into test application, with the required dependencies
   class FakeModule extends AbstractModule {
@@ -68,24 +75,24 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
   "CollectionsController" when {
 
     "request to getCollections(None)" in {
+      (pending)
 
       Then("create mock components, particular mocked CollectionsServive")
 
-      // configuration is only used to read application.(test).conf keys, and they are all defended with .getOrElse() if not accessible
-      val appConfig = app.configuration
-
       // behaviour for mocked underlying collections service when controller calls injected service functions
       mockCollectionsService.getOwcContextsForUserAndId(None, None) returns Seq[OwcContext]()
+      mockUserService.getUserSessionByToken("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "Default UA!1.0") returns None
 
       Then("create the Controller with mock components")
 
       // explicitely instatiating tested controller
       val controller = new CollectionsController(
-        configuration = appConfig,
         userService = mockUserService,
         emailService = mockEmailService,
         collectionsService = mockCollectionsService,
-        passwordHashing = new PasswordHashing(appConfig)
+        authenticationAction = mockAuthenticationAction,
+        optionalAuthenticationAction = mockOptionalAuthenticationAction,
+        userAction = mockUserAction
       )
 
       Then("call request on the Controller")
@@ -93,12 +100,13 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       // behaviour for mocked underlying collections service when controller calls injected service functions
       mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
 
+
       val fakeRequest = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
         .withHeaders("Content-Type" -> "application/json")
         .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
 
-      val otherResult = controller.getCollections(None).apply(fakeRequest)
       val result = controller.getCollections(None).apply(FakeRequest())
+      val otherResult = controller.getCollections(None).apply(fakeRequest)
 
       Then("response status must be ok and contain zero collections")
       status(otherResult.run) must be(OK)
@@ -116,10 +124,18 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
     // GET  /api/v1/collections controllers.CollectionsController.getCollections(id: Option[String])
     "request to getCollections(fakeContextId)" in {
-      (pending)
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.getOwcContextsForUserAndId(Some("authuser"), Some("fakeContextId")) returns Seq[OwcContext]()
+      mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
+      mockCollectionsService.getOwcContextsForUserAndId(Some(demodata.testUser1("xxx")), Some("fakeContextId")) returns Seq(demodata.owcContext1)
+      mockUserService.getUserSessionByToken(anyString, anyString, anyString) returns Some(
+        UserSession("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.",
+          "Default UA/1.0",
+          demodata.testUser1("xxx").email.value,
+          "ACTIVE",
+          ZonedDateTime.now(ZoneId.of("UTC"))))
+
+      mockUserService.getUserSessionByToken("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "Default UA/1.0") returns None
 
       val testRequest1 = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
         .withHeaders("Content-Type" -> "application/json")
@@ -137,7 +153,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       println(Json.stringify(contentAsJson(response)))
 
       val js = contentAsJson(response)
-      (js \ "message").asOpt[String] mustBe defined
+      (js \ "count").toOption mustBe defined
     }
 
     // GET  /api/v1/collections/default controllers.CollectionsController.getPersonalDefaultCollection
@@ -145,7 +161,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       (pending)
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.getUserDefaultOwcContext(authUser = "authuser") returns Some(demodata.owcContext1)
+      mockCollectionsService.getUserDefaultOwcContext(demodata.testUser1("xxx")) returns Some(demodata.owcContext1)
 
       val testRequest1 = FakeRequest(routes.CollectionsController.getPersonalDefaultCollection())
         .withHeaders("Content-Type" -> "application/json")
@@ -315,6 +331,5 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       val js = contentAsJson(response)
       (js \ "message").asOpt[String] mustBe defined
     }
-
   }
 }

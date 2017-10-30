@@ -101,18 +101,18 @@ class FilesController @Inject()(implicit configuration: Configuration,
 
   /**
     *
-    * @param id
+    * @param uuid
     * @return
     */
-  def mappedFileLinkFor(id: String): Action[Unit] = optionalAuthenticationAction(parse.empty) {
+  def mappedFileLinkFor(uuid: String): Action[Unit] = optionalAuthenticationAction(parse.empty) {
     request =>
-      userService.findUserFileByUuid(UUID.fromString(id)).fold{
+      userService.findUserFileByUuid(UUID.fromString(uuid)).fold{
         logger.error("file not found")
         val error = ErrorResult("file not found.", None)
         BadRequest(Json.toJson(error)).as(JSON)
       }{
         userFile =>
-          Ok(Json.obj("status" -> "OK", "filelink" -> userFile.linkreference, "filename" -> userFile.originalfilename))
+          Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference, "originalfilename" -> userFile.originalfilename))
       }
   }
 

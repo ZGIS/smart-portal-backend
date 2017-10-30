@@ -27,6 +27,7 @@ import javax.inject._
 import controllers.security.{AuthenticationAction, OptionalAuthenticationAction, UserAction}
 import info.smart.models.owc100._
 import models.ErrorResult
+import models.owc.OwcContextDAO
 import org.apache.commons.lang3.StringEscapeUtils
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc.{Action, AnyContent, Controller}
@@ -105,6 +106,7 @@ class CollectionsController @Inject()(userService: UserService,
   }
 
   /**
+    * add collection AS IS, beware may quickly result in unique DB constraint violations and unwanted id URLs
     *
     * @return
     */
@@ -121,6 +123,46 @@ class CollectionsController @Inject()(userService: UserService,
           logger.trace(Json.prettyPrint(owcContext.toJson))
           // TODO mangle Context and Resource IDs
           val inserted = collectionsService.insertCollection(owcContext, request.user)
+          inserted.fold {
+            val error: ErrorResult = ErrorResult("Collection could not be inserted",
+              Some("Database insert failed."))
+            BadRequest(Json.toJson(error)).as(JSON)
+          } {
+            theDoc => {
+              Ok(Json.obj("message" -> "owcContext inserted", "document" -> theDoc.toJson))
+            }
+          }
+
+        }
+      )
+  }
+
+  /**
+    * insert a new collection, but makes deep NewOf copy with refreshed IDs
+    *
+    * @return
+    */
+  def insertCopyOfCollection: Action[JsValue] = defaultAuthAction(parse.json) {
+    request =>
+      request.body.validate[OwcContext] fold(
+        errors => {
+          logger.error(JsError.toJson(errors).toString())
+          val error: ErrorResult = ErrorResult("Collection could not be inserted",
+            Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+          BadRequest(Json.toJson(error)).as(JSON)
+        },
+        owcContext => {
+          logger.trace(Json.prettyPrint(owcContext.toJson))
+          // TODO mangle Context and Resource IDs
+          val idLink = new URL(s"https://portal.smart-project.info/context/document/${UUID.randomUUID().toString}")
+          val updatedResources = owcContext.resource.map{
+            owcResource =>
+              val idLink = new URL(s"https://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
+              owcResource.newOf(idLink)
+          }
+          val refreshedCopyOfContext = OwcContextDAO.refreshedCopy(owcContext, idLink, Some(updatedResources))
+
+          val inserted = collectionsService.insertCollection(refreshedCopyOfContext, request.user)
           inserted.fold {
             val error: ErrorResult = ErrorResult("Collection could not be inserted",
               Some("Database insert failed."))
@@ -203,7 +245,7 @@ class CollectionsController @Inject()(userService: UserService,
   }
 
   /**
-    * add resource to collection, but makes deep NewOf copy with refreshed IDs, beware may quickly result in unique DB constraint violations
+    * add resource to collection, but makes deep NewOf copy with refreshed IDs
     *
     * @param owcContextId
     * @return

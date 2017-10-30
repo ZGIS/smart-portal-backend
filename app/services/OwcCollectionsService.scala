@@ -175,7 +175,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 
     val defaultOwcDoc = OwcContext(
-      id = new URL(s"https://portal.smart-project.info/context/user/${propsUuid.toString}"),
+      id = new URL(s"https://portal.smart-project.info/context/document/${propsUuid.toString}"),
       areaOfInterest = None,
       specReference = List(profileLink), // aka links.profiles[] & rel=profile
       contextMetadata = List(), // aka links.via[] & rel=via
@@ -331,11 +331,11 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
       val user = UserDAO.findByAccountSubject(userFile.users_accountsubject)
       val email = user.map(u => EmailAddress(u.email))
       val owcAuthor = user.map(u => OwcAuthor(name = s"${u.firstname} ${u.lastname}".toOption(), email = email, uri = None))
-      val baseLink = new URL(s"https://portal.smart-project.info/context/resource/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}")
+      val owcBaseLink = new URL(s"https://portal.smart-project.info/context/resource/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}")
 
-      val consentableFilelink = s"https://portal.smart-project.info/files/resource/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}"
+      val consentableFilelink = s"https://portal.smart-project.info/context/file/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}"
 
-      val viaLink = OwcLink(href = baseLink,
+      val viaLink = OwcLink(href = owcBaseLink,
         mimeType = Some("application/json"),
         lang = None,
         title = None,
@@ -351,7 +351,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
         rel = "enclosure")
 
       OwcResource(
-        id = baseLink,
+        id = owcBaseLink,
         geospatialExtent = None,
         title = userFile.originalfilename,
         subtitle = Some(s"${userFile.originalfilename} uploaded to $consentableFilelink via GW Hub by $email"),

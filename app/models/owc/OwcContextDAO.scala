@@ -100,6 +100,24 @@ object OwcContextDAO extends ClassnameLogger {
   }
 
   /**
+    * sort of overriding OwcContext.newOf to provide better styled ID URLs
+    *
+    * @param owcContext
+    * @param newId
+    * @param refreshedResources
+    * @return
+    */
+  def refreshedCopy(owcContext: OwcContext, newId: URL, refreshedResources: Option[List[OwcResource]]): OwcContext =
+    owcContext.copy(id = newId,
+      specReference = owcContext.specReference.map(o => o.newOf),
+      contextMetadata = owcContext.contextMetadata.map(o => o.newOf),
+      creatorApplication = owcContext.creatorApplication.map(o => o.newOf),
+      creatorDisplay = owcContext.creatorDisplay.map(o => o.newOf),
+      author = owcContext.author.map(o => o.newOf),
+      keyword = owcContext.keyword.map(o => o.newOf),
+      resource = refreshedResources.getOrElse(owcContext.resource.map(o => o.newOf())))
+
+  /**
     * get all OwcContexts
     *
     * @return

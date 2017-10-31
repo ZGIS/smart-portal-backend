@@ -84,8 +84,16 @@ class FilesController @Inject()(implicit configuration: Configuration,
               logger.debug(s"file upload $filename to ${blob.getMediaLink} with reference ${userFile.linkreference}")
               Try(handle.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
               Try(Files.delete(intermTempDir)).failed.map(ex => logger.error(ex.getLocalizedMessage))
+
               //FIXME SR do we also want to have a general "return" object? Status is always in the respone so it does not need to be in here
-              Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> userFile.linkreference, "entry" -> owcResource.toJson))
+              val added = collectionsService.addPlainFileResourceToUserDefaultCollection(owcResource, request.user)
+              if (added) {
+                Ok(Json.obj("status" -> "OK", "message" -> s"file uploaded $filename.", "file" -> userFile.linkreference, "entry" -> owcResource.toJson))
+              } else {
+                logger.error("Insert into own collection failed.")
+                val error = ErrorResult("Insert into own collection failed.", None)
+                BadRequest(Json.toJson(error)).as(JSON)
+              }
             }
           case _ =>
             logger.error("file upload to cloud storage failed")

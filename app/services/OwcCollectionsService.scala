@@ -376,38 +376,28 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
   /**
     *
     * @param owcResource
-    * @param authUser
+    * @param user
     * @return
     */
-  @deprecated
-  def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, authUser: String): Boolean = {
+  def addPlainFileResourceToUserDefaultCollection(owcResource: OwcResource, user: User): Boolean = {
 
-    val userLookup = dbSession.viaConnection { implicit connection =>
-      UserDAO.findUserByEmailAsString(authUser)
+    val collectionLookup = dbSession.viaConnection { implicit connection =>
+      OwcContextDAO.findUserDefaultOwcContext(user)
     }
-    userLookup.fold {
-      // user not found, then can't insert, shouldn't happen though
-      logger.error("User not found, can't access users collection")
+    collectionLookup.fold {
+      // collection not found, then can't insert, should probably also not happen usually
+      logger.error("Collection not found, can't access users collection")
       false
     } {
-      user =>
-        val collectionLookup = dbSession.viaConnection { implicit connection =>
-          OwcContextDAO.findUserDefaultOwcContext(user)
-        }
-        collectionLookup.fold {
-          // collection not found, then can't insert, should probably also not happen usually
-          logger.error("Collection not found, can't access users collection")
-          false
-        } {
-          owcDoc =>
-            val entries = owcDoc.resource ++ Seq(owcResource)
-            val newDoc = owcDoc.copy(resource = entries)
+      owcDoc =>
+        val entries = owcDoc.resource ++ Seq(owcResource)
+        val newDoc = owcDoc.copy(resource = entries)
 
-            dbSession.viaTransaction { implicit connection =>
-              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
-            }
+        dbSession.viaTransaction { implicit connection =>
+          OwcContextDAO.updateOwcContext(newDoc, user).isDefined
         }
     }
+
   }
 
   /**

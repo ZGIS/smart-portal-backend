@@ -74,24 +74,24 @@ object UserLinkLogging extends ClassnameLogger {
   }
 
   def getAllUserLinkLoggings(max: Int)(implicit connection: Connection): Seq[UserLinkLogging] = {
-    SQL(s"select * from $table_consentlogging order by 'timestamp' desc limit $max").as(userLinkLoggingParser *)
+    SQL(s"select * from $table_consentlogging order by timestamp desc limit $max").as(userLinkLoggingParser *)
   }
 
   def findUserLinkLoggingByEmail(email: String, max: Int)(implicit connection: Connection): Seq[UserLinkLogging] = {
-    SQL(s"select * from $table_consentlogging where email = {email} order by 'timestamp' desc limit $max").on(
+    SQL(s"select * from $table_consentlogging where email = {email} order by timestamp desc limit $max").on(
       'email -> email
     ).as(userLinkLoggingParser *)
   }
 
   def findUserLinkLoggingById(id: Long, max: Int)(implicit connection: Connection): Option[UserLinkLogging] = {
-    SQL(s"select * from $table_consentlogging where id = {id} order by 'timestamp' desc limit $max").on(
+    SQL(s"select * from $table_consentlogging where id = {id} order by timestamp desc limit $max").on(
       'id -> id
     ).as(userLinkLoggingParser.singleOpt)
   }
 
   def findUserLinkLoggingsByLink(link: String, max: Int)(implicit connection: Connection): Seq[UserLinkLogging] = {
 
-    SQL(s"select * from $table_consentlogging where link LIKE '%{link}%' order by 'timestamp' desc limit $max").on(
+    SQL(s"select * from $table_consentlogging where link LIKE '%{link}%' order by timestamp desc limit $max").on(
       'link -> link
     ).as(userLinkLoggingParser *)
   }

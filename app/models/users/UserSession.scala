@@ -66,17 +66,17 @@ object UserSession extends ClassnameLogger {
   }
 
   def getAllUserSessions(max: Int)(implicit connection: Connection): Seq[UserSession] = {
-    SQL(s"select * from $table_sessions order by 'laststatuschange' desc limit $max").as(userSessionsParser *)
+    SQL(s"select * from $table_sessions order by laststatuschange desc limit $max").as(userSessionsParser *)
   }
 
   def findUserSessionByEmail(email: String, max: Int)(implicit connection: Connection): Seq[UserSession] = {
-    SQL(s"select * from $table_sessions where email = {email} order by 'laststatuschange' desc limit $max").on(
+    SQL(s"select * from $table_sessions where email = {email} order by laststatuschange desc limit $max").on(
       'email -> email
     ).as(userSessionsParser *)
   }
 
   def findUserSessionByToken(token: String, max: Int)(implicit connection: Connection): Option[UserSession] = {
-    SQL(s"select * from $table_sessions where token = {token} order by 'laststatuschange' desc limit $max").on(
+    SQL(s"select * from $table_sessions where token = {token} order by laststatuschange desc limit $max").on(
       'token -> token
     ).as(userSessionsParser.singleOpt)
   }

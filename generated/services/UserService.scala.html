@@ -49,308 +49,373 @@
 </span>25 <span style=''>
 </span>26 <span style=''>import models.ErrorResult
 </span>27 <span style=''>import models.db.DatabaseSessionHolder
-</span>28 <span style=''>import models.users._
-</span>29 <span style=''>import play.api.Configuration
-</span>30 <span style=''>import uk.gov.hmrc.emailaddress.EmailAddress
-</span>31 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
-</span>32 <span style=''>
-</span>33 <span style=''>@Singleton
-</span>34 <span style=''>class UserService @Inject()(dbSession: DatabaseSessionHolder,
-</span>35 <span style=''>                            val passwordHashing: PasswordHashing,
-</span>36 <span style=''>                            configuration: Configuration) extends ClassnameLogger {
-</span>37 <span style=''>
-</span>38 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #AEF1AE'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
-</span>39 <span style=''>
-</span>40 <span style=''>  /**
-</span>41 <span style=''>    * basic auth compare
-</span>42 <span style=''>    *
-</span>43 <span style=''>    * @param loginCredentials
-</span>44 <span style=''>    * @return
-</span>45 <span style=''>    */
-</span>46 <span style=''>  def authenticateLocal(loginCredentials: LoginCredentials): Either[ErrorResult, User] = {
-</span>47 <span style=''>
-</span>48 <span style=''>    val userOpt = </span><span style='background: #AEF1AE'>dbSession.viaConnection { implicit connection =&gt;
-</span>49 <span style=''></span><span style='background: #AEF1AE'>      UserDAO.findUserByEmailAsString(loginCredentials.email).filter(user =&gt;
-</span>50 <span style=''></span><span style='background: #AEF1AE'>        passwordHashing.validatePassword(loginCredentials.password, user.password)
-</span>51 <span style=''></span><span style='background: #AEF1AE'>      )
-</span>52 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
-</span>53 <span style=''>    if (</span><span style='background: #AEF1AE'>userOpt.isDefined</span><span style=''>) </span><span style='background: #AEF1AE'>{
-</span>54 <span style=''></span><span style='background: #AEF1AE'>      // here is correct auth branch
-</span>55 <span style=''></span><span style='background: #AEF1AE'>      val user = userOpt.get
-</span>56 <span style=''></span><span style='background: #AEF1AE'>      if (user.isBlocked) {
-</span>57 <span style=''></span><span style='background: #AEF1AE'>        </span><span style='background: #F0ADAD'>Left(ErrorResult(&quot;Your account was temporarily disabled. Please contact the administrator.&quot;, None))</span><span style='background: #AEF1AE'>
-</span>58 <span style=''></span><span style='background: #AEF1AE'>      } else {
-</span>59 <span style=''></span><span style='background: #AEF1AE'>        Right(user)
-</span>60 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>61 <span style=''></span><span style='background: #AEF1AE'>
-</span>62 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> else {
-</span>63 <span style=''>      // should never indicate if user not found or just password wrong?
-</span>64 <span style=''>      </span><span style='background: #AEF1AE'>Left(ErrorResult(&quot;User email or password wrong.&quot;, None))</span><span style=''>
-</span>65 <span style=''>    }
-</span>66 <span style=''>  }
-</span>67 <span style=''>
-</span>68 <span style=''>  /**
-</span>69 <span style=''>    * passing findUserByEmailAsString request through from controller
-</span>70 <span style=''>    *
-</span>71 <span style=''>    * @param email
-</span>72 <span style=''>    * @return
-</span>73 <span style=''>    */
-</span>74 <span style=''>  def findUserByEmailAsString(email: String): Option[User] = {
-</span>75 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>76 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(email)
-</span>77 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>78 <span style=''>  }
-</span>79 <span style=''>
-</span>80 <span style=''>  /**
-</span>81 <span style=''>    * passing findUserByEmailAddress request through from controller
-</span>82 <span style=''>    *
-</span>83 <span style=''>    * @param email
-</span>84 <span style=''>    * @return
-</span>85 <span style=''>    */
-</span>86 <span style=''>  def findUserByEmailAddress(email: EmailAddress): Option[User] = {
-</span>87 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>88 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAddress(email)
-</span>89 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>90 <span style=''>  }
-</span>91 <span style=''>
-</span>92 <span style=''>  /**
-</span>93 <span style=''>    * passing findUsersByPassResetLink request through from controller
-</span>94 <span style=''>    *
-</span>95 <span style=''>    * @param linkId
-</span>96 <span style=''>    * @return
-</span>97 <span style=''>    */
-</span>98 <span style=''>  def findRegisteredUsersWithRegLink(linkId: String): Seq[User] = {
-</span>99 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>100 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findRegisteredUsersWithRegLink(linkId)
-</span>101 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>102 <span style=''>  }
-</span>103 <span style=''>
-</span>104 <span style=''>  /**
-</span>105 <span style=''>    * passing findUsersByPassResetLink request through from controller
-</span>106 <span style=''>    *
-</span>107 <span style=''>    * @param linkId
-</span>108 <span style=''>    * @return
-</span>109 <span style=''>    */
-</span>110 <span style=''>  def findUsersByPassResetLink(linkId: String): Seq[User] = {
-</span>111 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>112 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUsersByPassResetLink(linkId)
-</span>113 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>114 <span style=''>  }
-</span>115 <span style=''>
-</span>116 <span style=''>  /**
-</span>117 <span style=''>    * passing createUser request through from controller
-</span>118 <span style=''>    *
-</span>119 <span style=''>    * @param user
-</span>120 <span style=''>    * @return
-</span>121 <span style=''>    */
-</span>122 <span style=''>  def createUser(user: User): Option[User] = {
-</span>123 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>124 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.createUser(user)
-</span>125 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>126 <span style=''>  }
-</span>127 <span style=''>
-</span>128 <span style=''>  /**
-</span>129 <span style=''>    * passing deleteUser(user) request through from controller
-</span>130 <span style=''>    *
-</span>131 <span style=''>    * @param user
-</span>132 <span style=''>    * @return
-</span>133 <span style=''>    */
-</span>134 <span style=''>  def deleteUser(user: User): Boolean = {
-</span>135 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>136 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.deleteUser(user)
-</span>137 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>138 <span style=''>  }
-</span>139 <span style=''>
-</span>140 <span style=''>  /**
-</span>141 <span style=''>    * passing updateNoPass request through from controller
-</span>142 <span style=''>    *
-</span>143 <span style=''>    * @param user
-</span>144 <span style=''>    * @return
-</span>145 <span style=''>    */
-</span>146 <span style=''>  def updateNoPass(user: User): Option[User] = {
-</span>147 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>148 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.updateNoPass(user)
-</span>149 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>150 <span style=''>  }
-</span>151 <span style=''>
-</span>152 <span style=''>  /**
-</span>153 <span style=''>    * passing updatePassword request through from controller
-</span>154 <span style=''>    *
-</span>155 <span style=''>    * @param user
-</span>156 <span style=''>    * @return
-</span>157 <span style=''>    */
-</span>158 <span style=''>  def updatePassword(user: User): Option[User] = {
-</span>159 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>160 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.updatePassword(user)
-</span>161 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>162 <span style=''>  }
-</span>163 <span style=''>
-</span>164 <span style=''>  /**
-</span>165 <span style=''>    * set the new session and put it into cache
-</span>166 <span style=''>    *
-</span>167 <span style=''>    * @param userEmail
-</span>168 <span style=''>    * @param userAgentHeader
-</span>169 <span style=''>    * @return
-</span>170 <span style=''>    */
-</span>171 <span style=''>  def upsertUserSessionCache(userEmail: String, userAgentHeader: String): String = {
-</span>172 <span style=''>    val token = </span><span style='background: #AEF1AE'>passwordHashing.createSessionCookie(userEmail, userAgentHeader)</span><span style=''>
-</span>173 <span style=''>
-</span>174 <span style=''>    // TODO here replace cache access with DB
-</span>175 <span style=''>    // cache.set(token, userEmail)
-</span>176 <span style=''>    val sessionOpt = </span><span style='background: #AEF1AE'>dbSession.viaConnection(implicit connection =&gt; {
-</span>177 <span style=''></span><span style='background: #AEF1AE'>      UserSession.findUserSessionByToken(token).fold{
-</span>178 <span style=''></span><span style='background: #AEF1AE'>        UserSession.createUserSession(UserSession(
-</span>179 <span style=''></span><span style='background: #AEF1AE'>          token = token,
-</span>180 <span style=''></span><span style='background: #AEF1AE'>          useragent = userAgentHeader,
-</span>181 <span style=''></span><span style='background: #AEF1AE'>          email = userEmail,
-</span>182 <span style=''></span><span style='background: #AEF1AE'>          laststatustoken = s&quot;${StatusToken.ACTIVE}:NEW_SESSION&quot;,
-</span>183 <span style=''></span><span style='background: #AEF1AE'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
-</span>184 <span style=''></span><span style='background: #AEF1AE'>        ))
-</span>185 <span style=''></span><span style='background: #AEF1AE'>      }{
-</span>186 <span style=''></span><span style='background: #AEF1AE'>        session =&gt;
-</span>187 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>UserSession.updateUserSessionStatus(UserSession(
-</span>188 <span style=''></span><span style='background: #F0ADAD'>            token = token,
-</span>189 <span style=''></span><span style='background: #F0ADAD'>            useragent = userAgentHeader,
-</span>190 <span style=''></span><span style='background: #F0ADAD'>            email = userEmail,
-</span>191 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = s&quot;${StatusToken.ACTIVE}:SESSION_UPDATE&quot;,
-</span>192 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
-</span>193 <span style=''></span><span style='background: #F0ADAD'>          ))</span><span style='background: #AEF1AE'>
-</span>194 <span style=''></span><span style='background: #AEF1AE'>      }
-</span>195 <span style=''></span><span style='background: #AEF1AE'>    })</span><span style=''>
-</span>196 <span style=''>
-</span>197 <span style=''>    </span><span style='background: #AEF1AE'>sessionOpt.map(_.token).getOrElse(&quot;XXXXXXXXXXXXXXXXXXXXX-INVALID-xxxxxxxxxxxxxxx&quot;)</span><span style=''>
-</span>198 <span style=''>  }
-</span>199 <span style=''>
-</span>200 <span style=''>  /**
-</span>201 <span style=''>    * check for an active server-side session
-</span>202 <span style=''>    *
-</span>203 <span style=''>    * @param xsrfToken
-</span>204 <span style=''>    * @param xsrfTokenCookie
-</span>205 <span style=''>    * @param userAgentHeader
-</span>206 <span style=''>    * @return
-</span>207 <span style=''>    */
-</span>208 <span style=''>  def checkUserSessionCacheByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[String] = {
-</span>209 <span style=''>
-</span>210 <span style=''>    // TODO here replace cache access with DB
-</span>211 <span style=''>    // val userEmailOpt = cache.get[String](xsrfToken)
-</span>212 <span style=''>    val userEmailOpt = </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>213 <span style=''></span><span style='background: #F0ADAD'>      UserSession.findUserSessionByToken(xsrfToken)
-</span>214 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>215 <span style=''>
-</span>216 <span style=''>    </span><span style='background: #F0ADAD'>userEmailOpt.fold[Option[String]] {
-</span>217 <span style=''></span><span style='background: #F0ADAD'>      logger.debug(s&quot;no session for xsrfToken: $xsrfToken&quot;)
-</span>218 <span style=''></span><span style='background: #F0ADAD'>      None
-</span>219 <span style=''></span><span style='background: #F0ADAD'>    } {
-</span>220 <span style=''></span><span style='background: #F0ADAD'>      session =&gt;
-</span>221 <span style=''></span><span style='background: #F0ADAD'>      val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
-</span>222 <span style=''></span><span style='background: #F0ADAD'>      logger.trace(s&quot;testcookie: $cookieForUSerAndUserAgent&quot;)
-</span>223 <span style=''></span><span style='background: #F0ADAD'>      if (xsrfToken == xsrfTokenCookie &amp;&amp; cookieForUSerAndUserAgent) {
-</span>224 <span style=''></span><span style='background: #F0ADAD'>        logger.trace(s&quot;request for active session: ${session.email} / $xsrfToken / $userAgentHeader&quot;)
-</span>225 <span style=''></span><span style='background: #F0ADAD'>        Some(session.email)
-</span>226 <span style=''></span><span style='background: #F0ADAD'>      } else {
-</span>227 <span style=''></span><span style='background: #F0ADAD'>        logger.error(&quot;Invalid Token&quot;)
-</span>228 <span style=''></span><span style='background: #F0ADAD'>        None
-</span>229 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>230 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>231 <span style=''>  }
-</span>232 <span style=''>
-</span>233 <span style=''>  /**
-</span>234 <span style=''>    * remove a server-side session
-</span>235 <span style=''>    *
-</span>236 <span style=''>    * @param userEmail
-</span>237 <span style=''>    * @param xsrfToken
-</span>238 <span style=''>    */
-</span>239 <span style=''>  def removeUserSessionCache(userEmail: String, xsrfToken: String): Unit = {
-</span>240 <span style=''>    // TODO here replace with DB cache
-</span>241 <span style=''>    // cache.remove(xsrfToken)
-</span>242 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>243 <span style=''></span><span style='background: #F0ADAD'>      UserSession.deleteUserSessionByToken(xsrfToken)
-</span>244 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>245 <span style=''>  }
-</span>246 <span style=''>
-</span>247 <span style=''>  /**
-</span>248 <span style=''>    * unambiguous keep track of user upload files and owning them
-</span>249 <span style=''>    *
-</span>250 <span style=''>    * @param filename
-</span>251 <span style=''>    * @param authUser
-</span>252 <span style=''>    * @param filelink
-</span>253 <span style=''>    * @return
-</span>254 <span style=''>    */
-</span>255 <span style=''>  def insertUserFileEntry(filename: String, authUser: String, filelink: String): Option[UserFile] = {
-</span>256 <span style=''>
-</span>257 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>dbSession.viaConnection { implicit connection =&gt;
-</span>258 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
-</span>259 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>260 <span style=''>
-</span>261 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold[Option[UserFile]] {
-</span>262 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
-</span>263 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't store in users collection&quot;)
-</span>264 <span style=''></span><span style='background: #F0ADAD'>      None
-</span>265 <span style=''></span><span style='background: #F0ADAD'>    } {
-</span>266 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
-</span>267 <span style=''></span><span style='background: #F0ADAD'>
-</span>268 <span style=''></span><span style='background: #F0ADAD'>        val userFile = UserFile(
-</span>269 <span style=''></span><span style='background: #F0ADAD'>          uuid = UUID.randomUUID(),
-</span>270 <span style=''></span><span style='background: #F0ADAD'>          users_accountsubject = user.accountSubject,
-</span>271 <span style=''></span><span style='background: #F0ADAD'>          originalfilename = filename,
-</span>272 <span style=''></span><span style='background: #F0ADAD'>          linkreference = filelink,
-</span>273 <span style=''></span><span style='background: #F0ADAD'>          laststatustoken = &quot;UPLOAD&quot;,
-</span>274 <span style=''></span><span style='background: #F0ADAD'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-</span>275 <span style=''></span><span style='background: #F0ADAD'>
-</span>276 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction(implicit connection =&gt; {
-</span>277 <span style=''></span><span style='background: #F0ADAD'>          UserFile.createUserFile(userFile)
-</span>278 <span style=''></span><span style='background: #F0ADAD'>        })
-</span>279 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>280 <span style=''>  }
-</span>281 <span style=''>
-</span>282 <span style=''>
-</span>283 <span style=''>  /**
-</span>284 <span style=''>    * unambiguous keep track of user metadata records and owning them
-</span>285 <span style=''>    *
-</span>286 <span style=''>    * @param CSW_URL
-</span>287 <span style=''>    * @param mdMetadataUuid
-</span>288 <span style=''>    * @param authUser
-</span>289 <span style=''>    * @return
-</span>290 <span style=''>    */
-</span>291 <span style=''>  def insertUserMetaRecordEntry(CSW_URL: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
-</span>292 <span style=''>
-</span>293 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>dbSession.viaConnection { implicit connection =&gt;
-</span>294 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
-</span>295 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>296 <span style=''>
-</span>297 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold[Option[UserMetaRecord]] {
-</span>298 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
-</span>299 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't store in users collection&quot;)
-</span>300 <span style=''></span><span style='background: #F0ADAD'>      None
-</span>301 <span style=''></span><span style='background: #F0ADAD'>    } {
-</span>302 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
-</span>303 <span style=''></span><span style='background: #F0ADAD'>
-</span>304 <span style=''></span><span style='background: #F0ADAD'>        val userMetaRecord = UserMetaRecord(
-</span>305 <span style=''></span><span style='background: #F0ADAD'>          uuid = UUID.randomUUID(),
-</span>306 <span style=''></span><span style='background: #F0ADAD'>          users_accountsubject = user.accountSubject,
-</span>307 <span style=''></span><span style='background: #F0ADAD'>          originaluuid = mdMetadataUuid,
-</span>308 <span style=''></span><span style='background: #F0ADAD'>          cswreference = s&quot;https://portal.smart-project.info/pycsw/csw?request=GetRecordById&amp;service=CSW&amp;version=2.0.2&amp;elementSetName=full&amp;outputSchema=http://www.isotc211.org/2005/gmd&amp;id=$mdMetadataUuid&quot;,
-</span>309 <span style=''></span><span style='background: #F0ADAD'>          laststatustoken = &quot;UPLOAD&quot;,
-</span>310 <span style=''></span><span style='background: #F0ADAD'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-</span>311 <span style=''></span><span style='background: #F0ADAD'>
-</span>312 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction(implicit connection =&gt; {
-</span>313 <span style=''></span><span style='background: #F0ADAD'>          UserMetaRecord.createUserMetaRecord(userMetaRecord)
-</span>314 <span style=''></span><span style='background: #F0ADAD'>        })
-</span>315 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>316 <span style=''>  }
-</span>317 <span style=''>
-</span>318 <span style=''>  /**
-</span>319 <span style=''>    * log file downloads via consent accept button on webgui
-</span>320 <span style=''>    *
-</span>321 <span style=''>    * @param logRequest
-</span>322 <span style=''>    */
-</span>323 <span style=''>  def logLinkInfo(logRequest: UserLinkLogging): Int = {
-</span>324 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
-</span>325 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.createUserLinkLogging(logRequest)
-</span>326 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>327 <span style=''>  }
-</span>328 <span style=''>
-</span>329 <span style=''>}
+</span>28 <span style=''>import models.owc.OwcContextDAO
+</span>29 <span style=''>import models.users._
+</span>30 <span style=''>import play.api.Configuration
+</span>31 <span style=''>import uk.gov.hmrc.emailaddress.EmailAddress
+</span>32 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>33 <span style=''>
+</span>34 <span style=''>@Singleton
+</span>35 <span style=''>class UserService @Inject()(dbSession: DatabaseSessionHolder,
+</span>36 <span style=''>                            val passwordHashing: PasswordHashing,
+</span>37 <span style=''>                            configuration: Configuration) extends ClassnameLogger {
+</span>38 <span style=''>
+</span>39 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #AEF1AE'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
+</span>40 <span style=''>
+</span>41 <span style=''>  /**
+</span>42 <span style=''>    * basic auth compare
+</span>43 <span style=''>    *
+</span>44 <span style=''>    * @param loginCredentials
+</span>45 <span style=''>    * @return
+</span>46 <span style=''>    */
+</span>47 <span style=''>  def authenticateLocal(loginCredentials: LoginCredentials): Either[ErrorResult, User] = {
+</span>48 <span style=''>
+</span>49 <span style=''>    val userOpt = </span><span style='background: #AEF1AE'>dbSession.viaConnection { implicit connection =&gt;
+</span>50 <span style=''></span><span style='background: #AEF1AE'>      UserDAO.findUserByEmailAsString(loginCredentials.email).filter(user =&gt;
+</span>51 <span style=''></span><span style='background: #AEF1AE'>        passwordHashing.validatePassword(loginCredentials.password, user.password)
+</span>52 <span style=''></span><span style='background: #AEF1AE'>      )
+</span>53 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''>
+</span>54 <span style=''>    if (</span><span style='background: #AEF1AE'>userOpt.isDefined</span><span style=''>) </span><span style='background: #AEF1AE'>{
+</span>55 <span style=''></span><span style='background: #AEF1AE'>      // here is correct auth branch
+</span>56 <span style=''></span><span style='background: #AEF1AE'>      val user = userOpt.get
+</span>57 <span style=''></span><span style='background: #AEF1AE'>      if (user.isBlocked) </span><span style='background: #F0ADAD'>{
+</span>58 <span style=''></span><span style='background: #F0ADAD'>        val status = user.getToken
+</span>59 <span style=''></span><span style='background: #F0ADAD'>        Left(ErrorResult(s&quot;Your account was ${status.value}. Please contact the administrator.&quot;, None))
+</span>60 <span style=''></span><span style='background: #F0ADAD'>      }</span><span style='background: #AEF1AE'> else {
+</span>61 <span style=''></span><span style='background: #AEF1AE'>        Right(user)
+</span>62 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>63 <span style=''></span><span style='background: #AEF1AE'>
+</span>64 <span style=''></span><span style='background: #AEF1AE'>    }</span><span style=''> else {
+</span>65 <span style=''>      // should never indicate if user not found or just password wrong?
+</span>66 <span style=''>      </span><span style='background: #AEF1AE'>Left(ErrorResult(&quot;User email or password wrong.&quot;, None))</span><span style=''>
+</span>67 <span style=''>    }
+</span>68 <span style=''>  }
+</span>69 <span style=''>
+</span>70 <span style=''>  /**
+</span>71 <span style=''>    * passing findUserByEmailAsString request through from controller
+</span>72 <span style=''>    *
+</span>73 <span style=''>    * @param accountSubject
+</span>74 <span style=''>    * @return
+</span>75 <span style=''>    */
+</span>76 <span style=''>  def findUserByAccountSubject(accountSubject: String): Option[User] = {
+</span>77 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>78 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findByAccountSubject(accountSubject)
+</span>79 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>80 <span style=''>  }
+</span>81 <span style=''>
+</span>82 <span style=''>  /**
+</span>83 <span style=''>    * passing findUserByEmailAsString request through from controller
+</span>84 <span style=''>    *
+</span>85 <span style=''>    * @param email
+</span>86 <span style=''>    * @return
+</span>87 <span style=''>    */
+</span>88 <span style=''>  def findUserByEmailAsString(email: String): Option[User] = {
+</span>89 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>90 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(email)
+</span>91 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>92 <span style=''>  }
+</span>93 <span style=''>
+</span>94 <span style=''>  /**
+</span>95 <span style=''>    * passing findUserByEmailAddress request through from controller
+</span>96 <span style=''>    *
+</span>97 <span style=''>    * @param email
+</span>98 <span style=''>    * @return
+</span>99 <span style=''>    */
+</span>100 <span style=''>  def findUserByEmailAddress(email: EmailAddress): Option[User] = {
+</span>101 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>102 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAddress(email)
+</span>103 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>104 <span style=''>  }
+</span>105 <span style=''>
+</span>106 <span style=''>  /**
+</span>107 <span style=''>    * passing findUsersByPassResetLink request through from controller
+</span>108 <span style=''>    *
+</span>109 <span style=''>    * @param linkId
+</span>110 <span style=''>    * @return
+</span>111 <span style=''>    */
+</span>112 <span style=''>  def findRegisteredUsersWithRegLink(linkId: String): Seq[User] = {
+</span>113 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>114 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findRegisteredUsersWithRegLink(linkId)
+</span>115 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>116 <span style=''>  }
+</span>117 <span style=''>
+</span>118 <span style=''>  /**
+</span>119 <span style=''>    * passing findUsersByPassResetLink request through from controller
+</span>120 <span style=''>    *
+</span>121 <span style=''>    * @param linkId
+</span>122 <span style=''>    * @return
+</span>123 <span style=''>    */
+</span>124 <span style=''>  def findUsersByPassResetLink(linkId: String): Seq[User] = {
+</span>125 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>126 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUsersByPassResetLink(linkId)
+</span>127 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>128 <span style=''>  }
+</span>129 <span style=''>
+</span>130 <span style=''>  /**
+</span>131 <span style=''>    * passing createUser request through from controller
+</span>132 <span style=''>    *
+</span>133 <span style=''>    * @param user
+</span>134 <span style=''>    * @return
+</span>135 <span style=''>    */
+</span>136 <span style=''>  def createUser(user: User): Option[User] = {
+</span>137 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>138 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.createUser(user)
+</span>139 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>140 <span style=''>  }
+</span>141 <span style=''>
+</span>142 <span style=''>  /**
+</span>143 <span style=''>    * passing deleteUser(user) request through from controller,
+</span>144 <span style=''>    * BUT we need to delete contexts, userfiles and bucket objects?,
+</span>145 <span style=''>    * usermetarecords and the csw records?
+</span>146 <span style=''>    *
+</span>147 <span style=''>    *
+</span>148 <span style=''>    * @param user
+</span>149 <span style=''>    * @return
+</span>150 <span style=''>    */
+</span>151 <span style=''>  def deleteUser(user: User): Boolean = {
+</span>152 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>153 <span style=''></span><span style='background: #F0ADAD'>      // val userFiles = UserFile.findUserFileByAccountSubject(user.accountSubject)
+</span>154 <span style=''></span><span style='background: #F0ADAD'>      // for file in userFiles delete in DB and maybe even delete in remote datastore?
+</span>155 <span style=''></span><span style='background: #F0ADAD'>
+</span>156 <span style=''></span><span style='background: #F0ADAD'>      // val userMetas = UserMetaRecord.findUserMetaRecordByAccountSubject(user.accountSubject)
+</span>157 <span style=''></span><span style='background: #F0ADAD'>      // for record in userMetas delete in DB and maybe even delete in remote csw?
+</span>158 <span style=''></span><span style='background: #F0ADAD'>
+</span>159 <span style=''></span><span style='background: #F0ADAD'>      val userGroups = UserGroup.findUserGroupsForUser(user)
+</span>160 <span style=''></span><span style='background: #F0ADAD'>      // for each usergroups_has_users remove row with users_accountsubject reference
+</span>161 <span style=''></span><span style='background: #F0ADAD'>
+</span>162 <span style=''></span><span style='background: #F0ADAD'>      val updatedUserGroups = userGroups.map{ ug =&gt;
+</span>163 <span style=''></span><span style='background: #F0ADAD'>        val withRemoved = ug.hasUsersLevel.filterNot(level =&gt; level.users_accountsubject.equals(user.accountSubject))
+</span>164 <span style=''></span><span style='background: #F0ADAD'>        ug.copy(hasUsersLevel = withRemoved)
+</span>165 <span style=''></span><span style='background: #F0ADAD'>      }.forall(ug =&gt; UserGroup.updateUserGroup(ug).isDefined)
+</span>166 <span style=''></span><span style='background: #F0ADAD'>
+</span>167 <span style=''></span><span style='background: #F0ADAD'>      // val contexts = OwcContextDAO.findOwcContextsByUser(user)
+</span>168 <span style=''></span><span style='background: #F0ADAD'>      // for each owcContext in contexts remove reference from usergroups_has_owc_context_rights
+</span>169 <span style=''></span><span style='background: #F0ADAD'>      // delete each owcContext in contexts
+</span>170 <span style=''></span><span style='background: #F0ADAD'>
+</span>171 <span style=''></span><span style='background: #F0ADAD'>      // eventually delete user
+</span>172 <span style=''></span><span style='background: #F0ADAD'>      // UserDAO.deleteUser(user)
+</span>173 <span style=''></span><span style='background: #F0ADAD'>      val statusToken = StatusToken.DELETED
+</span>174 <span style=''></span><span style='background: #F0ADAD'>      val updateUser = user.copy(laststatustoken = s&quot;${statusToken.value}:BY-SELF&quot;,
+</span>175 <span style=''></span><span style='background: #F0ADAD'>        laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>176 <span style=''></span><span style='background: #F0ADAD'>
+</span>177 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.updateNoPass(updateUser).isDefined &amp;&amp; updatedUserGroups
+</span>178 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>179 <span style=''>  }
+</span>180 <span style=''>
+</span>181 <span style=''>  /**
+</span>182 <span style=''>    * passing updateNoPass request through from controller
+</span>183 <span style=''>    *
+</span>184 <span style=''>    * @param user
+</span>185 <span style=''>    * @return
+</span>186 <span style=''>    */
+</span>187 <span style=''>  def updateNoPass(user: User): Option[User] = {
+</span>188 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>189 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.updateNoPass(user)
+</span>190 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>191 <span style=''>  }
+</span>192 <span style=''>
+</span>193 <span style=''>  /**
+</span>194 <span style=''>    * passing updatePassword request through from controller
+</span>195 <span style=''>    *
+</span>196 <span style=''>    * @param user
+</span>197 <span style=''>    * @return
+</span>198 <span style=''>    */
+</span>199 <span style=''>  def updatePassword(user: User): Option[User] = {
+</span>200 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>201 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.updatePassword(user)
+</span>202 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>203 <span style=''>  }
+</span>204 <span style=''>
+</span>205 <span style=''>  /**
+</span>206 <span style=''>    * set the new session and put it into cache
+</span>207 <span style=''>    *
+</span>208 <span style=''>    * @param userEmail
+</span>209 <span style=''>    * @param userAgentHeader
+</span>210 <span style=''>    * @return
+</span>211 <span style=''>    */
+</span>212 <span style=''>  def upsertUserSession(userEmail: String, userAgentHeader: String): String = {
+</span>213 <span style=''>    val token = </span><span style='background: #AEF1AE'>passwordHashing.createSessionCookie(userEmail, userAgentHeader)</span><span style=''>
+</span>214 <span style=''>    val sessionOpt = </span><span style='background: #AEF1AE'>dbSession.viaConnection(implicit connection =&gt; {
+</span>215 <span style=''></span><span style='background: #AEF1AE'>      UserSession.findUserSessionByToken(token, 1).fold{
+</span>216 <span style=''></span><span style='background: #AEF1AE'>        UserSession.createUserSession(UserSession(
+</span>217 <span style=''></span><span style='background: #AEF1AE'>          token = token,
+</span>218 <span style=''></span><span style='background: #AEF1AE'>          useragent = userAgentHeader,
+</span>219 <span style=''></span><span style='background: #AEF1AE'>          email = userEmail,
+</span>220 <span style=''></span><span style='background: #AEF1AE'>          laststatustoken = s&quot;${StatusToken.ACTIVE}:NEW_SESSION&quot;,
+</span>221 <span style=''></span><span style='background: #AEF1AE'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+</span>222 <span style=''></span><span style='background: #AEF1AE'>        ))
+</span>223 <span style=''></span><span style='background: #AEF1AE'>      }{
+</span>224 <span style=''></span><span style='background: #AEF1AE'>        session =&gt;
+</span>225 <span style=''></span><span style='background: #AEF1AE'>          </span><span style='background: #F0ADAD'>UserSession.updateUserSessionStatus(UserSession(
+</span>226 <span style=''></span><span style='background: #F0ADAD'>            token = token,
+</span>227 <span style=''></span><span style='background: #F0ADAD'>            useragent = userAgentHeader,
+</span>228 <span style=''></span><span style='background: #F0ADAD'>            email = userEmail,
+</span>229 <span style=''></span><span style='background: #F0ADAD'>            laststatustoken = s&quot;${StatusToken.ACTIVE}:SESSION_UPDATE&quot;,
+</span>230 <span style=''></span><span style='background: #F0ADAD'>            laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+</span>231 <span style=''></span><span style='background: #F0ADAD'>          ))</span><span style='background: #AEF1AE'>
+</span>232 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>233 <span style=''></span><span style='background: #AEF1AE'>    })</span><span style=''>
+</span>234 <span style=''>
+</span>235 <span style=''>    </span><span style='background: #AEF1AE'>sessionOpt.map(_.token).getOrElse(&quot;XXXXXXXXXXXXXXXXXXXXX-INVALID-xxxxxxxxxxxxxxx&quot;)</span><span style=''>
+</span>236 <span style=''>  }
+</span>237 <span style=''>
+</span>238 <span style=''>  /**
+</span>239 <span style=''>    * check for an active server-side session
+</span>240 <span style=''>    *
+</span>241 <span style=''>    * @param xsrfToken
+</span>242 <span style=''>    * @param xsrfTokenCookie
+</span>243 <span style=''>    * @param userAgentHeader
+</span>244 <span style=''>    * @return
+</span>245 <span style=''>    */
+</span>246 <span style=''>  def getUserSessionByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[UserSession] = {
+</span>247 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>248 <span style=''></span><span style='background: #F0ADAD'>      UserSession.findUserSessionByToken(xsrfToken, 1)
+</span>249 <span style=''></span><span style='background: #F0ADAD'>    })
+</span>250 <span style=''></span><span style='background: #F0ADAD'>      .fold[Option[UserSession]] {
+</span>251 <span style=''></span><span style='background: #F0ADAD'>        logger.debug(s&quot;no session for xsrfToken: $xsrfToken&quot;)
+</span>252 <span style=''></span><span style='background: #F0ADAD'>        None
+</span>253 <span style=''></span><span style='background: #F0ADAD'>      } {
+</span>254 <span style=''></span><span style='background: #F0ADAD'>        session =&gt;
+</span>255 <span style=''></span><span style='background: #F0ADAD'>          val cookieForUSerAndUserAgent = passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
+</span>256 <span style=''></span><span style='background: #F0ADAD'>          logger.trace(s&quot;testcookie: $cookieForUSerAndUserAgent&quot;)
+</span>257 <span style=''></span><span style='background: #F0ADAD'>          if (xsrfToken == xsrfTokenCookie &amp;&amp; cookieForUSerAndUserAgent) {
+</span>258 <span style=''></span><span style='background: #F0ADAD'>            logger.trace(s&quot;request for active session: ${session.email} / $xsrfToken / $userAgentHeader&quot;)
+</span>259 <span style=''></span><span style='background: #F0ADAD'>            Some(session)
+</span>260 <span style=''></span><span style='background: #F0ADAD'>          } else {
+</span>261 <span style=''></span><span style='background: #F0ADAD'>            logger.error(&quot;Invalid Token&quot;)
+</span>262 <span style=''></span><span style='background: #F0ADAD'>            None
+</span>263 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>264 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>265 <span style=''>  }
+</span>266 <span style=''>
+</span>267 <span style=''>  /**
+</span>268 <span style=''>    * auxiliary intermediate for above function
+</span>269 <span style=''>    *
+</span>270 <span style=''>    * @param xsrfToken
+</span>271 <span style=''>    * @param xsrfTokenCookie
+</span>272 <span style=''>    * @param userAgentHeader
+</span>273 <span style=''>    * @return
+</span>274 <span style=''>    */
+</span>275 <span style=''>  def findUserSessionByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[String] = {
+</span>276 <span style=''>    </span><span style='background: #F0ADAD'>getUserSessionByToken(xsrfToken, xsrfTokenCookie, userAgentHeader).map(_.email)</span><span style=''>
+</span>277 <span style=''>  }
+</span>278 <span style=''>
+</span>279 <span style=''>  /**
+</span>280 <span style=''>    * remove a server-side session
+</span>281 <span style=''>    *
+</span>282 <span style=''>    * @param userEmail
+</span>283 <span style=''>    * @param xsrfToken
+</span>284 <span style=''>    */
+</span>285 <span style=''>  def removeUserSessionCache(userEmail: String, xsrfToken: String): Unit = {
+</span>286 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>287 <span style=''></span><span style='background: #F0ADAD'>      UserSession.deleteUserSessionByToken(xsrfToken)
+</span>288 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>289 <span style=''>  }
+</span>290 <span style=''>
+</span>291 <span style=''>  /**
+</span>292 <span style=''>    * unambiguous keep track of user upload files and owning them
+</span>293 <span style=''>    *
+</span>294 <span style=''>    * @param filename
+</span>295 <span style=''>    * @param authUser
+</span>296 <span style=''>    * @param filelink
+</span>297 <span style=''>    * @return
+</span>298 <span style=''>    */
+</span>299 <span style=''>  def insertUserFileEntry(filename: String, authUser: String, filelink: String): Option[UserFile] = {
+</span>300 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>dbSession.viaConnection { implicit connection =&gt;
+</span>301 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
+</span>302 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>303 <span style=''>
+</span>304 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold[Option[UserFile]] {
+</span>305 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
+</span>306 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't store in users collection&quot;)
+</span>307 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>308 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>309 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>310 <span style=''></span><span style='background: #F0ADAD'>        val userFile = UserFile(
+</span>311 <span style=''></span><span style='background: #F0ADAD'>          uuid = UUID.randomUUID(),
+</span>312 <span style=''></span><span style='background: #F0ADAD'>          users_accountsubject = user.accountSubject,
+</span>313 <span style=''></span><span style='background: #F0ADAD'>          originalfilename = filename,
+</span>314 <span style=''></span><span style='background: #F0ADAD'>          linkreference = filelink,
+</span>315 <span style=''></span><span style='background: #F0ADAD'>          laststatustoken = &quot;UPLOAD&quot;,
+</span>316 <span style=''></span><span style='background: #F0ADAD'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>317 <span style=''></span><span style='background: #F0ADAD'>
+</span>318 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction(implicit connection =&gt; {
+</span>319 <span style=''></span><span style='background: #F0ADAD'>          UserFile.createUserFile(userFile)
+</span>320 <span style=''></span><span style='background: #F0ADAD'>        })
+</span>321 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>322 <span style=''>  }
+</span>323 <span style=''>
+</span>324 <span style=''>  /**
+</span>325 <span style=''>    * for reverse mapping finding the file
+</span>326 <span style=''>    *
+</span>327 <span style=''>    * @param uuid
+</span>328 <span style=''>    * @return
+</span>329 <span style=''>    */
+</span>330 <span style=''>  def findUserFileByUuid(uuid: UUID): Option[UserFile] = {
+</span>331 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt;
+</span>332 <span style=''></span><span style='background: #F0ADAD'>      UserFile.findUserFileByUuid(uuid)
+</span>333 <span style=''></span><span style='background: #F0ADAD'>    )</span><span style=''>
+</span>334 <span style=''>  }
+</span>335 <span style=''>
+</span>336 <span style=''>  /**
+</span>337 <span style=''>    * deleting, needs upstream auth logic who is allowed and who not
+</span>338 <span style=''>    *
+</span>339 <span style=''>    * @param uuid
+</span>340 <span style=''>    * @return
+</span>341 <span style=''>    */
+</span>342 <span style=''>  def deleteUserFile(uuid: UUID): Boolean = {
+</span>343 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction( implicit connection =&gt;
+</span>344 <span style=''></span><span style='background: #F0ADAD'>      UserFile.deleteUserFile(uuid)
+</span>345 <span style=''></span><span style='background: #F0ADAD'>    )</span><span style=''>
+</span>346 <span style=''>  }
+</span>347 <span style=''>
+</span>348 <span style=''>
+</span>349 <span style=''>  /**
+</span>350 <span style=''>    * unambiguous keep track of user metadata records and owning them
+</span>351 <span style=''>    *
+</span>352 <span style=''>    * @param CSW_URL
+</span>353 <span style=''>    * @param mdMetadataUuid
+</span>354 <span style=''>    * @param authUser
+</span>355 <span style=''>    * @return
+</span>356 <span style=''>    */
+</span>357 <span style=''>  def insertUserMetaRecordEntry(CSW_URL: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
+</span>358 <span style=''>    val userLookup = </span><span style='background: #F0ADAD'>dbSession.viaConnection { implicit connection =&gt;
+</span>359 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(authUser)
+</span>360 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>361 <span style=''>
+</span>362 <span style=''>    </span><span style='background: #F0ADAD'>userLookup.fold[Option[UserMetaRecord]] {
+</span>363 <span style=''></span><span style='background: #F0ADAD'>      // user not found, then can't insert, shouldn't happen though
+</span>364 <span style=''></span><span style='background: #F0ADAD'>      logger.error(&quot;User not found, can't store in users collection&quot;)
+</span>365 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>366 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>367 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>368 <span style=''></span><span style='background: #F0ADAD'>
+</span>369 <span style=''></span><span style='background: #F0ADAD'>        val userMetaRecord = UserMetaRecord(
+</span>370 <span style=''></span><span style='background: #F0ADAD'>          uuid = UUID.randomUUID(),
+</span>371 <span style=''></span><span style='background: #F0ADAD'>          users_accountsubject = user.accountSubject,
+</span>372 <span style=''></span><span style='background: #F0ADAD'>          originaluuid = mdMetadataUuid,
+</span>373 <span style=''></span><span style='background: #F0ADAD'>          cswreference = s&quot;https://portal.smart-project.info/pycsw/csw?request=GetRecordById&amp;service=CSW&amp;version=2.0.2&amp;elementSetName=full&amp;outputSchema=http://www.isotc211.org/2005/gmd&amp;id=$mdMetadataUuid&quot;,
+</span>374 <span style=''></span><span style='background: #F0ADAD'>          laststatustoken = &quot;UPLOAD&quot;,
+</span>375 <span style=''></span><span style='background: #F0ADAD'>          laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>376 <span style=''></span><span style='background: #F0ADAD'>
+</span>377 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction(implicit connection =&gt; {
+</span>378 <span style=''></span><span style='background: #F0ADAD'>          UserMetaRecord.createUserMetaRecord(userMetaRecord)
+</span>379 <span style=''></span><span style='background: #F0ADAD'>        })
+</span>380 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>381 <span style=''>  }
+</span>382 <span style=''>
+</span>383 <span style=''>  /**
+</span>384 <span style=''>    * log file downloads via consent accept button on webgui
+</span>385 <span style=''>    *
+</span>386 <span style=''>    * @param logRequest
+</span>387 <span style=''>    */
+</span>388 <span style=''>  def logLinkInfo(logRequest: UserLinkLogging): Int = {
+</span>389 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>390 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.createUserLinkLogging(logRequest)
+</span>391 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>392 <span style=''>  }
+</span>393 <span style=''>
+</span>394 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -364,15 +429,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          38
+          39
         </td>
         <td>
-          9794
+          9938
         </td>
         <td>
-          1458
+          1490
           -
-          1532
+          1564
         </td>
         <td>
           Apply
@@ -385,15 +450,15 @@
         </td>
       </tr><tr>
         <td>
-          48
+          49
         </td>
         <td>
-          9801
+          9945
         </td>
         <td>
-          1732
+          1764
           -
-          1954
+          1986
         </td>
         <td>
           Apply
@@ -406,36 +471,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          9800
+          9940
         </td>
         <td>
-          1787
+          1851
           -
-          1948
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.filter
-        </td>
-        <td style="background: #AEF1AE">
-          models.users.UserDAO.findUserByEmailAsString(emailaddress.this.StringValue.stringValueToString(loginCredentials.email))(connection).filter(((user: models.users.User) =&gt; UserService.this.passwordHashing.validatePassword(loginCredentials.password, user.password)))
-        </td>
-      </tr><tr>
-        <td>
-          49
-        </td>
-        <td>
-          9796
-        </td>
-        <td>
-          1819
-          -
-          1841
+          1873
         </td>
         <td>
           ApplyImplicitView
@@ -448,15 +492,15 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          9795
+          9939
         </td>
         <td>
-          1819
+          1851
           -
-          1841
+          1873
         </td>
         <td>
           Select
@@ -472,12 +516,33 @@
           50
         </td>
         <td>
-          9799
+          9944
         </td>
         <td>
-          1866
+          1819
           -
-          1940
+          1980
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.filter
+        </td>
+        <td style="background: #AEF1AE">
+          models.users.UserDAO.findUserByEmailAsString(emailaddress.this.StringValue.stringValueToString(loginCredentials.email))(connection).filter(((user: models.users.User) =&gt; UserService.this.passwordHashing.validatePassword(loginCredentials.password, user.password)))
+        </td>
+      </tr><tr>
+        <td>
+          51
+        </td>
+        <td>
+          9943
+        </td>
+        <td>
+          1898
+          -
+          1972
         </td>
         <td>
           Apply
@@ -490,15 +555,15 @@
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9798
+          9942
         </td>
         <td>
-          1926
+          1958
           -
-          1939
+          1971
         </td>
         <td>
           Select
@@ -511,15 +576,15 @@
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9797
+          9941
         </td>
         <td>
-          1899
+          1931
           -
-          1924
+          1956
         </td>
         <td>
           Select
@@ -532,15 +597,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          54
         </td>
         <td>
-          9802
+          9946
         </td>
         <td>
-          1963
+          1995
           -
-          1980
+          2012
         </td>
         <td>
           Select
@@ -553,15 +618,15 @@
         </td>
       </tr><tr>
         <td>
-          53
+          54
         </td>
         <td>
-          9812
+          9960
         </td>
         <td>
-          1982
+          2014
           -
-          2235
+          2298
         </td>
         <td>
           Block
@@ -573,22 +638,25 @@
           {
   val user: models.users.User = userOpt.get;
   if (user.isBlocked)
-    scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(&quot;Your account was temporarily disabled. Please contact the administrator.&quot;, scala.None))
+    {
+      val status: models.users.StatusToken = user.getToken;
+      scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(scala.StringContext.apply(&quot;Your account was &quot;, &quot;. Please contact the administrator.&quot;).s(status.value), scala.None))
+    }
   else
     scala.`package`.Right.apply[Nothing, models.users.User](user)
 }
         </td>
       </tr><tr>
         <td>
-          55
+          56
         </td>
         <td>
-          9803
+          9947
         </td>
         <td>
-          2038
+          2070
           -
-          2049
+          2081
         </td>
         <td>
           Select
@@ -601,15 +669,15 @@
         </td>
       </tr><tr>
         <td>
-          56
+          57
         </td>
         <td>
-          9804
+          9948
         </td>
         <td>
-          2060
+          2092
           -
-          2074
+          2106
         </td>
         <td>
           Select
@@ -625,75 +693,57 @@
           57
         </td>
         <td>
-          9809
+          9957
         </td>
         <td>
-          2086
+          2108
           -
-          2185
+          2256
         </td>
         <td>
           Block
         </td>
         <td>
-          scala.util.Left.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(&quot;Your account was temporarily disabled. Please contact the administrator.&quot;, scala.None))
-        </td>
-      </tr><tr>
-        <td>
-          57
-        </td>
-        <td>
-          9808
-        </td>
-        <td>
-          2086
-          -
-          2185
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.util.Left.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(&quot;Your account was temporarily disabled. Please contact the administrator.&quot;, scala.None))
-        </td>
-      </tr><tr>
-        <td>
-          57
-        </td>
-        <td>
-          9805
-        </td>
-        <td>
-          2103
-          -
-          2177
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;Your account was temporarily disabled. Please contact the administrator.&quot;
+          {
+  val status: models.users.StatusToken = user.getToken;
+  scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(scala.StringContext.apply(&quot;Your account was &quot;, &quot;. Please contact the administrator.&quot;).s(status.value), scala.None))
+}
         </td>
       </tr><tr>
         <td>
-          57
+          58
         </td>
         <td>
-          9807
+          9949
         </td>
         <td>
-          2091
+          2131
           -
-          2184
+          2144
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.getToken
+        </td>
+        <td style="background: #F0ADAD">
+          user.getToken
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          9955
+        </td>
+        <td>
+          2158
+          -
+          2247
         </td>
         <td>
           Apply
@@ -702,19 +752,61 @@
           models.ErrorResult.apply
         </td>
         <td style="background: #F0ADAD">
-          models.ErrorResult.apply(&quot;Your account was temporarily disabled. Please contact the administrator.&quot;, scala.None)
+          models.ErrorResult.apply(scala.StringContext.apply(&quot;Your account was &quot;, &quot;. Please contact the administrator.&quot;).s(status.value), scala.None)
         </td>
       </tr><tr>
         <td>
-          57
+          59
         </td>
         <td>
-          9806
+          9952
         </td>
         <td>
-          2179
+          2191
           -
-          2183
+          2203
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.value
+        </td>
+        <td style="background: #F0ADAD">
+          status.value
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          9951
+        </td>
+        <td>
+          2204
+          -
+          2240
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;. Please contact the administrator.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          9954
+        </td>
+        <td>
+          2242
+          -
+          2246
         </td>
         <td>
           Select
@@ -730,33 +822,75 @@
           59
         </td>
         <td>
-          9811
+          9956
         </td>
         <td>
-          2209
+          2153
           -
-          2220
+          2248
         </td>
         <td>
-          Block
+          Apply
         </td>
         <td>
-          scala.util.Right.apply
+          scala.util.Left.apply
         </td>
-        <td style="background: #AEF1AE">
-          scala.`package`.Right.apply[Nothing, models.users.User](user)
+        <td style="background: #F0ADAD">
+          scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(scala.StringContext.apply(&quot;Your account was &quot;, &quot;. Please contact the administrator.&quot;).s(status.value), scala.None))
         </td>
       </tr><tr>
         <td>
           59
         </td>
         <td>
-          9810
+          9950
         </td>
         <td>
-          2209
+          2172
           -
-          2220
+          2190
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Your account was &quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          9953
+        </td>
+        <td>
+          2170
+          -
+          2240
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;Your account was &quot;, &quot;. Please contact the administrator.&quot;).s(status.value)
+        </td>
+      </tr><tr>
+        <td>
+          61
+        </td>
+        <td>
+          9958
+        </td>
+        <td>
+          2272
+          -
+          2283
         </td>
         <td>
           Apply
@@ -769,57 +903,36 @@
         </td>
       </tr><tr>
         <td>
-          64
+          61
         </td>
         <td>
-          9817
+          9959
         </td>
         <td>
-          2322
+          2272
           -
-          2378
+          2283
         </td>
         <td>
           Block
         </td>
         <td>
-          scala.util.Left.apply
+          scala.util.Right.apply
         </td>
         <td style="background: #AEF1AE">
-          scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.None))
+          scala.`package`.Right.apply[Nothing, models.users.User](user)
         </td>
       </tr><tr>
         <td>
-          64
+          66
         </td>
         <td>
-          9814
+          9961
         </td>
         <td>
-          2372
+          2402
           -
-          2376
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #AEF1AE">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          64
-        </td>
-        <td>
-          9813
-        </td>
-        <td>
-          2339
-          -
-          2370
+          2433
         </td>
         <td>
           Literal
@@ -832,15 +945,15 @@
         </td>
       </tr><tr>
         <td>
-          64
+          66
         </td>
         <td>
-          9816
+          9964
         </td>
         <td>
-          2322
+          2385
           -
-          2378
+          2441
         </td>
         <td>
           Apply
@@ -853,15 +966,15 @@
         </td>
       </tr><tr>
         <td>
-          64
+          66
         </td>
         <td>
-          9815
+          9963
         </td>
         <td>
-          2327
+          2390
           -
-          2377
+          2440
         </td>
         <td>
           Apply
@@ -874,15 +987,99 @@
         </td>
       </tr><tr>
         <td>
-          75
+          66
         </td>
         <td>
-          9819
+          9965
         </td>
         <td>
-          2579
+          2385
           -
-          2679
+          2441
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.util.Left.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.`package`.Left.apply[models.ErrorResult, Nothing](models.ErrorResult.apply(&quot;User email or password wrong.&quot;, scala.None))
+        </td>
+      </tr><tr>
+        <td>
+          66
+        </td>
+        <td>
+          9962
+        </td>
+        <td>
+          2435
+          -
+          2439
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #AEF1AE">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          9967
+        </td>
+        <td>
+          2661
+          -
+          2767
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaConnection[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.findByAccountSubject(accountSubject)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          78
+        </td>
+        <td>
+          9966
+        </td>
+        <td>
+          2716
+          -
+          2760
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.findByAccountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.findByAccountSubject(accountSubject)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          9969
+        </td>
+        <td>
+          2962
+          -
+          3062
         </td>
         <td>
           Apply
@@ -895,15 +1092,15 @@
         </td>
       </tr><tr>
         <td>
-          76
+          90
         </td>
         <td>
-          9818
+          9968
         </td>
         <td>
-          2634
+          3017
           -
-          2672
+          3055
         </td>
         <td>
           ApplyToImplicitArgs
@@ -916,15 +1113,15 @@
         </td>
       </tr><tr>
         <td>
-          87
+          101
         </td>
         <td>
-          9821
+          9971
         </td>
         <td>
-          2878
+          3261
           -
-          2977
+          3360
         </td>
         <td>
           Apply
@@ -937,15 +1134,15 @@
         </td>
       </tr><tr>
         <td>
-          88
+          102
         </td>
         <td>
-          9820
+          9970
         </td>
         <td>
-          2933
+          3316
           -
-          2970
+          3353
         </td>
         <td>
           ApplyToImplicitArgs
@@ -958,15 +1155,15 @@
         </td>
       </tr><tr>
         <td>
-          99
+          113
         </td>
         <td>
-          9823
+          9973
         </td>
         <td>
-          3179
+          3562
           -
-          3287
+          3670
         </td>
         <td>
           Apply
@@ -979,15 +1176,15 @@
         </td>
       </tr><tr>
         <td>
-          100
+          114
         </td>
         <td>
-          9822
+          9972
         </td>
         <td>
-          3234
+          3617
           -
-          3280
+          3663
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1000,15 +1197,15 @@
         </td>
       </tr><tr>
         <td>
-          111
+          125
         </td>
         <td>
-          9825
+          9975
         </td>
         <td>
-          3483
+          3866
           -
-          3585
+          3968
         </td>
         <td>
           Apply
@@ -1021,15 +1218,15 @@
         </td>
       </tr><tr>
         <td>
-          112
+          126
         </td>
         <td>
-          9824
+          9974
         </td>
         <td>
-          3538
+          3921
           -
-          3578
+          3961
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1042,15 +1239,15 @@
         </td>
       </tr><tr>
         <td>
-          123
+          137
         </td>
         <td>
-          9827
+          9977
         </td>
         <td>
-          3750
+          4133
           -
-          3837
+          4220
         </td>
         <td>
           Apply
@@ -1063,15 +1260,15 @@
         </td>
       </tr><tr>
         <td>
-          124
+          138
         </td>
         <td>
-          9826
+          9976
         </td>
         <td>
-          3806
+          4189
           -
-          3830
+          4213
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1084,15 +1281,15 @@
         </td>
       </tr><tr>
         <td>
-          135
+          152
         </td>
         <td>
-          9829
+          10006
         </td>
         <td>
-          4003
+          4505
           -
-          4090
+          5902
         </td>
         <td>
           Apply
@@ -1101,521 +1298,394 @@
           models.db.DatabaseSessionHolder.viaTransaction
         </td>
         <td style="background: #F0ADAD">
-          UserService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.deleteUser(user)(connection)))
-        </td>
-      </tr><tr>
-        <td>
-          136
-        </td>
-        <td>
-          9828
-        </td>
-        <td>
-          4059
-          -
-          4083
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.users.UserDAO.deleteUser
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.UserDAO.deleteUser(user)(connection)
-        </td>
-      </tr><tr>
-        <td>
-          147
-        </td>
-        <td>
-          9831
-        </td>
-        <td>
-          4259
-          -
-          4348
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.db.DatabaseSessionHolder.viaTransaction
-        </td>
-        <td style="background: #F0ADAD">
-          UserService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updateNoPass(user)(connection)))
-        </td>
-      </tr><tr>
-        <td>
-          148
-        </td>
-        <td>
-          9830
-        </td>
-        <td>
-          4315
-          -
-          4341
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.users.UserDAO.updateNoPass
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.UserDAO.updateNoPass(user)(connection)
+          UserService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; {
+  val userGroups: List[models.users.UserGroup] = models.users.UserGroup.findUserGroupsForUser(user)(connection);
+  val updatedUserGroups: Boolean = userGroups.map[models.users.UserGroup, List[models.users.UserGroup]](((ug: models.users.UserGroup) =&gt; {
+  val withRemoved: List[models.users.UserGroupUsersLevel] = ug.hasUsersLevel.filterNot(((level: models.users.UserGroupUsersLevel) =&gt; level.users_accountsubject.equals(user.accountSubject)));
+  {
+    &lt;artifact&gt; val x$3: List[models.users.UserGroupUsersLevel] @scala.reflect.internal.annotations.uncheckedBounds = withRemoved;
+    &lt;artifact&gt; val x$4: java.util.UUID = ug.copy$default$1;
+    &lt;artifact&gt; val x$5: String = ug.copy$default$2;
+    &lt;artifact&gt; val x$6: String = ug.copy$default$3;
+    &lt;artifact&gt; val x$7: String = ug.copy$default$4;
+    &lt;artifact&gt; val x$8: java.time.ZonedDateTime = ug.copy$default$5;
+    &lt;artifact&gt; val x$9: List[models.users.UserGroupContextsVisibility] @scala.reflect.internal.annotations.uncheckedBounds = ug.copy$default$7;
+    ug.copy(x$4, x$5, x$6, x$7, x$8, x$3, x$9)
+  }
+}))(immutable.this.List.canBuildFrom[models.users.UserGroup]).forall(((ug: models.users.UserGroup) =&gt; models.users.UserGroup.updateUserGroup(ug)(connection).isDefined));
+  val statusToken: models.users.StatusToken.DELETED.type = models.users.StatusToken.DELETED;
+  val updateUser: models.users.User = {
+    &lt;artifact&gt; val x$10: String = scala.StringContext.apply(&quot;&quot;, &quot;:BY-SELF&quot;).s(statusToken.value);
+    &lt;artifact&gt; val x$11: java.time.ZonedDateTime = java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone));
+    &lt;artifact&gt; val x$12: uk.gov.hmrc.emailaddress.EmailAddress = user.copy$default$1;
+    &lt;artifact&gt; val x$13: String = user.copy$default$2;
+    &lt;artifact&gt; val x$14: String = user.copy$default$3;
+    &lt;artifact&gt; val x$15: String = user.copy$default$4;
+    &lt;artifact&gt; val x$16: String = user.copy$default$5;
+    user.copy(x$12, x$13, x$14, x$15, x$16, x$10, x$11)
+  };
+  models.users.UserDAO.updateNoPass(updateUser)(connection).isDefined.&amp;&amp;(updatedUserGroups)
+}))
         </td>
       </tr><tr>
         <td>
           159
         </td>
         <td>
-          9833
+          9978
         </td>
         <td>
-          4521
+          4930
           -
-          4612
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.db.DatabaseSessionHolder.viaTransaction
-        </td>
-        <td style="background: #F0ADAD">
-          UserService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updatePassword(user)(connection)))
-        </td>
-      </tr><tr>
-        <td>
-          160
-        </td>
-        <td>
-          9832
-        </td>
-        <td>
-          4577
-          -
-          4605
+          4967
         </td>
         <td>
           ApplyToImplicitArgs
         </td>
         <td>
-          models.users.UserDAO.updatePassword
+          models.users.UserGroup.findUserGroupsForUser
         </td>
         <td style="background: #F0ADAD">
-          models.users.UserDAO.updatePassword(user)(connection)
+          models.users.UserGroup.findUserGroupsForUser(user)(connection)
         </td>
       </tr><tr>
         <td>
-          172
+          162
         </td>
         <td>
-          9834
+          9989
         </td>
         <td>
-          4852
+          5099
           -
-          4915
+          5099
         </td>
         <td>
-          Apply
+          TypeApply
         </td>
         <td>
-          utils.PasswordHashing.createSessionCookie
-        </td>
-        <td style="background: #AEF1AE">
-          UserService.this.passwordHashing.createSessionCookie(userEmail, userAgentHeader)
-        </td>
-      </tr><tr>
-        <td>
-          176
-        </td>
-        <td>
-          9838
-        </td>
-        <td>
-          5019
-          -
-          5811
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.db.DatabaseSessionHolder.viaConnection
-        </td>
-        <td style="background: #AEF1AE">
-          UserService.this.dbSession.viaConnection[Option[models.users.UserSession]](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.findUserSessionByToken(token)(connection).fold[Option[models.users.UserSession]](models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection))(((session: models.users.UserSession) =&gt; models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)))))
-        </td>
-      </tr><tr>
-        <td>
-          178
-        </td>
-        <td>
-          9835
-        </td>
-        <td>
-          5130
-          -
-          5433
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.users.UserSession.createUserSession
-        </td>
-        <td style="background: #AEF1AE">
-          models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)
-        </td>
-      </tr><tr>
-        <td>
-          185
-        </td>
-        <td>
-          9837
-        </td>
-        <td>
-          5074
-          -
-          5804
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.fold
-        </td>
-        <td style="background: #AEF1AE">
-          models.users.UserSession.findUserSessionByToken(token)(connection).fold[Option[models.users.UserSession]](models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection))(((session: models.users.UserSession) =&gt; models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)))
-        </td>
-      </tr><tr>
-        <td>
-          187
-        </td>
-        <td>
-          9836
-        </td>
-        <td>
-          5472
-          -
-          5796
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.users.UserSession.updateUserSessionStatus
+          scala.collection.immutable.List.canBuildFrom
         </td>
         <td style="background: #F0ADAD">
-          models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)
+          immutable.this.List.canBuildFrom[models.users.UserGroup]
         </td>
       </tr><tr>
         <td>
-          197
+          163
         </td>
         <td>
-          9839
+          9979
         </td>
         <td>
-          5817
+          5203
           -
-          5899
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #AEF1AE">
-          sessionOpt.map[String](((x$1: models.users.UserSession) =&gt; x$1.token)).getOrElse[String](&quot;XXXXXXXXXXXXXXXXXXXXX-INVALID-xxxxxxxxxxxxxxx&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          212
-        </td>
-        <td>
-          9841
-        </td>
-        <td>
-          6314
-          -
-          6421
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.db.DatabaseSessionHolder.viaConnection
-        </td>
-        <td style="background: #F0ADAD">
-          UserService.this.dbSession.viaConnection[Option[models.users.UserSession]](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.findUserSessionByToken(xsrfToken)(connection)))
-        </td>
-      </tr><tr>
-        <td>
-          213
-        </td>
-        <td>
-          9840
-        </td>
-        <td>
-          6369
-          -
-          6414
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          models.users.UserSession.findUserSessionByToken
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.UserSession.findUserSessionByToken(xsrfToken)(connection)
-        </td>
-      </tr><tr>
-        <td>
-          217
-        </td>
-        <td>
-          9843
-        </td>
-        <td>
-          6469
-          -
-          6522
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.debug
-        </td>
-        <td style="background: #F0ADAD">
-          UserService.this.logger.debug(scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken))
-        </td>
-      </tr><tr>
-        <td>
-          217
-        </td>
-        <td>
-          9842
-        </td>
-        <td>
-          6482
-          -
-          6521
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken)
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          9844
-        </td>
-        <td>
-          6529
-          -
-          6533
+          5222
         </td>
         <td>
           Select
         </td>
         <td>
-          scala.None
+          models.users.User.accountSubject
         </td>
         <td style="background: #F0ADAD">
-          scala.None
+          user.accountSubject
         </td>
       </tr><tr>
         <td>
-          219
+          163
         </td>
         <td>
-          9863
+          9981
         </td>
         <td>
-          6427
+          5133
           -
-          7016
+          5224
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.Option.fold
+          scala.collection.TraversableLike.filterNot
         </td>
         <td style="background: #F0ADAD">
-          userEmailOpt.fold[Option[String]]({
-  UserService.this.logger.debug(scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken));
-  scala.None
-})(((session: models.users.UserSession) =&gt; {
-  val cookieForUSerAndUserAgent: Boolean = UserService.this.passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader);
-  UserService.this.logger.trace(scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent));
-  if (xsrfToken.==(xsrfTokenCookie).&amp;&amp;(cookieForUSerAndUserAgent))
-    {
-      UserService.this.logger.trace(scala.StringContext.apply(&quot;request for active session: &quot;, &quot; / &quot;, &quot; / &quot;, &quot;&quot;).s(session.email, xsrfToken, userAgentHeader));
-      scala.Some.apply[String](session.email)
-    }
-  else
-    {
-      UserService.this.logger.error(&quot;Invalid Token&quot;);
-      scala.None
-    }
-}))
+          ug.hasUsersLevel.filterNot(((level: models.users.UserGroupUsersLevel) =&gt; level.users_accountsubject.equals(user.accountSubject)))
         </td>
       </tr><tr>
         <td>
-          221
+          163
         </td>
         <td>
-          9846
+          9980
         </td>
         <td>
-          6597
+          5169
           -
-          6673
+          5223
         </td>
         <td>
           Apply
         </td>
         <td>
-          utils.PasswordHashing.testSessionCookie
+          java.lang.String.equals
         </td>
         <td style="background: #F0ADAD">
-          UserService.this.passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
+          level.users_accountsubject.equals(user.accountSubject)
         </td>
       </tr><tr>
         <td>
-          221
+          164
         </td>
         <td>
-          9845
+          9988
         </td>
         <td>
-          6642
+          5233
           -
-          6655
+          5269
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.UserGroup.copy
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy(x$4, x$5, x$6, x$7, x$8, x$3, x$9)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          9982
+        </td>
+        <td>
+          5236
+          -
+          5236
         </td>
         <td>
           Select
         </td>
         <td>
-          models.users.UserSession.email
+          models.users.UserGroup.copy$default$1
         </td>
         <td style="background: #F0ADAD">
-          session.email
+          ug.copy$default$1
         </td>
       </tr><tr>
         <td>
-          222
+          164
         </td>
         <td>
-          9847
+          9985
         </td>
         <td>
-          6693
+          5236
           -
-          6734
+          5236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.copy$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy$default$4
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          9984
+        </td>
+        <td>
+          5236
+          -
+          5236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.copy$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy$default$3
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          9987
+        </td>
+        <td>
+          5236
+          -
+          5236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.copy$default$7
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy$default$7
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          9983
+        </td>
+        <td>
+          5236
+          -
+          5236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.copy$default$2
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy$default$2
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          9986
+        </td>
+        <td>
+          5236
+          -
+          5236
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.copy$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          ug.copy$default$5
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          9991
+        </td>
+        <td>
+          5085
+          -
+          5331
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          scala.collection.LinearSeqOptimized.forall
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent)
+          userGroups.map[models.users.UserGroup, List[models.users.UserGroup]](((ug: models.users.UserGroup) =&gt; {
+  val withRemoved: List[models.users.UserGroupUsersLevel] = ug.hasUsersLevel.filterNot(((level: models.users.UserGroupUsersLevel) =&gt; level.users_accountsubject.equals(user.accountSubject)));
+  {
+    &lt;artifact&gt; val x$3: List[models.users.UserGroupUsersLevel] @scala.reflect.internal.annotations.uncheckedBounds = withRemoved;
+    &lt;artifact&gt; val x$4: java.util.UUID = ug.copy$default$1;
+    &lt;artifact&gt; val x$5: String = ug.copy$default$2;
+    &lt;artifact&gt; val x$6: String = ug.copy$default$3;
+    &lt;artifact&gt; val x$7: String = ug.copy$default$4;
+    &lt;artifact&gt; val x$8: java.time.ZonedDateTime = ug.copy$default$5;
+    &lt;artifact&gt; val x$9: List[models.users.UserGroupContextsVisibility] @scala.reflect.internal.annotations.uncheckedBounds = ug.copy$default$7;
+    ug.copy(x$4, x$5, x$6, x$7, x$8, x$3, x$9)
+  }
+}))(immutable.this.List.canBuildFrom[models.users.UserGroup]).forall(((ug: models.users.UserGroup) =&gt; models.users.UserGroup.updateUserGroup(ug)(connection).isDefined))
         </td>
       </tr><tr>
         <td>
-          222
+          165
         </td>
         <td>
-          9848
+          9990
         </td>
         <td>
-          6680
+          5291
           -
-          6735
+          5330
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          play.api.LoggerLike.trace
+          scala.Option.isDefined
         </td>
         <td style="background: #F0ADAD">
-          UserService.this.logger.trace(scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent))
+          models.users.UserGroup.updateUserGroup(ug)(connection).isDefined
         </td>
       </tr><tr>
         <td>
-          223
+          173
         </td>
         <td>
-          9859
+          9992
         </td>
         <td>
-          6805
+          5631
           -
-          6944
+          5650
         </td>
         <td>
-          Block
+          Select
         </td>
         <td>
-          &lt;nosymbol&gt;
+          models.users.StatusToken.DELETED
         </td>
         <td style="background: #F0ADAD">
-          {
-  UserService.this.logger.trace(scala.StringContext.apply(&quot;request for active session: &quot;, &quot; / &quot;, &quot; / &quot;, &quot;&quot;).s(session.email, xsrfToken, userAgentHeader));
-  scala.Some.apply[String](session.email)
-}
+          models.users.StatusToken.DELETED
         </td>
       </tr><tr>
         <td>
-          223
+          174
         </td>
         <td>
-          9849
+          10000
         </td>
         <td>
-          6746
+          5679
           -
-          6803
+          5679
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          scala.Boolean.&amp;&amp;
+          models.users.User.copy$default$2
         </td>
         <td style="background: #F0ADAD">
-          xsrfToken.==(xsrfTokenCookie).&amp;&amp;(cookieForUSerAndUserAgent)
+          user.copy$default$2
         </td>
       </tr><tr>
         <td>
-          224
+          174
         </td>
         <td>
-          9850
+          9994
         </td>
         <td>
-          6830
+          5724
           -
-          6859
+          5733
         </td>
         <td>
           Literal
@@ -1624,19 +1694,61 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;request for active session: &quot;
+          &quot;:BY-SELF&quot;
         </td>
       </tr><tr>
         <td>
-          224
+          174
         </td>
         <td>
-          9853
+          10003
         </td>
         <td>
-          6906
+          5679
           -
-          6907
+          5679
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.copy$default$5
+        </td>
+        <td style="background: #F0ADAD">
+          user.copy$default$5
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          10002
+        </td>
+        <td>
+          5679
+          -
+          5679
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.copy$default$4
+        </td>
+        <td style="background: #F0ADAD">
+          user.copy$default$4
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          9993
+        </td>
+        <td>
+          5704
+          -
+          5705
         </td>
         <td>
           Literal
@@ -1649,15 +1761,664 @@
         </td>
       </tr><tr>
         <td>
-          224
+          174
         </td>
         <td>
-          9856
+          9996
         </td>
         <td>
-          6815
+          5702
           -
-          6908
+          5733
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot;:BY-SELF&quot;).s(statusToken.value)
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          9999
+        </td>
+        <td>
+          5679
+          -
+          5679
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.copy$default$1
+        </td>
+        <td style="background: #F0ADAD">
+          user.copy$default$1
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          10001
+        </td>
+        <td>
+          5679
+          -
+          5679
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.copy$default$3
+        </td>
+        <td style="background: #F0ADAD">
+          user.copy$default$3
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          9995
+        </td>
+        <td>
+          5706
+          -
+          5723
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.DELETED.value
+        </td>
+        <td style="background: #F0ADAD">
+          statusToken.value
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          10004
+        </td>
+        <td>
+          5674
+          -
+          5824
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.users.User.copy
+        </td>
+        <td style="background: #F0ADAD">
+          user.copy(x$12, x$13, x$14, x$15, x$16, x$10, x$11)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          9997
+        </td>
+        <td>
+          5800
+          -
+          5822
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZoneId.of(UserService.this.appTimeZone)
+        </td>
+      </tr><tr>
+        <td>
+          175
+        </td>
+        <td>
+          9998
+        </td>
+        <td>
+          5762
+          -
+          5823
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZonedDateTime.withZoneSameInstant
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))
+        </td>
+      </tr><tr>
+        <td>
+          177
+        </td>
+        <td>
+          10005
+        </td>
+        <td>
+          5832
+          -
+          5895
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.updateNoPass(updateUser)(connection).isDefined.&amp;&amp;(updatedUserGroups)
+        </td>
+      </tr><tr>
+        <td>
+          188
+        </td>
+        <td>
+          10008
+        </td>
+        <td>
+          6071
+          -
+          6160
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updateNoPass(user)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          189
+        </td>
+        <td>
+          10007
+        </td>
+        <td>
+          6127
+          -
+          6153
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.updateNoPass
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.updateNoPass(user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          200
+        </td>
+        <td>
+          10010
+        </td>
+        <td>
+          6333
+          -
+          6424
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaTransaction[Option[models.users.User]](((implicit connection: java.sql.Connection) =&gt; models.users.UserDAO.updatePassword(user)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          201
+        </td>
+        <td>
+          10009
+        </td>
+        <td>
+          6389
+          -
+          6417
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserDAO.updatePassword
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserDAO.updatePassword(user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          213
+        </td>
+        <td>
+          10011
+        </td>
+        <td>
+          6659
+          -
+          6722
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.PasswordHashing.createSessionCookie
+        </td>
+        <td style="background: #AEF1AE">
+          UserService.this.passwordHashing.createSessionCookie(userEmail, userAgentHeader)
+        </td>
+      </tr><tr>
+        <td>
+          214
+        </td>
+        <td>
+          10016
+        </td>
+        <td>
+          6744
+          -
+          7539
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #AEF1AE">
+          UserService.this.dbSession.viaConnection[Option[models.users.UserSession]](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.findUserSessionByToken(token, 1)(connection).fold[Option[models.users.UserSession]](models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection))(((session: models.users.UserSession) =&gt; models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)))))
+        </td>
+      </tr><tr>
+        <td>
+          215
+        </td>
+        <td>
+          10012
+        </td>
+        <td>
+          6841
+          -
+          6842
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          1
+        </td>
+      </tr><tr>
+        <td>
+          216
+        </td>
+        <td>
+          10013
+        </td>
+        <td>
+          6858
+          -
+          7161
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserSession.createUserSession
+        </td>
+        <td style="background: #AEF1AE">
+          models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          223
+        </td>
+        <td>
+          10015
+        </td>
+        <td>
+          6799
+          -
+          7532
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #AEF1AE">
+          models.users.UserSession.findUserSessionByToken(token, 1)(connection).fold[Option[models.users.UserSession]](models.users.UserSession.createUserSession(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:NEW_SESSION&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection))(((session: models.users.UserSession) =&gt; models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          10014
+        </td>
+        <td>
+          7200
+          -
+          7524
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserSession.updateUserSessionStatus
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserSession.updateUserSessionStatus(models.users.UserSession.apply(token, userAgentHeader, userEmail, scala.StringContext.apply(&quot;&quot;, &quot;:SESSION_UPDATE&quot;).s(models.users.StatusToken.ACTIVE), java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(UserService.this.appTimeZone))))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          235
+        </td>
+        <td>
+          10017
+        </td>
+        <td>
+          7545
+          -
+          7627
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          sessionOpt.map[String](((x$1: models.users.UserSession) =&gt; x$1.token)).getOrElse[String](&quot;XXXXXXXXXXXXXXXXXXXXX-INVALID-xxxxxxxxxxxxxxx&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          248
+        </td>
+        <td>
+          10018
+        </td>
+        <td>
+          7974
+          -
+          8022
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserSession.findUserSessionByToken
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserSession.findUserSessionByToken(xsrfToken, 1)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          10020
+        </td>
+        <td>
+          8073
+          -
+          8126
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.logger.debug(scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken))
+        </td>
+      </tr><tr>
+        <td>
+          251
+        </td>
+        <td>
+          10019
+        </td>
+        <td>
+          8086
+          -
+          8125
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken)
+        </td>
+      </tr><tr>
+        <td>
+          252
+        </td>
+        <td>
+          10021
+        </td>
+        <td>
+          8135
+          -
+          8139
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          253
+        </td>
+        <td>
+          10039
+        </td>
+        <td>
+          7919
+          -
+          8656
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaConnection[Option[models.users.UserSession]](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.findUserSessionByToken(xsrfToken, 1)(connection))).fold[Option[models.users.UserSession]]({
+  UserService.this.logger.debug(scala.StringContext.apply(&quot;no session for xsrfToken: &quot;, &quot;&quot;).s(xsrfToken));
+  scala.None
+})(((session: models.users.UserSession) =&gt; {
+  val cookieForUSerAndUserAgent: Boolean = UserService.this.passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader);
+  UserService.this.logger.trace(scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent));
+  if (xsrfToken.==(xsrfTokenCookie).&amp;&amp;(cookieForUSerAndUserAgent))
+    {
+      UserService.this.logger.trace(scala.StringContext.apply(&quot;request for active session: &quot;, &quot; / &quot;, &quot; / &quot;, &quot;&quot;).s(session.email, xsrfToken, userAgentHeader));
+      scala.Some.apply[models.users.UserSession](session)
+    }
+  else
+    {
+      UserService.this.logger.error(&quot;Invalid Token&quot;);
+      scala.None
+    }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          10023
+        </td>
+        <td>
+          8211
+          -
+          8287
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          utils.PasswordHashing.testSessionCookie
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.passwordHashing.testSessionCookie(xsrfToken, session.email, userAgentHeader)
+        </td>
+      </tr><tr>
+        <td>
+          255
+        </td>
+        <td>
+          10022
+        </td>
+        <td>
+          8256
+          -
+          8269
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.email
+        </td>
+        <td style="background: #F0ADAD">
+          session.email
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          10024
+        </td>
+        <td>
+          8311
+          -
+          8352
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent)
+        </td>
+      </tr><tr>
+        <td>
+          256
+        </td>
+        <td>
+          10025
+        </td>
+        <td>
+          8298
+          -
+          8353
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.trace
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.logger.trace(scala.StringContext.apply(&quot;testcookie: &quot;, &quot;&quot;).s(cookieForUSerAndUserAgent))
+        </td>
+      </tr><tr>
+        <td>
+          257
+        </td>
+        <td>
+          10035
+        </td>
+        <td>
+          8427
+          -
+          8572
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  UserService.this.logger.trace(scala.StringContext.apply(&quot;request for active session: &quot;, &quot; / &quot;, &quot; / &quot;, &quot;&quot;).s(session.email, xsrfToken, userAgentHeader));
+  scala.Some.apply[models.users.UserSession](session)
+}
+        </td>
+      </tr><tr>
+        <td>
+          257
+        </td>
+        <td>
+          10026
+        </td>
+        <td>
+          8368
+          -
+          8425
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td style="background: #F0ADAD">
+          xsrfToken.==(xsrfTokenCookie).&amp;&amp;(cookieForUSerAndUserAgent)
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          10033
+        </td>
+        <td>
+          8441
+          -
+          8534
         </td>
         <td>
           Apply
@@ -1670,15 +2431,57 @@
         </td>
       </tr><tr>
         <td>
-          224
+          258
         </td>
         <td>
-          9855
+          10027
         </td>
         <td>
-          6828
+          8456
           -
-          6907
+          8485
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;request for active session: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          10029
+        </td>
+        <td>
+          8513
+          -
+          8517
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; / &quot;
+        </td>
+      </tr><tr>
+        <td>
+          258
+        </td>
+        <td>
+          10032
+        </td>
+        <td>
+          8454
+          -
+          8533
         </td>
         <td>
           Apply
@@ -1691,15 +2494,15 @@
         </td>
       </tr><tr>
         <td>
-          224
+          258
         </td>
         <td>
-          9852
+          10028
         </td>
         <td>
-          6887
+          8500
           -
-          6891
+          8504
         </td>
         <td>
           Literal
@@ -1712,15 +2515,15 @@
         </td>
       </tr><tr>
         <td>
-          224
+          258
         </td>
         <td>
-          9854
+          10031
         </td>
         <td>
-          6860
+          8486
           -
-          6873
+          8499
         </td>
         <td>
           Select
@@ -1733,15 +2536,15 @@
         </td>
       </tr><tr>
         <td>
-          224
+          258
         </td>
         <td>
-          9851
+          10030
         </td>
         <td>
-          6874
+          8532
           -
-          6878
+          8533
         </td>
         <td>
           Literal
@@ -1750,19 +2553,19 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot; / &quot;
+          &quot;&quot;
         </td>
       </tr><tr>
         <td>
-          225
+          259
         </td>
         <td>
-          9858
+          10034
         </td>
         <td>
-          6917
+          8547
           -
-          6936
+          8560
         </td>
         <td>
           Apply
@@ -1771,40 +2574,19 @@
           scala.Some.apply
         </td>
         <td style="background: #F0ADAD">
-          scala.Some.apply[String](session.email)
+          scala.Some.apply[models.users.UserSession](session)
         </td>
       </tr><tr>
         <td>
-          225
+          260
         </td>
         <td>
-          9857
+          10038
         </td>
         <td>
-          6922
+          8578
           -
-          6935
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.UserSession.email
-        </td>
-        <td style="background: #F0ADAD">
-          session.email
-        </td>
-      </tr><tr>
-        <td>
-          226
-        </td>
-        <td>
-          9862
-        </td>
-        <td>
-          6950
-          -
-          7010
+          8650
         </td>
         <td>
           Block
@@ -1820,15 +2602,15 @@
         </td>
       </tr><tr>
         <td>
-          227
+          261
         </td>
         <td>
-          9860
+          10036
         </td>
         <td>
-          6960
+          8592
           -
-          6989
+          8621
         </td>
         <td>
           Apply
@@ -1841,15 +2623,15 @@
         </td>
       </tr><tr>
         <td>
-          228
+          262
         </td>
         <td>
-          9861
+          10037
         </td>
         <td>
-          6998
+          8634
           -
-          7002
+          8638
         </td>
         <td>
           Select
@@ -1862,36 +2644,57 @@
         </td>
       </tr><tr>
         <td>
-          242
+          276
         </td>
         <td>
-          9865
+          10041
         </td>
         <td>
-          7273
+          8946
           -
-          7382
+          9025
         </td>
         <td>
           Apply
         </td>
         <td>
-          models.db.DatabaseSessionHolder.viaConnection
+          scala.Option.map
         </td>
         <td style="background: #F0ADAD">
-          UserService.this.dbSession.viaConnection[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.deleteUserSessionByToken(xsrfToken)(connection)))
+          UserService.this.getUserSessionByToken(xsrfToken, xsrfTokenCookie, userAgentHeader).map[String](((x$2: models.users.UserSession) =&gt; x$2.email))
         </td>
       </tr><tr>
         <td>
-          242
+          276
         </td>
         <td>
-          9866
+          10040
         </td>
         <td>
-          7296
+          9017
           -
-          7296
+          9024
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserSession.email
+        </td>
+        <td style="background: #F0ADAD">
+          x$2.email
+        </td>
+      </tr><tr>
+        <td>
+          286
+        </td>
+        <td>
+          10044
+        </td>
+        <td>
+          9235
+          -
+          9235
         </td>
         <td>
           Literal
@@ -1904,15 +2707,36 @@
         </td>
       </tr><tr>
         <td>
-          243
+          286
         </td>
         <td>
-          9864
+          10043
         </td>
         <td>
-          7328
+          9212
           -
-          7375
+          9321
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaConnection[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserSession.deleteUserSessionByToken(xsrfToken)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          287
+        </td>
+        <td>
+          10042
+        </td>
+        <td>
+          9267
+          -
+          9314
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1925,15 +2749,15 @@
         </td>
       </tr><tr>
         <td>
-          257
+          300
         </td>
         <td>
-          9868
+          10046
         </td>
         <td>
-          7677
+          9615
           -
-          7779
+          9717
         </td>
         <td>
           Apply
@@ -1946,15 +2770,15 @@
         </td>
       </tr><tr>
         <td>
-          258
+          301
         </td>
         <td>
-          9867
+          10045
         </td>
         <td>
-          7732
+          9670
           -
-          7773
+          9711
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1967,15 +2791,15 @@
         </td>
       </tr><tr>
         <td>
-          263
+          306
         </td>
         <td>
-          9869
+          10047
         </td>
         <td>
-          7895
+          9833
           -
-          7958
+          9896
         </td>
         <td>
           Apply
@@ -1988,15 +2812,15 @@
         </td>
       </tr><tr>
         <td>
-          264
+          307
         </td>
         <td>
-          9870
+          10048
         </td>
         <td>
-          7965
+          9903
           -
-          7969
+          9907
         </td>
         <td>
           Select
@@ -2009,15 +2833,15 @@
         </td>
       </tr><tr>
         <td>
-          265
+          308
         </td>
         <td>
-          9879
+          10057
         </td>
         <td>
-          7785
+          9723
           -
-          8440
+          10377
         </td>
         <td>
           Apply
@@ -2036,15 +2860,15 @@
         </td>
       </tr><tr>
         <td>
-          268
+          310
         </td>
         <td>
-          9876
+          10054
         </td>
         <td>
-          8016
+          9953
           -
-          8320
+          10257
         </td>
         <td>
           Apply
@@ -2057,15 +2881,15 @@
         </td>
       </tr><tr>
         <td>
-          269
+          311
         </td>
         <td>
-          9871
+          10049
         </td>
         <td>
-          8043
+          9980
           -
-          8060
+          9997
         </td>
         <td>
           Apply
@@ -2078,15 +2902,15 @@
         </td>
       </tr><tr>
         <td>
-          270
+          312
         </td>
         <td>
-          9872
+          10050
         </td>
         <td>
-          8095
+          10032
           -
-          8114
+          10051
         </td>
         <td>
           Select
@@ -2099,15 +2923,15 @@
         </td>
       </tr><tr>
         <td>
-          273
+          315
         </td>
         <td>
-          9873
+          10051
         </td>
         <td>
-          8219
+          10156
           -
-          8227
+          10164
         </td>
         <td>
           Literal
@@ -2120,36 +2944,15 @@
         </td>
       </tr><tr>
         <td>
-          274
+          316
         </td>
         <td>
-          9874
+          10053
         </td>
         <td>
-          8296
+          10195
           -
-          8318
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZoneId.of
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZoneId.of(UserService.this.appTimeZone)
-        </td>
-      </tr><tr>
-        <td>
-          274
-        </td>
-        <td>
-          9875
-        </td>
-        <td>
-          8258
-          -
-          8319
+          10256
         </td>
         <td>
           Apply
@@ -2162,15 +2965,36 @@
         </td>
       </tr><tr>
         <td>
-          276
+          316
         </td>
         <td>
-          9878
+          10052
         </td>
         <td>
-          8330
+          10233
           -
-          8434
+          10255
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZoneId.of(UserService.this.appTimeZone)
+        </td>
+      </tr><tr>
+        <td>
+          318
+        </td>
+        <td>
+          10056
+        </td>
+        <td>
+          10267
+          -
+          10371
         </td>
         <td>
           Apply
@@ -2183,15 +3007,15 @@
         </td>
       </tr><tr>
         <td>
-          277
+          319
         </td>
         <td>
-          9877
+          10055
         </td>
         <td>
-          8390
+          10327
           -
-          8423
+          10360
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2204,15 +3028,99 @@
         </td>
       </tr><tr>
         <td>
-          293
+          331
         </td>
         <td>
-          9881
+          10059
         </td>
         <td>
-          8762
+          10540
           -
-          8864
+          10633
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaConnection[Option[models.users.UserFile]](((implicit connection: java.sql.Connection) =&gt; models.users.UserFile.findUserFileByUuid(uuid)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          332
+        </td>
+        <td>
+          10058
+        </td>
+        <td>
+          10594
+          -
+          10627
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserFile.findUserFileByUuid
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserFile.findUserFileByUuid(uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          343
+        </td>
+        <td>
+          10061
+        </td>
+        <td>
+          10809
+          -
+          10899
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserFile.deleteUserFile(uuid)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          344
+        </td>
+        <td>
+          10060
+        </td>
+        <td>
+          10864
+          -
+          10893
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserFile.deleteUserFile
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserFile.deleteUserFile(uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          358
+        </td>
+        <td>
+          10063
+        </td>
+        <td>
+          11220
+          -
+          11322
         </td>
         <td>
           Apply
@@ -2225,15 +3133,15 @@
         </td>
       </tr><tr>
         <td>
-          294
+          359
         </td>
         <td>
-          9880
+          10062
         </td>
         <td>
-          8817
+          11275
           -
-          8858
+          11316
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2246,15 +3154,15 @@
         </td>
       </tr><tr>
         <td>
-          299
+          364
         </td>
         <td>
-          9882
+          10064
         </td>
         <td>
-          8986
+          11444
           -
-          9049
+          11507
         </td>
         <td>
           Apply
@@ -2267,15 +3175,15 @@
         </td>
       </tr><tr>
         <td>
-          300
+          365
         </td>
         <td>
-          9883
+          10065
         </td>
         <td>
-          9056
+          11514
           -
-          9060
+          11518
         </td>
         <td>
           Select
@@ -2288,15 +3196,15 @@
         </td>
       </tr><tr>
         <td>
-          301
+          366
         </td>
         <td>
-          9893
+          10075
         </td>
         <td>
-          8870
+          11328
           -
-          9733
+          12191
         </td>
         <td>
           Apply
@@ -2315,15 +3223,15 @@
         </td>
       </tr><tr>
         <td>
-          304
+          369
         </td>
         <td>
-          9890
+          10072
         </td>
         <td>
-          9113
+          11571
           -
-          9595
+          12053
         </td>
         <td>
           Apply
@@ -2336,15 +3244,15 @@
         </td>
       </tr><tr>
         <td>
-          305
+          370
         </td>
         <td>
-          9884
+          10066
         </td>
         <td>
-          9146
+          11604
           -
-          9163
+          11621
         </td>
         <td>
           Apply
@@ -2357,15 +3265,15 @@
         </td>
       </tr><tr>
         <td>
-          306
+          371
         </td>
         <td>
-          9885
+          10067
         </td>
         <td>
-          9198
+          11656
           -
-          9217
+          11675
         </td>
         <td>
           Select
@@ -2378,15 +3286,15 @@
         </td>
       </tr><tr>
         <td>
-          308
+          373
         </td>
         <td>
-          9886
+          10068
         </td>
         <td>
-          9285
+          11743
           -
-          9464
+          11922
         </td>
         <td>
           Apply
@@ -2399,15 +3307,15 @@
         </td>
       </tr><tr>
         <td>
-          309
+          374
         </td>
         <td>
-          9887
+          10069
         </td>
         <td>
-          9494
+          11952
           -
-          9502
+          11960
         </td>
         <td>
           Literal
@@ -2420,15 +3328,15 @@
         </td>
       </tr><tr>
         <td>
-          310
+          375
         </td>
         <td>
-          9889
+          10071
         </td>
         <td>
-          9533
+          11991
           -
-          9594
+          12052
         </td>
         <td>
           Apply
@@ -2441,15 +3349,15 @@
         </td>
       </tr><tr>
         <td>
-          310
+          375
         </td>
         <td>
-          9888
+          10070
         </td>
         <td>
-          9571
+          12029
           -
-          9593
+          12051
         </td>
         <td>
           Apply
@@ -2462,15 +3370,15 @@
         </td>
       </tr><tr>
         <td>
-          312
+          377
         </td>
         <td>
-          9892
+          10074
         </td>
         <td>
-          9605
+          12063
           -
-          9727
+          12185
         </td>
         <td>
           Apply
@@ -2483,15 +3391,15 @@
         </td>
       </tr><tr>
         <td>
-          313
+          378
         </td>
         <td>
-          9891
+          10073
         </td>
         <td>
-          9665
+          12123
           -
-          9716
+          12174
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2504,15 +3412,15 @@
         </td>
       </tr><tr>
         <td>
-          324
+          389
         </td>
         <td>
-          9895
+          10077
         </td>
         <td>
-          9903
+          12361
           -
-          10014
+          12472
         </td>
         <td>
           Apply
@@ -2525,15 +3433,15 @@
         </td>
       </tr><tr>
         <td>
-          325
+          390
         </td>
         <td>
-          9894
+          10076
         </td>
         <td>
-          9958
+          12416
           -
-          10007
+          12465
         </td>
         <td>
           ApplyToImplicitArgs

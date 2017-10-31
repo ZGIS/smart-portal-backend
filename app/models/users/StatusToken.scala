@@ -31,6 +31,10 @@ object StatusToken {
     val value: String = "BLOCKED"
   }
 
+  case object DELETED extends StatusToken {
+    val value: String = "DELETED"
+  }
+
   case object REGISTERED extends StatusToken {
     val value: String = "REGISTERED"
   }
@@ -53,11 +57,15 @@ object StatusToken {
       case "ACTIVE" => ACTIVE
       case "PASSWORDRESET" => PASSWORDRESET
       case "EMAILVALIDATION" => EMAILVALIDATION
+      case "BLOCKED" => BLOCKED
+      case "DELETED" => DELETED
       case _ => throw new IllegalArgumentException(s"Value $v is not a valid StatusToken value")
     }
   }
 
   val activatedTokens: List[String] = List(ACTIVE.value, PASSWORDRESET.value, EMAILVALIDATION.value)
+
+  val deactivatedTokens: List[String] = List(BLOCKED.value, DELETED.value)
 
   def isValid(v: String) : Boolean = {
     Try (apply(v)).isSuccess
@@ -68,6 +76,6 @@ object StatusToken {
   }
 
   def isBlocked(token: StatusToken): Boolean = {
-    token == BLOCKED
+    deactivatedTokens.contains(token.value)
   }
 }

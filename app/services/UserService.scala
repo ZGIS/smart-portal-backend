@@ -25,6 +25,7 @@ import javax.inject._
 
 import models.ErrorResult
 import models.db.DatabaseSessionHolder
+import models.owc.OwcContextDAO
 import models.users._
 import play.api.Configuration
 import uk.gov.hmrc.emailaddress.EmailAddress
@@ -54,7 +55,8 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
       // here is correct auth branch
       val user = userOpt.get
       if (user.isBlocked) {
-        Left(ErrorResult("Your account was temporarily disabled. Please contact the administrator.", None))
+        val status = user.getToken
+        Left(ErrorResult(s"Your account was ${status.value}. Please contact the administrator.", None))
       } else {
         Right(user)
       }
@@ -138,14 +140,41 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   /**
-    * passing deleteUser(user) request through from controller
+    * passing deleteUser(user) request through from controller,
+    * BUT we need to delete contexts, userfiles and bucket objects?,
+    * usermetarecords and the csw records?
+    *
     *
     * @param user
     * @return
     */
   def deleteUser(user: User): Boolean = {
     dbSession.viaTransaction(implicit connection => {
-      UserDAO.deleteUser(user)
+      // val userFiles = UserFile.findUserFileByAccountSubject(user.accountSubject)
+      // for file in userFiles delete in DB and maybe even delete in remote datastore?
+
+      // val userMetas = UserMetaRecord.findUserMetaRecordByAccountSubject(user.accountSubject)
+      // for record in userMetas delete in DB and maybe even delete in remote csw?
+
+      val userGroups = UserGroup.findUserGroupsForUser(user)
+      // for each usergroups_has_users remove row with users_accountsubject reference
+
+      val updatedUserGroups = userGroups.map{ ug =>
+        val withRemoved = ug.hasUsersLevel.filterNot(level => level.users_accountsubject.equals(user.accountSubject))
+        ug.copy(hasUsersLevel = withRemoved)
+      }.forall(ug => UserGroup.updateUserGroup(ug).isDefined)
+
+      // val contexts = OwcContextDAO.findOwcContextsByUser(user)
+      // for each owcContext in contexts remove reference from usergroups_has_owc_context_rights
+      // delete each owcContext in contexts
+
+      // eventually delete user
+      // UserDAO.deleteUser(user)
+      val statusToken = StatusToken.DELETED
+      val updateUser = user.copy(laststatustoken = s"${statusToken.value}:BY-SELF",
+        laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+      UserDAO.updateNoPass(updateUser).isDefined && updatedUserGroups
     })
   }
 

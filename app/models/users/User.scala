@@ -81,6 +81,10 @@ case class User(email: EmailAddress,
     StatusToken.isBlocked(StatusToken(laststatustoken.split(":")(0)))
   }
 
+  def getToken: StatusToken = {
+    StatusToken.apply(laststatustoken.split(":")(0))
+  }
+
 }
 
 /**

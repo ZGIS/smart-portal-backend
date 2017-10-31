@@ -112,6 +112,16 @@ class FilesController @Inject()(implicit configuration: Configuration,
         BadRequest(Json.toJson(error)).as(JSON)
       }{
         userFile =>
+          val logRequest = UserLinkLogging(id = None,
+            timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+            ipaddress = Some(request.remoteAddress),
+            useragent = request.headers.get(UserAgentHeader),
+            email = request.optionalSession.map(_.email),
+            link = userFile.linkreference,
+            referer = request.headers.get(RefererHeader))
+
+          val updated = userService.logLinkInfo(logRequest)
+          logger.trace(logRequest.toString)
           Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference, "originalfilename" -> userFile.originalfilename))
       }
   }

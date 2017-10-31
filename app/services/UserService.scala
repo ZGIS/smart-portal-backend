@@ -212,7 +212,7 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   def upsertUserSession(userEmail: String, userAgentHeader: String): String = {
     val token = passwordHashing.createSessionCookie(userEmail, userAgentHeader)
     val sessionOpt = dbSession.viaConnection(implicit connection => {
-      UserSession.findUserSessionByToken(token).fold{
+      UserSession.findUserSessionByToken(token, 1).fold{
         UserSession.createUserSession(UserSession(
           token = token,
           useragent = userAgentHeader,
@@ -245,7 +245,7 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     */
   def getUserSessionByToken(xsrfToken: String, xsrfTokenCookie: String, userAgentHeader: String): Option[UserSession] = {
     dbSession.viaConnection(implicit connection => {
-      UserSession.findUserSessionByToken(xsrfToken)
+      UserSession.findUserSessionByToken(xsrfToken, 1)
     })
       .fold[Option[UserSession]] {
         logger.debug(s"no session for xsrfToken: $xsrfToken")

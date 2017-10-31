@@ -55,10 +55,46 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
     *
     * @return
     */
-  def getallUsers: Seq[ProfileJs] = {
+  def getallUsers: Seq[User] = {
     dbSession.viaConnection( implicit connection => {
-      UserDAO.getAllUsers.map(u => u.asProfileJs)
+      UserDAO.getAllUsers
     })
+  }
+
+  /**
+    * list all active sessions
+    *
+    * @return
+    */
+  def getActiveSessions(max: Option[Int]): Seq[UserSession] = {
+    dbSession.viaConnection( implicit connection => {
+      val count = max.getOrElse(100)
+      UserSession.getAllUserSessions(count)
+    })
+  }
+
+  /**
+    * list all active sessions
+    *
+    * @return
+    */
+  def queryActiveSessions(token: Option[String], max: Option[Int], email: Option[String]): Seq[UserSession] = {
+    dbSession.viaConnection{ implicit connection =>
+
+      val count = max.getOrElse(100)
+      (token, email) match {
+        case (Some(to), Some(em)) =>
+          val viaToken = UserSession.findUserSessionByToken(to, count).toSeq
+          val viaEmail = UserSession.findUserSessionByEmail(em, count)
+          (viaToken ++ viaEmail).filter(ul => ul.token.contains(to) && ul.email.contains(em))
+        case (Some(to), None) =>
+          UserSession.findUserSessionByToken(to, count).toSeq
+        case (None, Some(em)) =>
+          UserSession.findUserSessionByEmail(em, count)
+        case (None, None) =>
+          UserSession.getAllUserSessions(count)
+      }
+    }
   }
 
   def blockUnblockUsers(command: String, email: String): Option[User] = {
@@ -114,9 +150,10 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
     *
     * @return
     */
-  def getAllUserLinkLoggings: Seq[UserLinkLogging] = {
+  def getAllUserLinkLoggings(max: Option[Int]): Seq[UserLinkLogging] = {
     dbSession.viaConnection( implicit connection => {
-      UserLinkLogging.getAllUserLinkLoggings
+      val count = max.getOrElse(100)
+      UserLinkLogging.getAllUserLinkLoggings(count)
     })
   }
 
@@ -125,10 +162,23 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
     *
     * @return
     */
-  def findUserLinkLoggingsByLink(link: String): Seq[UserLinkLogging] = {
-    dbSession.viaConnection( implicit connection => {
-      UserLinkLogging.findUserLinkLoggingsByLink(link)
-    })
+  def queryUserLinkLoggings(link: Option[String], max: Option[Int], email: Option[String]): Seq[UserLinkLogging] = {
+    dbSession.viaConnection{ implicit connection =>
+
+      val count = max.getOrElse(100)
+      (link, email) match {
+        case (Some(li), Some(em)) =>
+          val viaLinks = UserLinkLogging.findUserLinkLoggingsByLink(li, count)
+          val viaEmail = UserLinkLogging.findUserLinkLoggingByEmail(em, count)
+          (viaLinks ++ viaLinks).filter(ul => ul.link.contains(li) && ul.email.contains(em))
+        case (Some(li), None) =>
+          UserLinkLogging.findUserLinkLoggingsByLink(li, count)
+        case (None, Some(em)) =>
+          UserLinkLogging.findUserLinkLoggingByEmail(em, count)
+        case (None, None) =>
+          UserLinkLogging.getAllUserLinkLoggings(count)
+      }
+    }
   }
 
   /**

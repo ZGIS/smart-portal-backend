@@ -72,8 +72,8 @@ class AdminController @Inject()(implicit configuration: Configuration,
     */
   def getAllUserGroups: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val userGroupList = adminService.getAllUserGroups.map(u => Json.toJson(u))
-      Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(userGroupList)))
+      val usergroups = adminService.getAllUserGroups.map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(usergroups)))
   }
 
   def createUserGroupAsAdmin: Action[JsValue] = (authenticationAction
@@ -182,8 +182,32 @@ class AdminController @Inject()(implicit configuration: Configuration,
     */
   def getAllUsers: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val userList = adminService.getallUsers.map(u => Json.toJson(u))
-      Ok(Json.obj("status" -> "OK", "users" -> JsArray(userList)))
+      val users = adminService.getallUsers.map(u => Json.toJson(u.asProfileJs))
+      Ok(Json.obj("status" -> "OK", "users" -> JsArray(users)))
+
+  }
+
+  /**
+    * for admin view list all users
+    *
+    * @return
+    */
+  def getActiveSessions(max: Option[Int]): Action[Unit] = defaultAdminAction(parse.empty) {
+    request =>
+      val sessions = adminService.getActiveSessions(max: Option[Int]).map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "sessions" -> JsArray(sessions)))
+
+  }
+
+  /**
+    * for admin view list all users
+    *
+    * @return
+    */
+  def queryActiveSessions(token: Option[String], max: Option[Int], email: Option[String]): Action[Unit] = defaultAdminAction(parse.empty) {
+    request =>
+      val sessions = adminService.queryActiveSessions(token, max, email).map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "sessions" -> JsArray(sessions)))
 
   }
 
@@ -194,8 +218,8 @@ class AdminController @Inject()(implicit configuration: Configuration,
     */
   def getAllUserFiles: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val userList = adminService.getallUserFiles.map(u => Json.toJson(u))
-      Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userList)))
+      val userfiles = adminService.getallUserFiles.map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userfiles)))
   }
 
   /**
@@ -205,8 +229,8 @@ class AdminController @Inject()(implicit configuration: Configuration,
     */
   def getallUserMetaRecords: Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val userList = adminService.getallUserMetaRecords.map(u => Json.toJson(u))
-      Ok(Json.obj("status" -> "OK", "metarecords" -> JsArray(userList)))
+      val metarecords = adminService.getallUserMetaRecords.map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "metarecords" -> JsArray(metarecords)))
   }
 
   /**
@@ -214,9 +238,9 @@ class AdminController @Inject()(implicit configuration: Configuration,
     *
     * @return
     */
-  def getallUserLinkLoggings: Action[Unit] = defaultAdminAction(parse.empty) {
+  def getallUserLinkLoggings(max: Option[Int]): Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val loglist = adminService.getAllUserLinkLoggings.map(u => Json.toJson(u))
+      val loglist = adminService.getAllUserLinkLoggings(max).map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
   }
 
@@ -225,9 +249,9 @@ class AdminController @Inject()(implicit configuration: Configuration,
     *
     * @return
     */
-  def findUserLinkLoggingsByLink(link: String): Action[Unit] = defaultAdminAction(parse.empty) {
+  def queryLinkLoggings(link: Option[String], max: Option[Int], email: Option[String]): Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val loglist = adminService.findUserLinkLoggingsByLink(link).map(u => Json.toJson(u))
+      val loglist = adminService.queryUserLinkLoggings(link, max, email).map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "loglist" -> JsArray(loglist)))
   }
 

@@ -220,7 +220,8 @@ class UserController @Inject()(implicit configuration: Configuration,
       if (result) {
         // cache.remove(token)
         userService.removeUserSessionCache(user.email, request.authenticatedRequest.userSession.token)
-        Ok.discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
+        Ok(Json.obj("status" -> "OK", "message" -> "Your account has been scheduled for deletion.", "email" -> user.email.value))
+          .discardingCookies(DiscardingCookie(name = AuthTokenCookieKey))
       } else {
         logger.error(s"User ${user.accountSubject} could not be deleted.")
         val error = ErrorResult("Sorry, we could not delete your account.", None)

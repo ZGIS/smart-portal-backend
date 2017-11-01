@@ -55,6 +55,7 @@ libraryDependencies ++= Seq(
   // "com.vividsolutions" % "jts-core" % "1.14.0",
   "org.locationtech.spatial4j" % "spatial4j" % "0.6",
   // "org.noggit" % "noggit" % "0.7",
+  "com.norbitltd" %% "spoiwo" % "1.2.0",
 
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,

@@ -101,8 +101,7 @@ class CollectionsController @Inject()(userService: UserService,
   def getPersonalFilesFromDefaultCollection: Action[Unit] = defaultAuthAction(parse.empty) {
     request =>
       val owcDataLinks = collectionsService.getOwcLinksForOwcAuthorOwnFiles(request.user).map(owcLink => owcLink.toJson)
-      Ok(JsArray(owcDataLinks))
-
+      Ok(Json.obj("status" -> "OK", "datalinks" -> JsArray(owcDataLinks)))
   }
 
   /**

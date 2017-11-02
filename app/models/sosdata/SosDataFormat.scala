@@ -23,20 +23,34 @@ import scala.util.Try
 
 trait SosDataFormat {
   def value: String
+  def contentType: String
+  def fileSuffix: String
 }
 
 object SosDataFormat {
 
   case object OM20 extends SosDataFormat {
-    val value: String = "http://www.opengis.net/om/2.0"
+    val value = "http://www.opengis.net/om/2.0"
+    val contentType = "application/xml"
+    val fileSuffix = ".xml"
   }
 
   case object WML2 extends SosDataFormat {
-    val value: String = "http://www.opengis.net/waterml/2.0"
+    val value = "http://www.opengis.net/waterml/2.0"
+    val contentType = "application/xml"
+    val fileSuffix = ".wml"
   }
 
   case object XLS extends SosDataFormat {
-    val value: String = "application/vnd.ms-excel"
+    val value = "application/vnd.ms-excel"
+    val contentType = "application/vnd.ms-excel"
+    val fileSuffix = ".xlsx"
+  }
+
+  case object CSV extends SosDataFormat {
+    val value = "text/csv"
+    val contentType = "text/csv"
+    val fileSuffix = ".csv"
   }
 
   def apply(v: String) : SosDataFormat = {
@@ -44,13 +58,14 @@ object SosDataFormat {
       case "http://www.opengis.net/om/2.0" => OM20
       case "http://www.opengis.net/waterml/2.0" => WML2
       case "application/vnd.ms-excel" => XLS
+      case "text/csv" => CSV
       case _ => throw new IllegalArgumentException(s"Value $v is not a supported data format value")
     }
   }
 
   val supportedParserFormats: List[String] = List(OM20.value, WML2.value)
 
-  val supportedExportFormats: List[String] = List(WML2.value, XLS.value)
+  val supportedExportFormats: List[String] = List(WML2.value, XLS.value, CSV.value)
 
   def isValid(v: String) : Boolean = {
     Try (apply(v)).isSuccess

@@ -26,9 +26,11 @@ import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId, ZonedDateTime}
 import javax.inject.Inject
 
+import com.norbitltd.spoiwo.model.Sheet
+import com.norbitltd.spoiwo.natures.csv.CsvProperties
 import controllers.security.{OptionalAuthenticationAction, RefererHeader, UserAgentHeader}
 import models.ErrorResult
-import models.sosdata.SosDataFormat.{OM20, WML2, XLS}
+import models.sosdata.SosDataFormat.{CSV, OM20, WML2, XLS}
 import models.sosdata._
 import models.tvp.XmlTvpParser
 import models.users.UserLinkLogging
@@ -86,92 +88,92 @@ class SosDataController @Inject()(implicit configuration: Configuration,
     */
   def getTimeseries: Action[JsValue] = optionalAuthenticationAction.async(parse.json) {
     request =>
-        request.body.validate[Timeseries].fold(
-          errors => {
-            logger.error(JsError.toJson(errors).toString())
-            val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
-            Future {
-              BadRequest(Json.toJson(error)).as(JSON)
+      request.body.validate[Timeseries].fold(
+        errors => {
+          logger.error(JsError.toJson(errors).toString())
+          val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
+          Future {
+            BadRequest(Json.toJson(error)).as(JSON)
+          }
+        },
+
+        timeseries => {
+          val sosXmlRequest = getObservationRequestXml(timeseries)
+          val responseFuture = wsClient.url(timeseries.sosUrl)
+            .withHeaders(CONTENT_TYPE -> "application/xml")
+            .post(sosXmlRequest)
+
+          responseFuture.recover {
+            case e: Exception =>
+              logger.error("Sos GetObservation threw exception", e)
+              val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+                Some(e.getMessage))
+              InternalServerError(Json.toJson(error)).as(JSON)
+          }
+
+          responseFuture.map { response =>
+            if (response.status != 200) {
+              logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
+              val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
+                Some(response.body))
+              InternalServerError(Json.toJson(error)).as(JSON)
             }
-          },
-
-          timeseries => {
-            val sosXmlRequest = getObservationRequestXml(timeseries)
-            val responseFuture = wsClient.url(timeseries.sosUrl)
-              .withHeaders(CONTENT_TYPE -> "application/xml")
-              .post(sosXmlRequest)
-
-            responseFuture.recover {
-              case e: Exception =>
-                logger.error("Sos GetObservation threw exception", e)
-                val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
-                  Some(e.getMessage))
-                InternalServerError(Json.toJson(error)).as(JSON)
+            else if (!response.header("Content-Type").get.contains("application/xml")) {
+              logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
+              val error = ErrorResult(
+                s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
+                Some(response.body))
+              InternalServerError(Json.toJson(error)).as(JSON)
             }
+            else if (timeseries.responseFormat.isDefined && !timeseries.responseFormat.get.equalsIgnoreCase("http://www.opengis.net/om/2.0")) {
+              logger.error(s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}")
+              val error = ErrorResult(
+                s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}",
+                Some(response.body))
+              InternalServerError(Json.toJson(error)).as(JSON)
+            }
+            else {
+              val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(response.body))
+              val tsdata =
+                if (tvp.isEmpty) {
+                  TimeseriesData(
+                    x = Seq.empty[String],
+                    y = Seq.empty[String],
+                    name = timeseries.timeseriesName
+                  )
+                }
+                else {
+                  TimeseriesData(
+                    x = tvp.map(_.datetime),
+                    y = tvp.map(_.measValue),
+                    name = timeseries.timeseriesName
+                  )
+                }
+              val uom = if (tvp.isEmpty) {
+                if (timeseries.uom.isEmpty) {
+                  timeseries.observedProperty
+                } else {
+                  timeseries.uom.getOrElse("empty")
+                }
+              } else tvp.head.measUnit
+              val result = timeseries.copy(data = Some(tsdata), uom = Some(uom))
 
-            responseFuture.map { response =>
-              if (response.status != 200) {
-                logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
-                val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
-                  Some(response.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              else if (!response.header("Content-Type").get.contains("application/xml")) {
-                logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
-                val error = ErrorResult(
-                  s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
-                  Some(response.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              else if (timeseries.responseFormat.isDefined && !timeseries.responseFormat.get.equalsIgnoreCase("http://www.opengis.net/om/2.0")) {
-                logger.error(s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}")
-                val error = ErrorResult(
-                  s"SOS GetObservation responseFormat unsupported for this request; ${timeseries.responseFormat.getOrElse("none")}",
-                  Some(response.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              else {
-                val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(response.body))
-                val tsdata =
-                  if (tvp.isEmpty) {
-                    TimeseriesData(
-                      x = Seq.empty[String],
-                      y = Seq.empty[String],
-                      name = timeseries.timeseriesName
-                    )
-                  }
-                  else {
-                    TimeseriesData(
-                      x = tvp.map(_.datetime),
-                      y = tvp.map(_.measValue),
-                      name = timeseries.timeseriesName
-                    )
-                  }
-                val uom = if (tvp.isEmpty) {
-                  if (timeseries.uom.isEmpty) {
-                    timeseries.observedProperty
-                  } else {
-                    timeseries.uom.getOrElse("empty")
-                  }
-                } else tvp.head.measUnit
-                val result = timeseries.copy(data = Some(tsdata), uom = Some(uom))
+              val logRequest = UserLinkLogging(id = None,
+                timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+                ipaddress = Some(request.remoteAddress),
+                useragent = request.headers.get(UserAgentHeader),
+                email = request.optionalSession.map(_.email),
+                link = sosXmlRequest,
+                referer = request.headers.get(RefererHeader))
 
-                val logRequest = UserLinkLogging(id = None,
-                  timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
-                  ipaddress = Some(request.remoteAddress),
-                  useragent = request.headers.get(UserAgentHeader),
-                  email = request.optionalSession.map(_.email),
-                  link = sosXmlRequest,
-                  referer = request.headers.get(RefererHeader))
+              val updated = userService.logLinkInfo(logRequest)
 
-                val updated = userService.logLinkInfo(logRequest)
-
-                logger.trace(logRequest.toString)
-                Ok(result.toJson()).as(JSON)
-              }
+              logger.trace(logRequest.toString)
+              Ok(result.toJson()).as(JSON)
             }
           }
-        )
+        }
+      )
   }
 
   /**
@@ -182,153 +184,209 @@ class SosDataController @Inject()(implicit configuration: Configuration,
     */
   def exportTimeseries = optionalAuthenticationAction.async(parse.json) {
     request =>
-        request.body.validate[Timeseries].fold(
-          errors => {
-            logger.error(JsError.toJson(errors).toString())
-            val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
-            Future {
-              BadRequest(Json.toJson(error)).as(JSON)
+      request.body.validate[Timeseries].fold(
+        errors => {
+          logger.error(JsError.toJson(errors).toString())
+          val error = ErrorResult("Error while validating request.", Some(JsError.toJson(errors).toString))
+          Future {
+            BadRequest(Json.toJson(error)).as(JSON)
+          }
+        },
+
+        timeseries => {
+
+          if (!timeseries.responseFormat.exists(f => SosDataFormat.supportedExportFormats.contains(f))) {
+            logger.error(s"This export format for observations is unsupported: ${timeseries.responseFormat.getOrElse("none")}")
+            val error = ErrorResult(
+              s"This export format for observations is unsupported: ${timeseries.responseFormat.getOrElse("")}", None)
+            BadRequest(Json.toJson(error)).as(JSON)
+          }
+
+          val capabilitiesFuture = retrieveSosCapabilities(timeseries.sosUrl)
+
+          // still normal future recover
+          capabilitiesFuture.recover {
+            case e: Exception =>
+              logger.error("Sos get capabilities threw exception", e)
+              val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+                Some(e.getMessage))
+              InternalServerError(Json.toJson(error)).as(JSON)
+          }
+
+          val sosLoadingFormat = timeseries.responseFormat match {
+            case Some(WML2.value) => WML2.value
+            case Some(XLS.value) => OM20.value
+            case Some(CSV.value) => OM20.value
+            case None => OM20.value
+            case _ => throw new IllegalArgumentException(f"This format doesn't work, something is wrong, ${timeseries.responseFormat.getOrElse("unknown")}")
+          }
+
+          val sosXmlRequest = getObservationRequestXml(timeseries, sosLoadingFormat)
+          val responseFuture = wsClient.url(timeseries.sosUrl)
+            .withHeaders(CONTENT_TYPE -> "application/xml")
+            .post(sosXmlRequest)
+
+          responseFuture.recover {
+            case e: Exception =>
+              logger.error("Sos GetObservation threw exception", e)
+              val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
+                Some(e.getMessage))
+              InternalServerError(Json.toJson(error)).as(JSON)
+          }
+
+          val combinedFuture: Future[(Either[ErrorResult, SosCapabilities], WSResponse)] = for {
+            capaResult <- capabilitiesFuture
+            sosDataResult <- responseFuture
+          } yield (capaResult, sosDataResult)
+
+          combinedFuture.map(combinedResponse => {
+
+            val response = combinedResponse._2
+
+            if (response.status != 200) {
+              logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
+              val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
+                Some(response.body))
+              InternalServerError(Json.toJson(error)).as(JSON)
             }
-          },
-
-          timeseries => {
-
-            if (!timeseries.responseFormat.exists(f => SosDataFormat.supportedExportFormats.contains(f))) {
-              logger.error(s"This export format for observations is unsupported: ${timeseries.responseFormat.getOrElse("none")}")
+            else if (!response.header("Content-Type").get.contains("application/xml")) {
+              logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
               val error = ErrorResult(
-                s"This export format for observations is unsupported: ${timeseries.responseFormat.getOrElse("")}", None)
-              BadRequest(Json.toJson(error)).as(JSON)
+                s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
+                Some(response.body))
+              InternalServerError(Json.toJson(error)).as(JSON)
             }
+            else {
+              // Either future folding begins
+              combinedResponse._1 match {
+                case Right(sosCapabilities) => {
+                  logger.debug(s"sosCapabilities ${sosCapabilities.responseFormats}")
+                  if (!sosCapabilities.responseFormats.exists(_.contains(sosLoadingFormat))) {
+                    logger.error(s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}")
+                    val error = ErrorResult(
+                      s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}", None)
+                    BadRequest(Json.toJson(error)).as(JSON)
+                  }
 
-            val capabilitiesFuture = retrieveSosCapabilities(timeseries.sosUrl)
+                  val logRequest = UserLinkLogging(id = None,
+                    timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+                    ipaddress = Some(request.remoteAddress),
+                    useragent = request.headers.get(UserAgentHeader),
+                    email = request.optionalSession.map(_.email),
+                    link = sosXmlRequest,
+                    referer = request.headers.get(RefererHeader))
 
-            // still normal future recover
-            capabilitiesFuture.recover {
-              case e: Exception =>
-                logger.error("Sos get capabilities threw exception", e)
-                val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
-                  Some(e.getMessage))
-                InternalServerError(Json.toJson(error)).as(JSON)
-            }
+                  val updated = userService.logLinkInfo(logRequest)
+                  logger.trace(logRequest.toString)
 
-            val sosLoadingFormat = timeseries.responseFormat match {
-              case Some(WML2.value) => WML2.value
-              case Some(XLS.value) => OM20.value
-              case None => OM20.value
-              case _ => throw new IllegalArgumentException(f"This format doesn't work, something is wrong, ${timeseries.responseFormat.getOrElse("unknown")}")
-            }
-
-            val sosXmlRequest = getObservationRequestXml(timeseries, sosLoadingFormat)
-            val responseFuture = wsClient.url(timeseries.sosUrl)
-              .withHeaders(CONTENT_TYPE -> "application/xml")
-              .post(sosXmlRequest)
-
-            responseFuture.recover {
-              case e: Exception =>
-                logger.error("Sos GetObservation threw exception", e)
-                val error = ErrorResult(s"Exception (${e.getClass.getCanonicalName}) on SOS get capabilities.",
-                  Some(e.getMessage))
-                InternalServerError(Json.toJson(error)).as(JSON)
-            }
-
-            val combinedFuture: Future[(Either[ErrorResult, SosCapabilities], WSResponse)] = for {
-              capaResult <- capabilitiesFuture
-              sosDataResult <- responseFuture
-            } yield (capaResult, sosDataResult)
-
-            combinedFuture.map(combinedResponse => {
-
-              val response = combinedResponse._2
-
-              if (response.status != 200) {
-                logger.error(s"Calling SOS ${timeseries.sosUrl} HTTP result status ${response.status} on GetObservation")
-                val error = ErrorResult(s"Server ${timeseries.sosUrl} responded with ${response.status} on GetObservation",
-                  Some(response.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              else if (!response.header("Content-Type").get.contains("application/xml")) {
-                logger.error(s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}")
-                val error = ErrorResult(
-                  s"SOS GetObservation result was not XML but ${response.header("Content-Type").get}",
-                  Some(response.body))
-                InternalServerError(Json.toJson(error)).as(JSON)
-              }
-              else {
-                // Either future folding begins
-                combinedResponse._1 match {
-                  case Right(sosCapabilities) =>
-                    logger.debug(s"sosCapabilities ${sosCapabilities.responseFormats}")
-                    if (!sosCapabilities.responseFormats.exists(_.contains(sosLoadingFormat))) {
-                      logger.error(s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}")
-                      val error = ErrorResult(
-                        s"SOS Server does not support responseFormat for this request; ${timeseries.responseFormat.getOrElse("none")}", None)
-                      BadRequest(Json.toJson(error)).as(JSON)
-                    }
-                    // FIXME here build braching for different export formats such as Excel spreadheet
-                    val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
-                    val fileNameTmpl = "export-" + Try(URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8") + "-" + updatedTime.format(formatter)).getOrElse("-sosdata")
-                    val pathOfUploadTmp = Paths.get(uploadDataPath)
-                    val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sos-export-")
-
-                    val exportFile = timeseries.responseFormat match {
-                      case Some(WML2.value) => {
-                        val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(response.body, sosCapabilities, sosXmlRequest)
-
-                        if (wml2.isEmpty) {
-                          logger.error("Couldn't extract WML2 from this SOS GetObservation response")
-                        }
-                        val tmpFile = new File(intermTempDir.resolve(fileNameTmpl + ".wml").toAbsolutePath.toString)
-                        scala.xml.XML.save(tmpFile.getAbsolutePath, wml2.get.head, "UTF-8", true, null)
-                        // return ref handle
-                        tmpFile
-                      }
-                      case _ => {
-                        val tmpFile = new File(intermTempDir.resolve(fileNameTmpl + ".xlsx").toAbsolutePath.toString)
-                        val sheets = xlsExporter.getSpreadsheetExportFromSosGetObs(response.body, sosCapabilities, sosXmlRequest)
-                        if (sheets.isEmpty) {
-                          logger.error("Couldn't extract OM2 into XLS from this SOS GetObservation response")
-                        }
-                        import com.norbitltd.spoiwo.natures.xlsx.Model2XlsxConversions._
-                        sheets.foreach(wb => wb.saveAsXlsx(tmpFile.getAbsolutePath))
-                        // return ref handle
-                        tmpFile
-                      }
-                    }
-
-                    val logRequest = UserLinkLogging(id = None,
-                      timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
-                      ipaddress = Some(request.remoteAddress),
-                      useragent = request.headers.get(UserAgentHeader),
-                      email = request.optionalSession.map(_.email),
-                      link = sosXmlRequest,
-                      referer = request.headers.get(RefererHeader))
-
-                    val updated = userService.logLinkInfo(logRequest)
-                    logger.trace(logRequest.toString)
-
-                    val contentType = timeseries.responseFormat.map(
-                      f => if (f.equalsIgnoreCase(XLS.value)) XLS.value else "application/xml").getOrElse("application/xml")
-
-                    Ok.sendFile(
-                      content = exportFile,
-                      fileName = _ => exportFile.getName,
+                  val exported = exportToFile(timeseries.responseFormat, response.body, sosCapabilities, sosXmlRequest)
+                  exported.fold(
+                    error => BadRequest(Json.toJson(error)).as(JSON),
+                    fileFile => Ok.sendFile(
+                      content = fileFile,
+                      fileName = _ => fileFile.getName,
                       onClose = () => {
-                        Try(exportFile.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
-                        Try(Files.delete(intermTempDir)).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                        Try(fileFile.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
+                        Try(Files.delete(fileFile.getParentFile.toPath)).failed.map(ex => logger.error(ex.getLocalizedMessage))
                       }
                     )
-                      .as(contentType)
-                      .withHeaders("Content-disposition" -> s"attachment; filename=${exportFile.getName}")
+                      .as(timeseries.responseFormat.map(f => SosDataFormat.apply(f).contentType).getOrElse("application/octet-stream"))
+                      .withHeaders("Content-disposition" -> s"attachment; filename=${fileFile.getName}")
                       .withHeaders("Access-Control-Expose-Headers" -> "Content-disposition")
                       .withHeaders("Access-Control-Expose-Headers" -> "x-filename")
-                      .withHeaders("x-filename" -> exportFile.getName)
-
-                  case Left(errorResult) => InternalServerError(Json.toJson(errorResult)).as(JSON)
+                      .withHeaders("x-filename" -> fileFile.getName))
                 }
+
+                case Left(errorResult) => InternalServerError(Json.toJson(errorResult)).as(JSON)
               }
-            })
+            }
+          })
+        }
+      )
+  }
+
+  /**
+    * a bit of a crippling nested fold but the write-out as file for xls/csv only does Unit return,
+    * thought it would be nice to add some IO security around it
+    *
+    * @param responseFormat
+    * @param sosResponseAsText
+    * @param sosCapabilities
+    * @param sosXmlRequest
+    * @return
+    */
+  def exportToFile(responseFormat: Option[String], sosResponseAsText: String,
+                   sosCapabilities: SosCapabilities, sosXmlRequest: String): Either[ErrorResult, File] = {
+    // FIXME here build braching for different export formats such as Excel spreadheet
+    val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+    val fileNameTmpl = "export-" + Try(URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8")
+      + "-" + updatedTime.format(formatter)).getOrElse("-sosdata")
+    val pathOfUploadTmp = Paths.get(uploadDataPath)
+    val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sos-export-")
+
+    responseFormat match {
+      case Some(WML2.value) => {
+        val wml2 = wml2Exporter.getWml2ExportFromSosGetObs(sosResponseAsText, sosCapabilities, sosXmlRequest)
+
+        if (wml2.isEmpty) {
+          logger.error("Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response")
+          Left(ErrorResult(message = "Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response",
+            details = Some("Sheet is empty, no data?")))
+        } else {
+          val tmpFile = new File(intermTempDir.resolve(fileNameTmpl + WML2.fileSuffix).toAbsolutePath.toString)
+          scala.xml.XML.save(tmpFile.getAbsolutePath, wml2.get.head, "UTF-8", true, null)
+          // return ref handle
+          Right(tmpFile)
+        }
+      }
+      case Some(spreadSheet) if spreadSheet.equals(XLS.value) || spreadSheet.equals(CSV.value) => {
+        val format = SosDataFormat.apply(spreadSheet)
+        val tmpFile = new File(intermTempDir.resolve(fileNameTmpl + format.fileSuffix).toAbsolutePath.toString)
+        val sheets = xlsExporter.getSpreadsheetExportFromSosGetObs(sosResponseAsText, sosCapabilities, sosXmlRequest)
+        val saved = saveSpreadSheet(sheets, format, tmpFile.getAbsolutePath)
+        saved.map(err => Left(err)).getOrElse(Right(tmpFile))
+      }
+      case Some(otherText) =>
+        logger.error(s"Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response, unsupported fomat:? $otherText")
+        Left(ErrorResult(message = s"Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response, unsupported fomat:? $otherText", details = None))
+    }
+  }
+
+  /**
+    * export sheet as either CSV or XLS format, write to re-destined file location
+    *
+    * @param sheets
+    * @param format
+    * @param filename
+    */
+  def saveSpreadSheet(sheets: Option[Sheet], format: SosDataFormat, filename: String): Option[ErrorResult] = {
+    try {
+      sheets.fold[Option[ErrorResult]] {
+        logger.error("Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response")
+        Some(ErrorResult(message = "Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response", details = Some("Sheet is empty, no data?")))
+      } {
+        wb =>
+          if (format.equals(XLS)) {
+            import com.norbitltd.spoiwo.natures.xlsx.Model2XlsxConversions._
+            wb.saveAsXlsx(filename)
+            None
+          } else if (format.equals(CSV)) {
+            import com.norbitltd.spoiwo.natures.csv.Model2CsvConversions._
+            val defCsvProps = CsvProperties(separator = ",", defaultDateFormat = "yyyy-MM-dd")
+            wb.saveAsCsv(filename, defCsvProps)
+            None
+          } else {
+            logger.error("Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response")
+            Some(ErrorResult(
+              message = "Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response",
+              details = Some(s"Unsupported format $format?")))
           }
-        )
+      }
+    } catch {
+      case ex: Exception =>
+        logger.error(s"Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response, ${ex.getLocalizedMessage}")
+        Some(ErrorResult(message = "Couldn't extract OM2 into SpreadSheet from this SOS GetObservation response", details = Some(ex.getLocalizedMessage)))
+    }
   }
 
   /**

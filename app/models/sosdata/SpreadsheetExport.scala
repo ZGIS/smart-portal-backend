@@ -37,7 +37,23 @@ import scala.xml.NodeSeq
 class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
 
   lazy val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-  lazy val xlsxDateStyle = CellStyle(dataFormat = CellDataFormat("m/d/yy h:mm"))
+  lazy val xlsxDateStyle = CellStyle(dataFormat = CellDataFormat("m/d/yy"))
+
+  /**
+    * damn date parsing everywhere :-)
+    *
+    * @param str
+    * @return
+    */
+  def parsedDate(str: String): Option[DateTime] = Try {
+    val of = OffsetDateTime.parse(str).atZoneSameInstant(ZoneId.of("UTC"))
+    new DateTime(of.toInstant.toEpochMilli, DateTimeZone.forID("UTC"))
+  }.toOption
+
+  def millisToHours(millis: Long): Double = {
+    // milliseconds -> seconds -> minutes -> hours
+    millis / 1000 / 60 / 60
+  }
 
   def getSpreadsheetExportFromSosGetObs(xmlText: String, sosCapabilities: SosCapabilities, sosXmlRequest: String): Option[Sheet] = {
 
@@ -73,16 +89,13 @@ class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
       val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(xmlText))
       val headerStyle = CellStyle(fillPattern = CellFill.Solid, fillForegroundColor = Color.AquaMarine, font = Font(bold = true))
 
-      val headerRow = Row(style = headerStyle).withCellValues("datetime", "timezone", "value", "unit", "feature id", "observedProperty id", "procedure id")
+      val headerRow = Row(style = headerStyle).withCellValues("date", "time", "act. TZ offset", "value", "unit", "feature id", "observedProperty id", "procedure id")
 
       val dataRows = tvp.map { t =>
         Row().withCells(
-          Try {
-            val of = OffsetDateTime.parse(t.datetime).atZoneSameInstant(ZoneId.of("UTC"))
-            val jodaDate = new DateTime(of.toInstant.toEpochMilli, DateTimeZone.forID("UTC"))
-            Cell(jodaDate, style = xlsxDateStyle)
-          }.getOrElse(Cell.Empty),
-          Cell(DateTimeZone.getDefault().toTimeZone.getID),
+          parsedDate(t.datetime).map(d => Cell(d, style = xlsxDateStyle)).getOrElse(Cell.Empty),
+          parsedDate(t.datetime).map(d => Cell(s"${d.toString("hh:mm:ss")}")).getOrElse(Cell.Empty),
+          parsedDate(t.datetime).map(d => Cell(millisToHours(DateTimeZone.getDefault.toTimeZone.getOffset(d.getMillis)), style = CellStyle(dataFormat = CellDataFormat("0.00")))).getOrElse(Cell.Empty),
           Cell(t.measValue, style = CellStyle(dataFormat = CellDataFormat("0.00"))),
           Cell(t.measUnit),
           Cell(t.foiId),

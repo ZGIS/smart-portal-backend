@@ -23,6 +23,7 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import javax.inject._
 
+import com.google.cloud.storage.Blob
 import controllers.security._
 import models.ErrorResult
 import models.users._
@@ -220,6 +221,19 @@ class AdminController @Inject()(implicit configuration: Configuration,
     request =>
       val userfiles = adminService.getallUserFiles.map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userfiles)))
+  }
+
+  /**
+    * admin list of remote files
+    *
+    * @return
+    */
+  def getAllGoogleFiles: Action[Unit] = defaultAdminAction(parse.empty) {
+    request =>
+      val bucketList = googleService.listbucket
+      bucketList.fold[Result](
+        error => BadRequest(Json.toJson(error)).as(JSON),
+        blobSeq => Ok(Json.obj("status" -> "OK", "blobs" -> JsArray(blobSeq.map(b => b.toJson)))))
   }
 
   /**

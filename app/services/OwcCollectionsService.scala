@@ -209,13 +209,14 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   /**
+    * generate the plain MdMetadataa resource for a CSW entry reference
     *
     * @param catalogUrl
     * @param mdMetadata
     * @param userMetaEntry
     * @return
     */
-  def addMdResourceToUserDefaultCollection(catalogUrl: String, mdMetadata: MdMetadata, userMetaEntry: UserMetaRecord): Boolean = {
+  def generateMdResource(catalogUrl: String, mdMetadata: MdMetadata, userMetaEntry: UserMetaRecord): OwcResource = {
 
     lazy val bboxFormat = new BboxArrayFormat
 
@@ -251,6 +252,52 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
       mimeType = cswGetRecordOps.mimeType,
       rel = "via")
 
+    val owcResource = OwcResource(
+      id = baseLink,
+      geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
+      title = mdMetadata.title,
+      subtitle = mdMetadata.abstrakt.toOption(),
+      updateDate = updatedTime,
+      author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
+        email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
+        uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
+      publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
+      rights = mdMetadata.distribution.useLimitation.toOption(),
+      temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
+
+      // links.alternates[] and rel=alternate
+      contentDescription = List(),
+
+      // aka links.previews[] and rel=icon (atom)
+      preview = List(),
+
+      // aka links.data[] and rel=enclosure (atom)
+      contentByRef = List(),
+
+      // aka links.via[] & rel=via
+      resourceMetadata = List(viaLink, cswLink),
+      offering = List(cswOffering),
+      minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
+      maxScaleDenominator = None,
+      active = None,
+      keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
+      folder = None)
+
+    logger.trace(Json.prettyPrint(owcResource.toJson))
+
+    owcResource
+  }
+
+  /**
+    * add the MdResource OWC to colelction, becoming redundant?
+    *
+    * @param catalogUrl
+    * @param owcResource
+    * @param userMetaEntry
+    * @return
+    */
+  def addMdResourceToUserDefaultCollection(catalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
+
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findByAccountSubject(userMetaEntry.users_accountsubject)
     }
@@ -271,40 +318,42 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
         } {
           owcDoc =>
 
-            val owcResource = OwcResource(
-              id = baseLink,
-              geospatialExtent = bboxFormat.parseBboxArray(mdMetadata.extent.mapExtentCoordinates).toOption,
-              title = mdMetadata.title,
-              subtitle = mdMetadata.abstrakt.toOption(),
-              updateDate = updatedTime,
-              author = List(OwcAuthor(name = mdMetadata.responsibleParty.individualName.toOption(),
-                email = parseEmailStringtoEmailAddress(mdMetadata.responsibleParty.email),
-                uri = Some(new URL(mdMetadata.responsibleParty.orgWebLinkage)))),
-              publisher = mdMetadata.responsibleParty.pointOfContact.toOption(),
-              rights = mdMetadata.distribution.useLimitation.toOption(),
-              temporalExtent = GeoDateParserUtils.parseOffsetDateString(Some(mdMetadata.extent.temporalExtent)),
-
-              // links.alternates[] and rel=alternate
-              contentDescription = List(),
-
-              // aka links.previews[] and rel=icon (atom)
-              preview = List(),
-
-              // aka links.data[] and rel=enclosure (atom)
-              contentByRef = List(),
-
-              // aka links.via[] & rel=via
-              resourceMetadata = List(viaLink, cswLink),
-              offering = List(cswOffering),
-              minScaleDenominator = Try(mdMetadata.scale.toDouble).toOption,
-              maxScaleDenominator = None,
-              active = None,
-              keyword = mdMetadata.keywords.map(w => OwcCategory(term = w, scheme = None, label = None)),
-              folder = None)
-
-            logger.trace(Json.prettyPrint(owcResource.toJson))
-
             val entries = owcDoc.resource ++ Seq(owcResource)
+            val newDoc = owcDoc.copy(resource = entries)
+
+            logger.trace(Json.prettyPrint(newDoc.toJson))
+
+            dbSession.viaTransaction { implicit connection =>
+              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+            }
+        }
+    }
+  }
+
+  def updateMdResourceInUserDefaultCollection(catalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
+
+    val userLookup = dbSession.viaConnection { implicit connection =>
+      UserDAO.findByAccountSubject(userMetaEntry.users_accountsubject)
+    }
+
+    userLookup.fold {
+      // user not found, then can't insert, shouldn't happen though
+      logger.error("User not found, can't access users collection")
+      false
+    } {
+      user =>
+        val collectionLookup = dbSession.viaConnection { implicit connection =>
+          OwcContextDAO.findUserDefaultOwcContext(user)
+        }
+        collectionLookup.fold {
+          // collection not found, then can't insert, should probably also not happen usually
+          logger.error("Collection not found, can't access users collection")
+          false
+        } {
+          owcDoc =>
+
+            // drop out old resource, add new resource, IDs are same, it's basically a replace
+            val entries = owcDoc.resource.filterNot(o => o.id.equals(owcResource.id)) ++ Seq(owcResource)
             val newDoc = owcDoc.copy(resource = entries)
 
             logger.trace(Json.prettyPrint(newDoc.toJson))

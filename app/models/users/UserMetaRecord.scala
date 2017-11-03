@@ -112,9 +112,15 @@ CREATE TABLE usermetarecords (
     }
   }
 
+  def updateUserMetaRecord(userMetaRecord: UserMetaRecord)(implicit connection: Connection): Option[UserMetaRecord] = ???
+
   def deleteUserMetaRecord(userMetaRecord: UserMetaRecord)(implicit connection: Connection): Boolean = {
+    deleteUserMetaRecord(userMetaRecord.uuid)
+  }
+
+  def deleteUserMetaRecord(uuid: UUID)(implicit connection: Connection): Boolean = {
     val rowCount = SQL(s"delete from $table_usermetarecords where uuid = {uuid}").on(
-      'uuid -> userMetaRecord.uuid.toString
+      'uuid -> uuid.toString
     ).executeUpdate()
 
     rowCount match {

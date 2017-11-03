@@ -24,6 +24,7 @@ import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
 import javax.inject._
 
+import com.google.cloud.storage.Blob
 import controllers.ProfileJs
 import models.db.DatabaseSessionHolder
 import models.users._

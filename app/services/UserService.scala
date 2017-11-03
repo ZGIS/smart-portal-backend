@@ -334,6 +334,24 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   /**
+    * for reverse mapping finding the files
+    *
+    * @param user
+    * @return
+    */
+  def findUserFileByAccountSubject(user: User): Seq[UserFile] = {
+    dbSession.viaConnection( implicit connection =>
+      UserFile.findUserFileByAccountSubject(user.accountSubject)
+    )
+  }
+
+  def updateUserFile(userFile: UserFile): Option[UserFile] = {
+    dbSession.viaConnection( implicit connection =>
+      UserFile.updateUserFile(userFile)
+    )
+  }
+
+  /**
     * deleting, needs upstream auth logic who is allowed and who not
     *
     * @param uuid
@@ -378,6 +396,48 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
           UserMetaRecord.createUserMetaRecord(userMetaRecord)
         })
     }
+  }
+
+  /**
+    * for reverse mapping finding the record ref
+    *
+    * @param uuid
+    * @return
+    */
+  def findUserMetaRecordByUuid(uuid: UUID): Option[UserMetaRecord] = {
+    dbSession.viaConnection( implicit connection =>
+      UserMetaRecord.findUserMetaRecordByUuid(uuid)
+    )
+  }
+
+  /**
+    * for reverse mapping finding the  record ref
+    *
+    * @param user
+    * @return
+    */
+  def findUserMetaRecordByAccountSubject(user: User): Seq[UserMetaRecord] = {
+    dbSession.viaConnection( implicit connection =>
+      UserMetaRecord.findUserMetaRecordByAccountSubject(user.accountSubject)
+    )
+  }
+
+  def updateUserMetaRecord(userMetaRecord: UserMetaRecord): Option[UserMetaRecord] = {
+    dbSession.viaConnection( implicit connection =>
+      UserMetaRecord.updateUserMetaRecord(userMetaRecord)
+    )
+  }
+
+  /**
+    * deleting record ref, needs upstream auth logic who is allowed and who not
+    *
+    * @param uuid
+    * @return
+    */
+  def deleteUserMetaRecord(uuid: UUID): Boolean = {
+    dbSession.viaTransaction( implicit connection =>
+      UserMetaRecord.deleteUserMetaRecord(uuid)
+    )
   }
 
   /**

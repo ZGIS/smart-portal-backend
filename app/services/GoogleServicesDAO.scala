@@ -20,6 +20,7 @@
 package services
 
 import java.io.{File, FileReader}
+import java.time.{LocalDateTime, ZoneOffset}
 import javax.inject.{Inject, Singleton}
 
 import com.google.api.client.googleapis.auth.oauth2.{GoogleAuthorizationCodeTokenRequest, GoogleClientSecrets, GoogleTokenResponse}
@@ -30,9 +31,51 @@ import com.google.common.io.{Files => GoogleFiles}
 import models.ErrorResult
 import models.users.GAuthCredentials
 import play.api.Configuration
+import play.api.libs.functional.syntax._
+import play.api.libs.json.Writes._
+import play.api.libs.json._
 import utils.ClassnameLogger
 
 import scala.util.{Failure, Success, Try}
+
+case class LocalBlobInfo(name: String,
+                         mediaLink: String,
+                         bucket: String,
+                         contentType: String,
+                         contentEncoding: String,
+                         size: Long,
+                         md5: String,
+                         createTime: LocalDateTime
+                        ) extends ClassnameLogger {
+
+  def toJson: JsValue = Json.toJson(this)
+}
+
+object LocalBlobInfo {
+
+  implicit val googleBlobWrites: Writes[LocalBlobInfo] = (
+    (JsPath \ "name").write[String] and
+      (JsPath \ "mediaLink").write[String] and
+      (JsPath \ "bucket").write[String] and
+      (JsPath \ "contentType").write[String] and
+      (JsPath \ "contentEncoding").write[String] and
+      (JsPath \ "size").write[Long] and
+      (JsPath \ "md5").write[String] and
+      (JsPath \ "createTime").write[LocalDateTime]) (unlift(LocalBlobInfo.unapply))
+
+  def newFrom(blob: Blob): LocalBlobInfo = {
+    LocalBlobInfo(blob.getName,
+      blob.getMediaLink,
+      blob.getBucket,
+      blob.getContentType,
+      blob.getContentEncoding,
+      blob.getSize,
+      blob.getMd5,
+      LocalDateTime.ofEpochSecond(blob.getCreateTime, 0, ZoneOffset.UTC)
+    )
+  }
+}
+
 
 trait AbstractCloudServiceDAO {
 
@@ -88,7 +131,7 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
     * @param fileHandle
     * @return
     */
-  def uploadFileGoogleBucket(fileHandle: File): Either[ErrorResult, Blob] = {
+  def uploadFileGoogleBucket(fileHandle: File): Either[ErrorResult, LocalBlobInfo] = {
     // Google Java upload stuff
     import scala.collection.JavaConverters._
 
@@ -101,16 +144,87 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
     val acls: java.util.List[Acl] = List(roAcl).asJava
 
     // the inputstream is closed by default, so we don't need to close it here
-    val blobTry: Try[Blob] = Try {
-      storage.create(BlobInfo.newBuilder(googleStorageBucket, fileHandle.getName).setAcl(acls).build(),
+    val blobTry: Try[LocalBlobInfo] = Try {
+      val blob = storage.create(BlobInfo.newBuilder(googleStorageBucket, fileHandle.getName).setAcl(acls).build(),
         GoogleFiles.asByteSource(fileHandle).openStream())
+      LocalBlobInfo.newFrom(blob)
     }
 
     blobTry match {
-      case Success(blob) => Right(blob)
-      case Failure(ex) => Left(ErrorResult("Blob creation in cloud storage failed.", Some(ex.getLocalizedMessage)))
+      case Success(blobInfo) => Right(blobInfo)
+      case Failure(ex) =>
+        logger.error(s"Blob creation in cloud storage failed. ${ex.getLocalizedMessage}")
+        Left(ErrorResult("Blob creation in cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
 
+  }
+
+  /**
+    * humble try of listing the buckets content for admin
+    *
+    * @return
+    */
+  def listbucket: Either[ErrorResult, Seq[LocalBlobInfo]] = {
+    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    val bucket = storage.get(googleStorageBucket)
+
+    import scala.collection.JavaConverters._
+
+    val blobTry = Try {
+      bucket.list().iterateAll().asScala.map( blob => LocalBlobInfo.newFrom(blob)).toSeq
+    }
+    blobTry match {
+      case Success(blobSeq) => Right(blobSeq)
+      case Failure(ex) =>
+        logger.error(s"Blob listing of cloud storage failed. ${ex.getLocalizedMessage}")
+        Left(ErrorResult("Blob listing of cloud storage failed.", Some(ex.getLocalizedMessage)))
+    }
+  }
+
+  /**
+    * find a specific blob
+    *
+    * @param fileName
+    * @return
+    */
+  def getFileBlob(fileName: String): Either[ErrorResult, LocalBlobInfo] = {
+    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    val bucket = storage.get(googleStorageBucket)
+    val blobTry = Try {
+      bucket.get(fileName)
+    }
+    blobTry match {
+      case Success(blob) => Right(LocalBlobInfo.newFrom(blob))
+      case Failure(ex) =>
+        logger.error(s"Blob retrieve from cloud storage failed. ${ex.getLocalizedMessage}")
+        Left(ErrorResult("Blob retrieve from cloud storage failed.", Some(ex.getLocalizedMessage)))
+    }
+  }
+
+  /**
+    * delete a file in the bucket
+    *
+    * @param fileName
+    * @return
+    */
+  def deleteFileBlob(fileName: String): scala.Option[ErrorResult] = {
+    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    val bucket = storage.get(googleStorageBucket)
+    val blobTry = Try {
+      bucket.get(fileName).delete()
+    }
+    blobTry match {
+      case Success(blobDel) =>
+        if (blobDel) {
+          None
+        } else {
+          logger.error(s"Blob delete from cloud storage failed. No details here.")
+          Some(ErrorResult("Blob delete from cloud storage failed.", Some(s"$fileName not found.")))
+        }
+      case Failure(ex) =>
+        logger.error(s"Blob delete from cloud storage failed. ${ex.getLocalizedMessage}")
+        Some(ErrorResult("Blob delete from cloud storage failed.", Some(ex.getLocalizedMessage)))
+    }
   }
 
   /**

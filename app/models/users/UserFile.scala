@@ -118,6 +118,8 @@ CREATE TABLE userfiles (
     }
   }
 
+  def updateUserFile(userFile: UserFile)(implicit connection: Connection): Option[UserFile] = ???
+
   def deleteUserFile(userFile: UserFile)(implicit connection: Connection): Boolean = {
     deleteUserFile(userFile.uuid)
   }

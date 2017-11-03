@@ -29,7 +29,7 @@ import play.api.mvc.{ActionRefiner, _}
 import services.{AdminService, UserService}
 import utils.ClassnameLogger
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Use [[ActionBuilder]] when you want to add before/after logic in your actions.
@@ -161,7 +161,9 @@ class AuthenticatedPlainAction @Inject()(val userService: UserService)
   */
 @Singleton
 class UserAction @Inject()(val userService: UserService) extends ActionRefiner[AuthenticatedRequest, UserRequest] with ClassnameLogger {
-  def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future.successful {
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  def refine[A](authenticatedRequest: AuthenticatedRequest[A]) = Future {
     userService.findUserByEmailAsString(authenticatedRequest.userSession.email)
       .map(user => new UserRequest(user, authenticatedRequest))
       .toRight{
@@ -179,6 +181,8 @@ class UserAction @Inject()(val userService: UserService) extends ActionRefiner[A
   */
 @Singleton
 class AdminPermissionCheckAction @Inject()(val adminService: AdminService) extends ActionFilter[UserRequest] with ClassnameLogger {
+  // import scala.concurrent.ExecutionContext.Implicits.global
+
   def filter[A](input: UserRequest[A]) = Future.successful {
     if (!adminService.isAdmin(input.user.email)) {
       logger.error("User email not Admin.")

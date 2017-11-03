@@ -32,7 +32,7 @@ import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.Json
 import play.api.mvc._
-import services.{GoogleServicesDAO, OwcCollectionsService, UserService}
+import services.{GoogleServicesDAO, LocalBlobInfo, OwcCollectionsService, UserService}
 import utils.ClassnameLogger
 
 import scala.util.Try
@@ -52,6 +52,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
                                 userAction: UserAction
                                ) extends Controller with ClassnameLogger {
   /**
+    * upload a file to the portal, then it'll be forwarded to Google Cloud bucket and reference stored
     *
     * @return
     */
@@ -71,9 +72,9 @@ class FilesController @Inject()(implicit configuration: Configuration,
           case Left(errorResult) =>
             logger.error(errorResult.message + errorResult.details.mkString)
             InternalServerError(Json.toJson(errorResult)).as(JSON)
-          case Right(blob) =>
+          case Right(blobInfo) =>
             // return the public download link
-            val userFileEntryOk = userService.insertUserFileEntry(filename, request.user.email, blob.getMediaLink())
+            val userFileEntryOk = userService.insertUserFileEntry(filename, request.user.email, blobInfo.mediaLink)
             userFileEntryOk.fold {
               logger.error("file metadata insert failed.")
               val error = ErrorResult("File metadata insert failed.", None)
@@ -81,7 +82,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
             } { userFile =>
               val owcResource = collectionsService.fileMetadata(userFile, contentType, Try(kilobytes.toInt).toOption)
               logger.trace(Json.prettyPrint(owcResource.toJson))
-              logger.debug(s"file upload $filename to ${blob.getMediaLink} with reference ${userFile.linkreference}")
+              logger.debug(s"file upload $filename to ${blobInfo.mediaLink} with reference ${userFile.linkreference}; bob details: ${blobInfo.name} ${blobInfo.bucket} ${blobInfo.contentType} ${blobInfo.contentEncoding} ${blobInfo.size} ${blobInfo.md5}")
               Try(handle.delete()).failed.map(ex => logger.error(ex.getLocalizedMessage))
               Try(Files.delete(intermTempDir)).failed.map(ex => logger.error(ex.getLocalizedMessage))
 
@@ -108,17 +109,20 @@ class FilesController @Inject()(implicit configuration: Configuration,
   }
 
   /**
+    * retrieve the remote file download link for the uuid userfile mapping,
+    * uuid can't be guessed so comparatively safe 'open' download,
+    * (hide remote url so people have to download via our portal and we can count downloads)
     *
     * @param uuid
     * @return
     */
   def mappedFileLinkFor(uuid: String): Action[Unit] = optionalAuthenticationAction(parse.empty) {
     request =>
-      userService.findUserFileByUuid(UUID.fromString(uuid)).fold{
+      userService.findUserFileByUuid(UUID.fromString(uuid)).fold {
         logger.error("file not found")
         val error = ErrorResult("file not found.", None)
         BadRequest(Json.toJson(error)).as(JSON)
-      }{
+      } {
         userFile =>
           val logRequest = UserLinkLogging(id = None,
             timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
@@ -131,6 +135,63 @@ class FilesController @Inject()(implicit configuration: Configuration,
           val updated = userService.logLinkInfo(logRequest)
           logger.trace(logRequest.toString)
           Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference, "originalfilename" -> userFile.originalfilename))
+      }
+  }
+
+  /**
+    * get remote blob details for user owning it
+    *
+    * @param uuid
+    * @return
+    */
+  def getBlobInfoForMappedLink(uuid: String): Action[Unit] = (authenticationAction andThen userAction) (parse.empty) {
+    request =>
+      val foundfile = userService.findUserFileByAccountSubject(request.user).exists(f => f.uuid.equals(UUID.fromString(uuid)))
+      val notFoundBlock = {
+        logger.error("file not found")
+        val error = ErrorResult("file not found.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      }
+      if (!foundfile) {
+        notFoundBlock
+      } else {
+        userService.findUserFileByUuid(UUID.fromString(uuid))
+          .map { userFile =>
+            googleService.getFileBlob(userFile.originalfilename).fold[Result](
+              error => BadRequest(Json.toJson(error)).as(JSON),
+              blobInfo => Ok(Json.obj("status" -> "OK", "blobinfo" -> blobInfo.toJson)))
+          }
+          .getOrElse(notFoundBlock)
+      }
+  }
+
+  /**
+    * delete a remote file as owning user
+    *
+    * @param uuid
+    * @return
+    */
+  def deleteBlobForMappedLink(uuid: String): Action[Unit] = (authenticationAction andThen userAction) (parse.empty) {
+    request =>
+      val foundfile = userService.findUserFileByAccountSubject(request.user).exists(f => f.uuid.equals(UUID.fromString(uuid)))
+      val notFoundBlock = {
+        logger.error("file not found")
+        val error = ErrorResult("file not found.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      }
+      if (!foundfile) {
+        notFoundBlock
+      } else {
+        userService.findUserFileByUuid(UUID.fromString(uuid))
+          .map { userFile =>
+            googleService.deleteFileBlob(userFile.originalfilename).fold[Result] {
+              // if empty
+              Ok(Json.obj("status" -> "OK", "deleted" -> userFile.originalfilename))
+            } {
+              error => BadRequest(Json.toJson(error)).as(JSON)
+            }
+          }
+          .getOrElse(notFoundBlock)
       }
   }
 

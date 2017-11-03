@@ -19,6 +19,7 @@
 
 import java.time.ZonedDateTime
 
+import com.google.cloud.storage.Blob
 import models.users.{PasswordUpdateCredentials, _}
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._

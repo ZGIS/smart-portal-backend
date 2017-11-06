@@ -367,15 +367,20 @@ class CswController @Inject()(implicit configuration: Configuration,
               logger.warn(error.message)
               InternalServerError(Json.toJson(error)).as(JSON)
             },
-            ok => {
-              NotImplemented(Json.obj("status" -> "OK", "fileIdentifier" -> uuid.toString))
+            deletedUuid => {
+              logger.debug(s"Deleting MetaRecord of ${deletedUuid.toString} in default collection of ${request.user.email}.")
+              val userMetaEntryDeleteOk: Boolean = userService.findUserMetaRecordByUuid(deletedUuid)
+                .exists ( mt => userService.deleteUserMetaRecord(mt.uuid))
+              if (userMetaEntryDeleteOk) {
+                Ok(Json.obj("type" -> "success", "fileIdentifier" -> deletedUuid.toString,
+                  "message" -> s"Deleted metadata record ${deletedUuid.toString}."))
+              } else {
+                val error = ErrorResult(s"Could not delete ${deletedUuid.toString} in your collection of ${request.user.email}.", None)
+                logger.warn(error.message)
+                BadRequest(Json.toJson(error)).as(JSON)
+              }
             })
-          // if successful sent catalogue update link
-          // if both return nicely send acknowledgement as result
-          // else sent error message and hope for the best
-
         }
       }
   }
-
 }

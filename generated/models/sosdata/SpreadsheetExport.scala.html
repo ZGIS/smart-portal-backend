@@ -1,0 +1,4857 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          models/sosdata/SpreadsheetExport.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package models.sosdata
+</span>21 <span style=''>
+</span>22 <span style=''>import java.io.File
+</span>23 <span style=''>import java.time.format.DateTimeFormatter
+</span>24 <span style=''>import java.time.{OffsetDateTime, ZoneId}
+</span>25 <span style=''>import java.util.Date
+</span>26 <span style=''>
+</span>27 <span style=''>import com.norbitltd.spoiwo.model.enums.CellFill
+</span>28 <span style=''>import com.norbitltd.spoiwo.model._
+</span>29 <span style=''>import models.tvp.XmlTvpParser
+</span>30 <span style=''>import org.joda.time.{DateTime, DateTimeZone}
+</span>31 <span style=''>import utils.{ClassnameLogger, GeoDateParserUtils}
+</span>32 <span style=''>
+</span>33 <span style=''>import scala.io.Source
+</span>34 <span style=''>import scala.util.Try
+</span>35 <span style=''>import scala.xml.NodeSeq
+</span>36 <span style=''>
+</span>37 <span style=''>class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
+</span>38 <span style=''>
+</span>39 <span style=''>  lazy val formatter = </span><span style='background: #F0ADAD'>DateTimeFormatter.ISO_OFFSET_DATE_TIME</span><span style=''>
+</span>40 <span style=''>  lazy val xlsxDateStyle = </span><span style='background: #AEF1AE'>CellStyle(dataFormat = CellDataFormat(&quot;m/d/yy&quot;))</span><span style=''>
+</span>41 <span style=''>
+</span>42 <span style=''>  /**
+</span>43 <span style=''>    * damn date parsing everywhere :-)
+</span>44 <span style=''>    *
+</span>45 <span style=''>    * @param str
+</span>46 <span style=''>    * @return
+</span>47 <span style=''>    */
+</span>48 <span style=''>  def parsedDate(str: String): Option[DateTime] = </span><span style='background: #AEF1AE'>Try {
+</span>49 <span style=''></span><span style='background: #AEF1AE'>    val of = OffsetDateTime.parse(str).atZoneSameInstant(ZoneId.of(&quot;UTC&quot;))
+</span>50 <span style=''></span><span style='background: #AEF1AE'>    new DateTime(of.toInstant.toEpochMilli, DateTimeZone.forID(&quot;UTC&quot;))
+</span>51 <span style=''></span><span style='background: #AEF1AE'>  }.toOption</span><span style=''>
+</span>52 <span style=''>
+</span>53 <span style=''>  def millisToHours(millis: Long): Double = {
+</span>54 <span style=''>    // milliseconds -&gt; seconds -&gt; minutes -&gt; hours
+</span>55 <span style=''>    </span><span style='background: #AEF1AE'>millis / 1000 / 60 / 60</span><span style=''>
+</span>56 <span style=''>  }
+</span>57 <span style=''>
+</span>58 <span style=''>  def getSpreadsheetExportFromSosGetObs(xmlText: String, sosCapabilities: SosCapabilities, sosXmlRequest: String): Option[Sheet] = {
+</span>59 <span style=''>
+</span>60 <span style=''>    try {
+</span>61 <span style=''>
+</span>62 <span style=''>      </span><span style='background: #AEF1AE'>val updatedTime = OffsetDateTime.now(ZoneId.of(timeZone))
+</span>63 <span style=''></span><span style='background: #AEF1AE'>
+</span>64 <span style=''></span><span style='background: #AEF1AE'>      val serviceMeta = sosCapabilities.serviceMetadata.map(m =&gt;
+</span>65 <span style=''></span><span style='background: #AEF1AE'>        s&quot;&quot;&quot;${m.providerName.map(a =&gt; s&quot;providerName: $a;&quot;).getOrElse(&quot;&quot;)}
+</span>66 <span style=''></span><span style='background: #AEF1AE'>           |${m.providerSite.map(a =&gt; s&quot;providerSite: $a;&quot;).getOrElse(&quot;&quot;)}
+</span>67 <span style=''></span><span style='background: #AEF1AE'>           |${m.abstrakt.map(a =&gt; s&quot;abstract: $a;&quot;).getOrElse(&quot;&quot;)}
+</span>68 <span style=''></span><span style='background: #AEF1AE'>           |${m.fees.map(a =&gt; s&quot;fees: $a;&quot;).getOrElse(&quot;fees: None mentioned;&quot;)}
+</span>69 <span style=''></span><span style='background: #AEF1AE'>           |${m.accessConstraints.map(a =&gt; s&quot;accessConstraints: $a;&quot;).getOrElse(&quot;accessConstraints: None mentioned;&quot;)}
+</span>70 <span style=''></span><span style='background: #AEF1AE'>           |${m.serviceContactName.map(a =&gt; s&quot;serviceContactName: $a;&quot;).getOrElse(&quot;serviceContactName: None mentioned;&quot;)}
+</span>71 <span style=''></span><span style='background: #AEF1AE'>           |${m.serviceContactEmail.map(a =&gt; s&quot;serviceContactEmail: $a;&quot;).getOrElse(&quot;serviceContactEmail: None mentioned;&quot;)}
+</span>72 <span style=''></span><span style='background: #AEF1AE'>               &quot;&quot;&quot;.stripMargin).getOrElse(&quot;No extra info available&quot;)
+</span>73 <span style=''></span><span style='background: #AEF1AE'>
+</span>74 <span style=''></span><span style='background: #AEF1AE'>      val requestComment =
+</span>75 <span style=''></span><span style='background: #AEF1AE'>        s&quot;&quot;&quot;Following request was issued:
+</span>76 <span style=''></span><span style='background: #AEF1AE'>           |$sosXmlRequest
+</span>77 <span style=''></span><span style='background: #AEF1AE'>           |&quot;&quot;&quot;.stripMargin
+</span>78 <span style=''></span><span style='background: #AEF1AE'>
+</span>79 <span style=''></span><span style='background: #AEF1AE'>      // xml.Utility.escape() ?
+</span>80 <span style=''></span><span style='background: #AEF1AE'>      val description =
+</span>81 <span style=''></span><span style='background: #AEF1AE'>        s&quot;&quot;&quot;Sac Gw Hub WaterML2.0 export:
+</span>82 <span style=''></span><span style='background: #AEF1AE'>           |title: ${sosCapabilities.title},
+</span>83 <span style=''></span><span style='background: #AEF1AE'>           |from service: ${sosCapabilities.sosUrl},
+</span>84 <span style=''></span><span style='background: #AEF1AE'>           |$serviceMeta
+</span>85 <span style=''></span><span style='background: #AEF1AE'>           |$requestComment
+</span>86 <span style=''></span><span style='background: #AEF1AE'>              &quot;&quot;&quot;.stripMargin
+</span>87 <span style=''></span><span style='background: #AEF1AE'>
+</span>88 <span style=''></span><span style='background: #AEF1AE'>
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      val tvp = new XmlTvpParser().parseOm2Measurements(Source.fromString(xmlText))
+</span>90 <span style=''></span><span style='background: #AEF1AE'>      val headerStyle = CellStyle(fillPattern = CellFill.Solid, fillForegroundColor = Color.AquaMarine, font = Font(bold = true))
+</span>91 <span style=''></span><span style='background: #AEF1AE'>
+</span>92 <span style=''></span><span style='background: #AEF1AE'>      val headerRow = Row(style = headerStyle).withCellValues(&quot;date&quot;, &quot;time&quot;, &quot;act. TZ offset&quot;, &quot;value&quot;, &quot;unit&quot;, &quot;feature id&quot;, &quot;observedProperty id&quot;, &quot;procedure id&quot;)
+</span>93 <span style=''></span><span style='background: #AEF1AE'>
+</span>94 <span style=''></span><span style='background: #AEF1AE'>      val dataRows = tvp.map { t =&gt;
+</span>95 <span style=''></span><span style='background: #AEF1AE'>        Row().withCells(
+</span>96 <span style=''></span><span style='background: #AEF1AE'>          parsedDate(t.datetime).map(d =&gt; Cell(d, style = xlsxDateStyle)).getOrElse(Cell.Empty),
+</span>97 <span style=''></span><span style='background: #AEF1AE'>          parsedDate(t.datetime).map(d =&gt; Cell(s&quot;${d.toString(&quot;hh:mm:ss&quot;)}&quot;)).getOrElse(Cell.Empty),
+</span>98 <span style=''></span><span style='background: #AEF1AE'>          parsedDate(t.datetime).map(d =&gt; Cell(millisToHours(DateTimeZone.getDefault.toTimeZone.getOffset(d.getMillis)), style = CellStyle(dataFormat = CellDataFormat(&quot;0.00&quot;)))).getOrElse(Cell.Empty),
+</span>99 <span style=''></span><span style='background: #AEF1AE'>          Cell(t.measValue, style = CellStyle(dataFormat = CellDataFormat(&quot;0.00&quot;))),
+</span>100 <span style=''></span><span style='background: #AEF1AE'>          Cell(t.measUnit),
+</span>101 <span style=''></span><span style='background: #AEF1AE'>          Cell(t.foiId),
+</span>102 <span style=''></span><span style='background: #AEF1AE'>          Cell(t.obsProp),
+</span>103 <span style=''></span><span style='background: #AEF1AE'>          Cell(t.procedure))
+</span>104 <span style=''></span><span style='background: #AEF1AE'>      }
+</span>105 <span style=''></span><span style='background: #AEF1AE'>
+</span>106 <span style=''></span><span style='background: #AEF1AE'>      logger.debug(</span><span style='background: #F0ADAD'>s&quot;${tvp.length} points in tvp&quot;</span><span style='background: #AEF1AE'>)
+</span>107 <span style=''></span><span style='background: #AEF1AE'>
+</span>108 <span style=''></span><span style='background: #AEF1AE'>      val exportWorkbook = Sheet(name = &quot;data&quot;).addRow(headerRow).addRows(dataRows)
+</span>109 <span style=''></span><span style='background: #AEF1AE'>        .withColumns(
+</span>110 <span style=''></span><span style='background: #AEF1AE'>          Column(index = 0, style = CellStyle(font = Font(bold = true)), autoSized = true)
+</span>111 <span style=''></span><span style='background: #AEF1AE'>        )
+</span>112 <span style=''></span><span style='background: #AEF1AE'>
+</span>113 <span style=''></span><span style='background: #AEF1AE'>      // return the workbook before saving
+</span>114 <span style=''></span><span style='background: #AEF1AE'>      Some(exportWorkbook)</span><span style=''>
+</span>115 <span style=''>
+</span>116 <span style=''>    } catch {
+</span>117 <span style=''>      //FIXME SR replace by specific exceptions
+</span>118 <span style=''>      case e: Exception =&gt; </span><span style='background: #F0ADAD'>logger.warn(f&quot;Exception on parsing GetObservationResponse: ${e.getMessage}&quot;, e)</span><span style=''>
+</span>119 <span style=''>        </span><span style='background: #F0ADAD'>None</span><span style=''>
+</span>120 <span style=''>    }
+</span>121 <span style=''>  }
+</span>122 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          39
+        </td>
+        <td>
+          8129
+        </td>
+        <td>
+          1407
+          -
+          1445
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8140
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8131
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8134
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8143
+        </td>
+        <td>
+          1473
+          -
+          1521
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply(x$2, x$1, x$3, x$4, x$5, x$6, x$7, x$8, x$9, x$10, x$11, x$12, x$13)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8133
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8142
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8136
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8130
+        </td>
+        <td>
+          1496
+          -
+          1520
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellDataFormat.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;m/d/yy&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8139
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8141
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8132
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8135
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8138
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          40
+        </td>
+        <td>
+          8137
+        </td>
+        <td>
+          1473
+          -
+          1473
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          8145
+        </td>
+        <td>
+          1681
+          -
+          1742
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.OffsetDateTime.atZoneSameInstant
+        </td>
+        <td style="background: #AEF1AE">
+          java.time.OffsetDateTime.parse(str).atZoneSameInstant(java.time.ZoneId.of(&quot;UTC&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          8144
+        </td>
+        <td>
+          1725
+          -
+          1741
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #AEF1AE">
+          java.time.ZoneId.of(&quot;UTC&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          8148
+        </td>
+        <td>
+          1747
+          -
+          1813
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.joda.time.DateTime.&lt;init&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          new org.joda.time.DateTime(of.toInstant().toEpochMilli(), org.joda.time.DateTimeZone.forID(&quot;UTC&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          8147
+        </td>
+        <td>
+          1787
+          -
+          1812
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.joda.time.DateTimeZone.forID
+        </td>
+        <td style="background: #AEF1AE">
+          org.joda.time.DateTimeZone.forID(&quot;UTC&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          8146
+        </td>
+        <td>
+          1760
+          -
+          1785
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.Instant.toEpochMilli
+        </td>
+        <td style="background: #AEF1AE">
+          of.toInstant().toEpochMilli()
+        </td>
+      </tr><tr>
+        <td>
+          51
+        </td>
+        <td>
+          8149
+        </td>
+        <td>
+          1662
+          -
+          1826
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.util.Try.toOption
+        </td>
+        <td style="background: #AEF1AE">
+          scala.util.Try.apply[org.joda.time.DateTime]({
+  val of: java.time.ZonedDateTime = java.time.OffsetDateTime.parse(str).atZoneSameInstant(java.time.ZoneId.of(&quot;UTC&quot;));
+  new org.joda.time.DateTime(of.toInstant().toEpochMilli(), org.joda.time.DateTimeZone.forID(&quot;UTC&quot;))
+}).toOption
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          8152
+        </td>
+        <td>
+          1950
+          -
+          1952
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          60
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          8151
+        </td>
+        <td>
+          1945
+          -
+          1947
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          60
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          8150
+        </td>
+        <td>
+          1938
+          -
+          1942
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          1000
+        </td>
+      </tr><tr>
+        <td>
+          55
+        </td>
+        <td>
+          8153
+        </td>
+        <td>
+          1929
+          -
+          1952
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Long.toDouble
+        </td>
+        <td style="background: #AEF1AE">
+          millis./(1000)./(60)./(60).toDouble
+        </td>
+      </tr><tr>
+        <td>
+          60
+        </td>
+        <td>
+          8335
+        </td>
+        <td>
+          2109
+          -
+          4746
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  val updatedTime: java.time.OffsetDateTime = java.time.OffsetDateTime.now(java.time.ZoneId.of(SpreadsheetExport.this.timeZone));
+  val serviceMeta: String = sosCapabilities.serviceMetadata.map[String](((m: models.sosdata.SosServiceMetadata) =&gt; scala.this.Predef.augmentString(scala.StringContext.apply(&quot;&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n               &quot;).s(m.providerName.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;providerName: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.providerSite.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;providerSite: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.abstrakt.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;abstract: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.fees.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;fees: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;fees: None mentioned;&quot;), m.accessConstraints.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;accessConstraints: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;accessConstraints: None mentioned;&quot;), m.serviceContactName.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;serviceContactName: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;serviceContactName: None mentioned;&quot;), m.serviceContactEmail.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;serviceContactEmail: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;serviceContactEmail: None mentioned;&quot;))).stripMargin)).getOrElse[String](&quot;No extra info available&quot;);
+  val requestComment: String = scala.this.Predef.augmentString(scala.StringContext.apply(&quot;Following request was issued:\n           |&quot;, &quot;\n           |&quot;).s(sosXmlRequest)).stripMargin;
+  val description: String = scala.this.Predef.augmentString(scala.StringContext.apply(&quot;Sac Gw Hub WaterML2.0 export:\n           |title: &quot;, &quot;,\n           |from service: &quot;, &quot;,\n           |&quot;, &quot;\n           |&quot;, &quot;\n              &quot;).s(sosCapabilities.title, sosCapabilities.sosUrl, serviceMeta, requestComment)).stripMargin;
+  val tvp: Seq[models.tvp.TimeValuePair] = new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(xmlText));
+  val headerStyle: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$25: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.enums.CellFill.Solid;
+    &lt;artifact&gt; val x$26: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.Color.AquaMarine;
+    &lt;artifact&gt; val x$27: com.norbitltd.spoiwo.model.Font = {
+      &lt;artifact&gt; val x$14: Boolean = scala.this.Predef.boolean2Boolean(true);
+      &lt;artifact&gt; val x$15: com.norbitltd.spoiwo.model.Height = com.norbitltd.spoiwo.model.Font.apply$default$1;
+      &lt;artifact&gt; val x$16: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$3;
+      &lt;artifact&gt; val x$17: com.norbitltd.spoiwo.model.enums.Charset = com.norbitltd.spoiwo.model.Font.apply$default$4;
+      &lt;artifact&gt; val x$18: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.Font.apply$default$5;
+      &lt;artifact&gt; val x$19: com.norbitltd.spoiwo.model.enums.FontFamily = com.norbitltd.spoiwo.model.Font.apply$default$6;
+      &lt;artifact&gt; val x$20: com.norbitltd.spoiwo.model.enums.FontScheme = com.norbitltd.spoiwo.model.Font.apply$default$7;
+      &lt;artifact&gt; val x$21: String = com.norbitltd.spoiwo.model.Font.apply$default$8;
+      &lt;artifact&gt; val x$22: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$9;
+      &lt;artifact&gt; val x$23: com.norbitltd.spoiwo.model.enums.TypeOffset = com.norbitltd.spoiwo.model.Font.apply$default$10;
+      &lt;artifact&gt; val x$24: com.norbitltd.spoiwo.model.enums.Underline = com.norbitltd.spoiwo.model.Font.apply$default$11;
+      com.norbitltd.spoiwo.model.Font.apply(x$15, x$14, x$16, x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$24)
+    };
+    &lt;artifact&gt; val x$28: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$29: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellStyle.apply$default$2;
+    &lt;artifact&gt; val x$30: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$31: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$32: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$33: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$34: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$35: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$36: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$37: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$28, x$29, x$27, x$25, x$26, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37)
+  };
+  val headerRow: com.norbitltd.spoiwo.model.Row = {
+  &lt;artifact&gt; val x$38: com.norbitltd.spoiwo.model.CellStyle = headerStyle;
+  &lt;artifact&gt; val x$39: Iterable[com.norbitltd.spoiwo.model.Cell] @scala.reflect.internal.annotations.uncheckedBounds = com.norbitltd.spoiwo.model.Row.apply$default$1;
+  &lt;artifact&gt; val x$40: com.norbitltd.spoiwo.model.Height = com.norbitltd.spoiwo.model.Row.apply$default$2;
+  &lt;artifact&gt; val x$41: Integer = com.norbitltd.spoiwo.model.Row.apply$default$3;
+  &lt;artifact&gt; val x$42: Boolean = com.norbitltd.spoiwo.model.Row.apply$default$5;
+  com.norbitltd.spoiwo.model.Row.apply(x$39, x$40, x$41, x$38, x$42)
+}.withCellValues(&quot;date&quot;, &quot;time&quot;, &quot;act. TZ offset&quot;, &quot;value&quot;, &quot;unit&quot;, &quot;feature id&quot;, &quot;observedProperty id&quot;, &quot;procedure id&quot;);
+  val dataRows: Seq[com.norbitltd.spoiwo.model.Row] = tvp.map[com.norbitltd.spoiwo.model.Row, Seq[com.norbitltd.spoiwo.model.Row]](((t: models.tvp.TimeValuePair) =&gt; com.norbitltd.spoiwo.model.Row.apply().withCells(SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$43: org.joda.time.DateTime = d;
+  &lt;artifact&gt; val x$44: com.norbitltd.spoiwo.model.CellStyle = SpreadsheetExport.this.xlsxDateStyle;
+  &lt;artifact&gt; val x$45: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$46: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[org.joda.time.DateTime](x$43, x$45, x$44, x$46)(model.this.CellValueType.DateTimeWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; com.norbitltd.spoiwo.model.Cell.apply[String](scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;)), com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$60: Double = SpreadsheetExport.this.millisToHours(org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong);
+  &lt;artifact&gt; val x$61: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$47: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$48: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$49: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$50: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$51: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$52: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$53: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$54: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$55: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$56: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$57: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$58: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$59: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$48, x$47, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$57, x$58, x$59)
+  };
+  &lt;artifact&gt; val x$62: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$63: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[Double](x$60, x$62, x$61, x$63)(model.this.CellValueType.DoubleWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), {
+    &lt;artifact&gt; val x$77: String = t.measValue;
+    &lt;artifact&gt; val x$78: com.norbitltd.spoiwo.model.CellStyle = {
+      &lt;artifact&gt; val x$64: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+      &lt;artifact&gt; val x$65: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+      &lt;artifact&gt; val x$66: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+      &lt;artifact&gt; val x$67: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+      &lt;artifact&gt; val x$68: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+      &lt;artifact&gt; val x$69: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+      &lt;artifact&gt; val x$70: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+      &lt;artifact&gt; val x$71: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+      &lt;artifact&gt; val x$72: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+      &lt;artifact&gt; val x$73: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+      &lt;artifact&gt; val x$74: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+      &lt;artifact&gt; val x$75: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+      &lt;artifact&gt; val x$76: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+      com.norbitltd.spoiwo.model.CellStyle.apply(x$65, x$64, x$66, x$67, x$68, x$69, x$70, x$71, x$72, x$73, x$74, x$75, x$76)
+    };
+    &lt;artifact&gt; val x$79: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+    &lt;artifact&gt; val x$80: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+    com.norbitltd.spoiwo.model.Cell.apply[String](x$77, x$79, x$78, x$80)(model.this.CellValueType.StringWitness)
+  }, com.norbitltd.spoiwo.model.Cell.apply[String](t.measUnit, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.foiId, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.obsProp, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.procedure, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))))(collection.this.Seq.canBuildFrom[com.norbitltd.spoiwo.model.Row]);
+  SpreadsheetExport.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot; points in tvp&quot;).s(tvp.length));
+  val exportWorkbook: com.norbitltd.spoiwo.model.Sheet = com.norbitltd.spoiwo.model.Sheet.apply(&quot;data&quot;, com.norbitltd.spoiwo.model.Sheet.apply$default$2, com.norbitltd.spoiwo.model.Sheet.apply$default$3, com.norbitltd.spoiwo.model.Sheet.apply$default$4, com.norbitltd.spoiwo.model.Sheet.apply$default$5, com.norbitltd.spoiwo.model.Sheet.apply$default$6, com.norbitltd.spoiwo.model.Sheet.apply$default$7, com.norbitltd.spoiwo.model.Sheet.apply$default$8, com.norbitltd.spoiwo.model.Sheet.apply$default$9, com.norbitltd.spoiwo.model.Sheet.apply$default$10, com.norbitltd.spoiwo.model.Sheet.apply$default$11, com.norbitltd.spoiwo.model.Sheet.apply$default$12, com.norbitltd.spoiwo.model.Sheet.apply$default$13, com.norbitltd.spoiwo.model.Sheet.apply$default$14, com.norbitltd.spoiwo.model.Sheet.apply$default$15).addRow(headerRow).addRows(dataRows).withColumns({
+    &lt;artifact&gt; val x$105: Integer = scala.this.Predef.int2Integer(0);
+    &lt;artifact&gt; val x$106: com.norbitltd.spoiwo.model.CellStyle = {
+      &lt;artifact&gt; val x$92: com.norbitltd.spoiwo.model.Font = {
+        &lt;artifact&gt; val x$81: Boolean = scala.this.Predef.boolean2Boolean(true);
+        &lt;artifact&gt; val x$82: com.norbitltd.spoiwo.model.Height = com.norbitltd.spoiwo.model.Font.apply$default$1;
+        &lt;artifact&gt; val x$83: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$3;
+        &lt;artifact&gt; val x$84: com.norbitltd.spoiwo.model.enums.Charset = com.norbitltd.spoiwo.model.Font.apply$default$4;
+        &lt;artifact&gt; val x$85: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.Font.apply$default$5;
+        &lt;artifact&gt; val x$86: com.norbitltd.spoiwo.model.enums.FontFamily = com.norbitltd.spoiwo.model.Font.apply$default$6;
+        &lt;artifact&gt; val x$87: com.norbitltd.spoiwo.model.enums.FontScheme = com.norbitltd.spoiwo.model.Font.apply$default$7;
+        &lt;artifact&gt; val x$88: String = com.norbitltd.spoiwo.model.Font.apply$default$8;
+        &lt;artifact&gt; val x$89: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$9;
+        &lt;artifact&gt; val x$90: com.norbitltd.spoiwo.model.enums.TypeOffset = com.norbitltd.spoiwo.model.Font.apply$default$10;
+        &lt;artifact&gt; val x$91: com.norbitltd.spoiwo.model.enums.Underline = com.norbitltd.spoiwo.model.Font.apply$default$11;
+        com.norbitltd.spoiwo.model.Font.apply(x$82, x$81, x$83, x$84, x$85, x$86, x$87, x$88, x$89, x$90, x$91)
+      };
+      &lt;artifact&gt; val x$93: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+      &lt;artifact&gt; val x$94: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellStyle.apply$default$2;
+      &lt;artifact&gt; val x$95: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+      &lt;artifact&gt; val x$96: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+      &lt;artifact&gt; val x$97: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+      &lt;artifact&gt; val x$98: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+      &lt;artifact&gt; val x$99: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+      &lt;artifact&gt; val x$100: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+      &lt;artifact&gt; val x$101: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+      &lt;artifact&gt; val x$102: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+      &lt;artifact&gt; val x$103: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+      &lt;artifact&gt; val x$104: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+      com.norbitltd.spoiwo.model.CellStyle.apply(x$93, x$94, x$92, x$95, x$96, x$97, x$98, x$99, x$100, x$101, x$102, x$103, x$104)
+    };
+    &lt;artifact&gt; val x$107: Boolean = scala.this.Predef.boolean2Boolean(true);
+    &lt;artifact&gt; val x$108: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$3;
+    &lt;artifact&gt; val x$109: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$4;
+    &lt;artifact&gt; val x$110: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$5;
+    &lt;artifact&gt; val x$111: com.norbitltd.spoiwo.model.Width = com.norbitltd.spoiwo.model.Column.apply$default$7;
+    com.norbitltd.spoiwo.model.Column.apply(x$105, x$107, x$108, x$109, x$110, x$106, x$111)
+  });
+  scala.Some.apply[com.norbitltd.spoiwo.model.Sheet](exportWorkbook)
+}
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8154
+        </td>
+        <td>
+          2156
+          -
+          2164
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.SpreadsheetExport.timeZone
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.timeZone
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8156
+        </td>
+        <td>
+          2127
+          -
+          2166
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.OffsetDateTime.now
+        </td>
+        <td style="background: #AEF1AE">
+          java.time.OffsetDateTime.now(java.time.ZoneId.of(SpreadsheetExport.this.timeZone))
+        </td>
+      </tr><tr>
+        <td>
+          62
+        </td>
+        <td>
+          8155
+        </td>
+        <td>
+          2146
+          -
+          2165
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZoneId.of
+        </td>
+        <td style="background: #AEF1AE">
+          java.time.ZoneId.of(SpreadsheetExport.this.timeZone)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          8157
+        </td>
+        <td>
+          2192
+          -
+          2964
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          sosCapabilities.serviceMetadata.map[String](((m: models.sosdata.SosServiceMetadata) =&gt; scala.this.Predef.augmentString(scala.StringContext.apply(&quot;&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n           |&quot;, &quot;\n               &quot;).s(m.providerName.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;providerName: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.providerSite.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;providerSite: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.abstrakt.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;abstract: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;&quot;), m.fees.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;fees: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;fees: None mentioned;&quot;), m.accessConstraints.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;accessConstraints: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;accessConstraints: None mentioned;&quot;), m.serviceContactName.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;serviceContactName: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;serviceContactName: None mentioned;&quot;), m.serviceContactEmail.map[String](((a: String) =&gt; scala.StringContext.apply(&quot;serviceContactEmail: &quot;, &quot;;&quot;).s(a))).getOrElse[String](&quot;serviceContactEmail: None mentioned;&quot;))).stripMargin)).getOrElse[String](&quot;No extra info available&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          75
+        </td>
+        <td>
+          8158
+        </td>
+        <td>
+          3001
+          -
+          3077
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;Following request was issued:\n           |&quot;, &quot;\n           |&quot;).s(sosXmlRequest)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          8159
+        </td>
+        <td>
+          3001
+          -
+          3089
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(scala.StringContext.apply(&quot;Following request was issued:\n           |&quot;, &quot;\n           |&quot;).s(sosXmlRequest)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          8167
+        </td>
+        <td>
+          3155
+          -
+          3357
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;Sac Gw Hub WaterML2.0 export:\n           |title: &quot;, &quot;,\n           |from service: &quot;, &quot;,\n           |&quot;, &quot;\n           |&quot;, &quot;\n              &quot;).s(sosCapabilities.title, sosCapabilities.sosUrl, serviceMeta, requestComment)
+        </td>
+      </tr><tr>
+        <td>
+          81
+        </td>
+        <td>
+          8160
+        </td>
+        <td>
+          3159
+          -
+          3209
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;Sac Gw Hub WaterML2.0 export:\n           |title: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          8161
+        </td>
+        <td>
+          3232
+          -
+          3261
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;,\n           |from service: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          82
+        </td>
+        <td>
+          8165
+        </td>
+        <td>
+          3210
+          -
+          3231
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.SosCapabilities.title
+        </td>
+        <td style="background: #AEF1AE">
+          sosCapabilities.title
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          8166
+        </td>
+        <td>
+          3262
+          -
+          3284
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.sosdata.SosCapabilities.sosUrl
+        </td>
+        <td style="background: #AEF1AE">
+          sosCapabilities.sosUrl
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          8162
+        </td>
+        <td>
+          3285
+          -
+          3300
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;,\n           |&quot;
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          8163
+        </td>
+        <td>
+          3311
+          -
+          3325
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;\n           |&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          8164
+        </td>
+        <td>
+          3339
+          -
+          3357
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;\n              &quot;
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          8168
+        </td>
+        <td>
+          3155
+          -
+          3369
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.immutable.StringLike.stripMargin
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.augmentString(scala.StringContext.apply(&quot;Sac Gw Hub WaterML2.0 export:\n           |title: &quot;, &quot;,\n           |from service: &quot;, &quot;,\n           |&quot;, &quot;\n           |&quot;, &quot;\n              &quot;).s(sosCapabilities.title, sosCapabilities.sosUrl, serviceMeta, requestComment)).stripMargin
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8169
+        </td>
+        <td>
+          3428
+          -
+          3454
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.io.Source.fromString
+        </td>
+        <td style="background: #AEF1AE">
+          scala.io.Source.fromString(xmlText)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          8170
+        </td>
+        <td>
+          3388
+          -
+          3455
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.tvp.XmlTvpParser.parseOm2Measurements
+        </td>
+        <td style="background: #AEF1AE">
+          new models.tvp.XmlTvpParser().parseOm2Measurements(scala.io.Source.fromString(xmlText))
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8185
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8176
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8193
+        </td>
+        <td>
+          3480
+          -
+          3585
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply(x$28, x$29, x$27, x$25, x$26, x$30, x$31, x$32, x$33, x$34, x$35, x$36, x$37)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8184
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$2
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8187
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8178
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8172
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8190
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8181
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8175
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8192
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8174
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8183
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8177
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8186
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8180
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8189
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8171
+        </td>
+        <td>
+          3579
+          -
+          3583
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scala.Predef.boolean2Boolean
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.boolean2Boolean(true)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8179
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8188
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8191
+        </td>
+        <td>
+          3480
+          -
+          3480
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8173
+        </td>
+        <td>
+          3567
+          -
+          3567
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          8182
+        </td>
+        <td>
+          3567
+          -
+          3584
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply(x$15, x$14, x$16, x$17, x$18, x$19, x$20, x$21, x$22, x$23, x$24)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          8194
+        </td>
+        <td>
+          3609
+          -
+          3752
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Row.withCellValues
+        </td>
+        <td style="background: #AEF1AE">
+          {
+  &lt;artifact&gt; val x$38: com.norbitltd.spoiwo.model.CellStyle = headerStyle;
+  &lt;artifact&gt; val x$39: Iterable[com.norbitltd.spoiwo.model.Cell] @scala.reflect.internal.annotations.uncheckedBounds = com.norbitltd.spoiwo.model.Row.apply$default$1;
+  &lt;artifact&gt; val x$40: com.norbitltd.spoiwo.model.Height = com.norbitltd.spoiwo.model.Row.apply$default$2;
+  &lt;artifact&gt; val x$41: Integer = com.norbitltd.spoiwo.model.Row.apply$default$3;
+  &lt;artifact&gt; val x$42: Boolean = com.norbitltd.spoiwo.model.Row.apply$default$5;
+  com.norbitltd.spoiwo.model.Row.apply(x$39, x$40, x$41, x$38, x$42)
+}.withCellValues(&quot;date&quot;, &quot;time&quot;, &quot;act. TZ offset&quot;, &quot;value&quot;, &quot;unit&quot;, &quot;feature id&quot;, &quot;observedProperty id&quot;, &quot;procedure id&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          8280
+        </td>
+        <td>
+          3775
+          -
+          4415
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #AEF1AE">
+          tvp.map[com.norbitltd.spoiwo.model.Row, Seq[com.norbitltd.spoiwo.model.Row]](((t: models.tvp.TimeValuePair) =&gt; com.norbitltd.spoiwo.model.Row.apply().withCells(SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$43: org.joda.time.DateTime = d;
+  &lt;artifact&gt; val x$44: com.norbitltd.spoiwo.model.CellStyle = SpreadsheetExport.this.xlsxDateStyle;
+  &lt;artifact&gt; val x$45: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$46: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[org.joda.time.DateTime](x$43, x$45, x$44, x$46)(model.this.CellValueType.DateTimeWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; com.norbitltd.spoiwo.model.Cell.apply[String](scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;)), com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$60: Double = SpreadsheetExport.this.millisToHours(org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong);
+  &lt;artifact&gt; val x$61: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$47: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$48: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$49: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$50: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$51: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$52: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$53: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$54: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$55: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$56: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$57: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$58: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$59: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$48, x$47, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$57, x$58, x$59)
+  };
+  &lt;artifact&gt; val x$62: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$63: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[Double](x$60, x$62, x$61, x$63)(model.this.CellValueType.DoubleWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), {
+  &lt;artifact&gt; val x$77: String = t.measValue;
+  &lt;artifact&gt; val x$78: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$64: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$65: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$66: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$67: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$68: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$69: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$70: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$71: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$72: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$73: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$74: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$75: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$76: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$65, x$64, x$66, x$67, x$68, x$69, x$70, x$71, x$72, x$73, x$74, x$75, x$76)
+  };
+  &lt;artifact&gt; val x$79: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$80: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[String](x$77, x$79, x$78, x$80)(model.this.CellValueType.StringWitness)
+}, com.norbitltd.spoiwo.model.Cell.apply[String](t.measUnit, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.foiId, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.obsProp, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.procedure, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))))(collection.this.Seq.canBuildFrom[com.norbitltd.spoiwo.model.Row])
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          8279
+        </td>
+        <td>
+          3783
+          -
+          3783
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #AEF1AE">
+          collection.this.Seq.canBuildFrom[com.norbitltd.spoiwo.model.Row]
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          8278
+        </td>
+        <td>
+          3798
+          -
+          4407
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Row.withCells
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Row.apply().withCells(SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$43: org.joda.time.DateTime = d;
+  &lt;artifact&gt; val x$44: com.norbitltd.spoiwo.model.CellStyle = SpreadsheetExport.this.xlsxDateStyle;
+  &lt;artifact&gt; val x$45: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$46: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[org.joda.time.DateTime](x$43, x$45, x$44, x$46)(model.this.CellValueType.DateTimeWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; com.norbitltd.spoiwo.model.Cell.apply[String](scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;)), com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$60: Double = SpreadsheetExport.this.millisToHours(org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong);
+  &lt;artifact&gt; val x$61: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$47: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$48: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$49: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$50: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$51: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$52: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$53: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$54: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$55: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$56: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$57: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$58: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$59: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$48, x$47, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$57, x$58, x$59)
+  };
+  &lt;artifact&gt; val x$62: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$63: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[Double](x$60, x$62, x$61, x$63)(model.this.CellValueType.DoubleWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty), {
+  &lt;artifact&gt; val x$77: String = t.measValue;
+  &lt;artifact&gt; val x$78: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$64: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$65: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$66: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$67: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$68: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$69: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$70: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$71: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$72: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$73: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$74: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$75: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$76: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$65, x$64, x$66, x$67, x$68, x$69, x$70, x$71, x$72, x$73, x$74, x$75, x$76)
+  };
+  &lt;artifact&gt; val x$79: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$80: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[String](x$77, x$79, x$78, x$80)(model.this.CellValueType.StringWitness)
+}, com.norbitltd.spoiwo.model.Cell.apply[String](t.measUnit, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.foiId, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.obsProp, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness), com.norbitltd.spoiwo.model.Cell.apply[String](t.procedure, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8196
+        </td>
+        <td>
+          3857
+          -
+          3857
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8199
+        </td>
+        <td>
+          3857
+          -
+          3887
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[org.joda.time.DateTime](x$43, x$45, x$44, x$46)(model.this.CellValueType.DateTimeWitness)
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8195
+        </td>
+        <td>
+          3836
+          -
+          3846
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.datetime
+        </td>
+        <td style="background: #AEF1AE">
+          t.datetime
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8198
+        </td>
+        <td>
+          3861
+          -
+          3861
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.DateTimeWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.DateTimeWitness
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8197
+        </td>
+        <td>
+          3857
+          -
+          3857
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          8200
+        </td>
+        <td>
+          3825
+          -
+          3910
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$43: org.joda.time.DateTime = d;
+  &lt;artifact&gt; val x$44: com.norbitltd.spoiwo.model.CellStyle = SpreadsheetExport.this.xlsxDateStyle;
+  &lt;artifact&gt; val x$45: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$46: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[org.joda.time.DateTime](x$43, x$45, x$44, x$46)(model.this.CellValueType.DateTimeWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8203
+        </td>
+        <td>
+          3986
+          -
+          3987
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8202
+        </td>
+        <td>
+          3961
+          -
+          3962
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8211
+        </td>
+        <td>
+          3922
+          -
+          4011
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; com.norbitltd.spoiwo.model.Cell.apply[String](scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;)), com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness))).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8205
+        </td>
+        <td>
+          3959
+          -
+          3987
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #AEF1AE">
+          scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8208
+        </td>
+        <td>
+          3954
+          -
+          3954
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8207
+        </td>
+        <td>
+          3954
+          -
+          3954
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8201
+        </td>
+        <td>
+          3933
+          -
+          3943
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.datetime
+        </td>
+        <td style="background: #AEF1AE">
+          t.datetime
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8210
+        </td>
+        <td>
+          3954
+          -
+          3988
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](scala.StringContext.apply(&quot;&quot;, &quot;&quot;).s(d.toString(&quot;hh:mm:ss&quot;)), com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8204
+        </td>
+        <td>
+          3963
+          -
+          3985
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.joda.time.base.AbstractDateTime.toString
+        </td>
+        <td style="background: #AEF1AE">
+          d.toString(&quot;hh:mm:ss&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8206
+        </td>
+        <td>
+          3954
+          -
+          3954
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          8209
+        </td>
+        <td>
+          3958
+          -
+          3958
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8221
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8212
+        </td>
+        <td>
+          4034
+          -
+          4044
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.datetime
+        </td>
+        <td style="background: #AEF1AE">
+          t.datetime
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8229
+        </td>
+        <td>
+          4142
+          -
+          4188
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply(x$48, x$47, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$57, x$58, x$59)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8220
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8232
+        </td>
+        <td>
+          4059
+          -
+          4059
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.DoubleWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.DoubleWitness
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8214
+        </td>
+        <td>
+          4074
+          -
+          4131
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Int.toLong
+        </td>
+        <td style="background: #AEF1AE">
+          org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8223
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8226
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8217
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8234
+        </td>
+        <td>
+          4023
+          -
+          4212
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.parsedDate(t.datetime).map[com.norbitltd.spoiwo.model.Cell](((d: org.joda.time.DateTime) =&gt; {
+  &lt;artifact&gt; val x$60: Double = SpreadsheetExport.this.millisToHours(org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong);
+  &lt;artifact&gt; val x$61: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$47: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;);
+    &lt;artifact&gt; val x$48: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$49: com.norbitltd.spoiwo.model.Font = com.norbitltd.spoiwo.model.CellStyle.apply$default$3;
+    &lt;artifact&gt; val x$50: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$51: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$52: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$53: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$54: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$55: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$56: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$57: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$58: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$59: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$48, x$47, x$49, x$50, x$51, x$52, x$53, x$54, x$55, x$56, x$57, x$58, x$59)
+  };
+  &lt;artifact&gt; val x$62: Integer = com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing];
+  &lt;artifact&gt; val x$63: com.norbitltd.spoiwo.model.enums.CellStyleInheritance = com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing];
+  com.norbitltd.spoiwo.model.Cell.apply[Double](x$60, x$62, x$61, x$63)(model.this.CellValueType.DoubleWitness)
+})).getOrElse[com.norbitltd.spoiwo.model.Cell](com.norbitltd.spoiwo.model.Cell.Empty)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8216
+        </td>
+        <td>
+          4165
+          -
+          4187
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellDataFormat.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8225
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8219
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8228
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8222
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8231
+        </td>
+        <td>
+          4055
+          -
+          4055
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8213
+        </td>
+        <td>
+          4119
+          -
+          4130
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.joda.time.base.BaseDateTime.getMillis
+        </td>
+        <td style="background: #AEF1AE">
+          d.getMillis()
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8230
+        </td>
+        <td>
+          4055
+          -
+          4055
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8224
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8233
+        </td>
+        <td>
+          4055
+          -
+          4189
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[Double](x$60, x$62, x$61, x$63)(model.this.CellValueType.DoubleWitness)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8215
+        </td>
+        <td>
+          4060
+          -
+          4132
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.sosdata.SpreadsheetExport.millisToHours
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.millisToHours(org.joda.time.DateTimeZone.getDefault().toTimeZone().getOffset(d.getMillis()).toLong)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8218
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          8227
+        </td>
+        <td>
+          4142
+          -
+          4142
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8253
+        </td>
+        <td>
+          4224
+          -
+          4297
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](x$77, x$79, x$78, x$80)(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8244
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8247
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8238
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8241
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8250
+        </td>
+        <td>
+          4224
+          -
+          4224
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8235
+        </td>
+        <td>
+          4229
+          -
+          4240
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.measValue
+        </td>
+        <td style="background: #AEF1AE">
+          t.measValue
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8243
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8252
+        </td>
+        <td>
+          4228
+          -
+          4228
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8237
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8246
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8240
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8249
+        </td>
+        <td>
+          4250
+          -
+          4296
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply(x$65, x$64, x$66, x$67, x$68, x$69, x$70, x$71, x$72, x$73, x$74, x$75, x$76)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8239
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8248
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8242
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8251
+        </td>
+        <td>
+          4224
+          -
+          4224
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8236
+        </td>
+        <td>
+          4273
+          -
+          4295
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellDataFormat.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellDataFormat.apply(&quot;0.00&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          8245
+        </td>
+        <td>
+          4250
+          -
+          4250
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8256
+        </td>
+        <td>
+          4309
+          -
+          4309
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8259
+        </td>
+        <td>
+          4309
+          -
+          4325
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](t.measUnit, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8255
+        </td>
+        <td>
+          4309
+          -
+          4309
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8258
+        </td>
+        <td>
+          4313
+          -
+          4313
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8257
+        </td>
+        <td>
+          4309
+          -
+          4309
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          8254
+        </td>
+        <td>
+          4314
+          -
+          4324
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.measUnit
+        </td>
+        <td style="background: #AEF1AE">
+          t.measUnit
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8262
+        </td>
+        <td>
+          4337
+          -
+          4337
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8265
+        </td>
+        <td>
+          4337
+          -
+          4350
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](t.foiId, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8261
+        </td>
+        <td>
+          4337
+          -
+          4337
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8264
+        </td>
+        <td>
+          4341
+          -
+          4341
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8260
+        </td>
+        <td>
+          4342
+          -
+          4349
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.foiId
+        </td>
+        <td style="background: #AEF1AE">
+          t.foiId
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          8263
+        </td>
+        <td>
+          4337
+          -
+          4337
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8271
+        </td>
+        <td>
+          4362
+          -
+          4377
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](t.obsProp, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8268
+        </td>
+        <td>
+          4362
+          -
+          4362
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8267
+        </td>
+        <td>
+          4362
+          -
+          4362
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8270
+        </td>
+        <td>
+          4366
+          -
+          4366
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8266
+        </td>
+        <td>
+          4367
+          -
+          4376
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.obsProp
+        </td>
+        <td style="background: #AEF1AE">
+          t.obsProp
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          8269
+        </td>
+        <td>
+          4362
+          -
+          4362
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8274
+        </td>
+        <td>
+          4389
+          -
+          4389
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8277
+        </td>
+        <td>
+          4389
+          -
+          4406
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply[String](t.procedure, com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$3[Nothing], com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing])(model.this.CellValueType.StringWitness)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8276
+        </td>
+        <td>
+          4393
+          -
+          4393
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellValueType.StringWitness
+        </td>
+        <td style="background: #AEF1AE">
+          model.this.CellValueType.StringWitness
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8273
+        </td>
+        <td>
+          4389
+          -
+          4389
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$2[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8275
+        </td>
+        <td>
+          4389
+          -
+          4389
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Cell.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Cell.apply$default$4[Nothing]
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          8272
+        </td>
+        <td>
+          4394
+          -
+          4405
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.tvp.TimeValuePair.procedure
+        </td>
+        <td style="background: #AEF1AE">
+          t.procedure
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          8283
+        </td>
+        <td>
+          4440
+          -
+          4450
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.collection.SeqLike.length
+        </td>
+        <td style="background: #F0ADAD">
+          tvp.length
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          8285
+        </td>
+        <td>
+          4423
+          -
+          4467
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #AEF1AE">
+          SpreadsheetExport.this.logger.debug(scala.StringContext.apply(&quot;&quot;, &quot; points in tvp&quot;).s(tvp.length))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          8282
+        </td>
+        <td>
+          4451
+          -
+          4466
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; points in tvp&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          8284
+        </td>
+        <td>
+          4436
+          -
+          4466
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot; points in tvp&quot;).s(tvp.length)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          8281
+        </td>
+        <td>
+          4438
+          -
+          4439
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8289
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8298
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8292
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8286
+        </td>
+        <td>
+          4509
+          -
+          4515
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;data&quot;
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8295
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8294
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8288
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8297
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8300
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$15
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$15
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8291
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8290
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8299
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$14
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$14
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8293
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8287
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$2
+        </td>
+      </tr><tr>
+        <td>
+          108
+        </td>
+        <td>
+          8296
+        </td>
+        <td>
+          4496
+          -
+          4496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          8333
+        </td>
+        <td>
+          4496
+          -
+          4675
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Sheet.withColumns
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Sheet.apply(&quot;data&quot;, com.norbitltd.spoiwo.model.Sheet.apply$default$2, com.norbitltd.spoiwo.model.Sheet.apply$default$3, com.norbitltd.spoiwo.model.Sheet.apply$default$4, com.norbitltd.spoiwo.model.Sheet.apply$default$5, com.norbitltd.spoiwo.model.Sheet.apply$default$6, com.norbitltd.spoiwo.model.Sheet.apply$default$7, com.norbitltd.spoiwo.model.Sheet.apply$default$8, com.norbitltd.spoiwo.model.Sheet.apply$default$9, com.norbitltd.spoiwo.model.Sheet.apply$default$10, com.norbitltd.spoiwo.model.Sheet.apply$default$11, com.norbitltd.spoiwo.model.Sheet.apply$default$12, com.norbitltd.spoiwo.model.Sheet.apply$default$13, com.norbitltd.spoiwo.model.Sheet.apply$default$14, com.norbitltd.spoiwo.model.Sheet.apply$default$15).addRow(headerRow).addRows(dataRows).withColumns({
+  &lt;artifact&gt; val x$105: Integer = scala.this.Predef.int2Integer(0);
+  &lt;artifact&gt; val x$106: com.norbitltd.spoiwo.model.CellStyle = {
+    &lt;artifact&gt; val x$92: com.norbitltd.spoiwo.model.Font = {
+      &lt;artifact&gt; val x$81: Boolean = scala.this.Predef.boolean2Boolean(true);
+      &lt;artifact&gt; val x$82: com.norbitltd.spoiwo.model.Height = com.norbitltd.spoiwo.model.Font.apply$default$1;
+      &lt;artifact&gt; val x$83: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$3;
+      &lt;artifact&gt; val x$84: com.norbitltd.spoiwo.model.enums.Charset = com.norbitltd.spoiwo.model.Font.apply$default$4;
+      &lt;artifact&gt; val x$85: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.Font.apply$default$5;
+      &lt;artifact&gt; val x$86: com.norbitltd.spoiwo.model.enums.FontFamily = com.norbitltd.spoiwo.model.Font.apply$default$6;
+      &lt;artifact&gt; val x$87: com.norbitltd.spoiwo.model.enums.FontScheme = com.norbitltd.spoiwo.model.Font.apply$default$7;
+      &lt;artifact&gt; val x$88: String = com.norbitltd.spoiwo.model.Font.apply$default$8;
+      &lt;artifact&gt; val x$89: Boolean = com.norbitltd.spoiwo.model.Font.apply$default$9;
+      &lt;artifact&gt; val x$90: com.norbitltd.spoiwo.model.enums.TypeOffset = com.norbitltd.spoiwo.model.Font.apply$default$10;
+      &lt;artifact&gt; val x$91: com.norbitltd.spoiwo.model.enums.Underline = com.norbitltd.spoiwo.model.Font.apply$default$11;
+      com.norbitltd.spoiwo.model.Font.apply(x$82, x$81, x$83, x$84, x$85, x$86, x$87, x$88, x$89, x$90, x$91)
+    };
+    &lt;artifact&gt; val x$93: com.norbitltd.spoiwo.model.CellBorders = com.norbitltd.spoiwo.model.CellStyle.apply$default$1;
+    &lt;artifact&gt; val x$94: com.norbitltd.spoiwo.model.CellDataFormat = com.norbitltd.spoiwo.model.CellStyle.apply$default$2;
+    &lt;artifact&gt; val x$95: com.norbitltd.spoiwo.model.enums.CellFill = com.norbitltd.spoiwo.model.CellStyle.apply$default$4;
+    &lt;artifact&gt; val x$96: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$5;
+    &lt;artifact&gt; val x$97: com.norbitltd.spoiwo.model.Color = com.norbitltd.spoiwo.model.CellStyle.apply$default$6;
+    &lt;artifact&gt; val x$98: com.norbitltd.spoiwo.model.enums.CellHorizontalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$7;
+    &lt;artifact&gt; val x$99: com.norbitltd.spoiwo.model.enums.CellVerticalAlignment = com.norbitltd.spoiwo.model.CellStyle.apply$default$8;
+    &lt;artifact&gt; val x$100: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$9;
+    &lt;artifact&gt; val x$101: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$10;
+    &lt;artifact&gt; val x$102: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$11;
+    &lt;artifact&gt; val x$103: Integer = com.norbitltd.spoiwo.model.CellStyle.apply$default$12;
+    &lt;artifact&gt; val x$104: Boolean = com.norbitltd.spoiwo.model.CellStyle.apply$default$13;
+    com.norbitltd.spoiwo.model.CellStyle.apply(x$93, x$94, x$92, x$95, x$96, x$97, x$98, x$99, x$100, x$101, x$102, x$103, x$104)
+  };
+  &lt;artifact&gt; val x$107: Boolean = scala.this.Predef.boolean2Boolean(true);
+  &lt;artifact&gt; val x$108: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$3;
+  &lt;artifact&gt; val x$109: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$4;
+  &lt;artifact&gt; val x$110: Boolean = com.norbitltd.spoiwo.model.Column.apply$default$5;
+  &lt;artifact&gt; val x$111: com.norbitltd.spoiwo.model.Width = com.norbitltd.spoiwo.model.Column.apply$default$7;
+  com.norbitltd.spoiwo.model.Column.apply(x$105, x$107, x$108, x$109, x$110, x$106, x$111)
+})
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8331
+        </td>
+        <td>
+          4585
+          -
+          4585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Column.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Column.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8322
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8313
+        </td>
+        <td>
+          4628
+          -
+          4645
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply(x$82, x$81, x$83, x$84, x$85, x$86, x$87, x$88, x$89, x$90, x$91)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8304
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8316
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8325
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$13
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8307
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8328
+        </td>
+        <td>
+          4585
+          -
+          4585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Column.apply$default$3
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Column.apply$default$3
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8319
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8310
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8301
+        </td>
+        <td>
+          4600
+          -
+          4601
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scala.Predef.int2Integer
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.int2Integer(0)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8327
+        </td>
+        <td>
+          4660
+          -
+          4664
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scala.Predef.boolean2Boolean
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.boolean2Boolean(true)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8330
+        </td>
+        <td>
+          4585
+          -
+          4585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Column.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Column.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8303
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8321
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$9
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8312
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8315
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$2
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8324
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$12
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8306
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8318
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$6
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8309
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8326
+        </td>
+        <td>
+          4611
+          -
+          4646
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply(x$93, x$94, x$92, x$95, x$96, x$97, x$98, x$99, x$100, x$101, x$102, x$103, x$104)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8317
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$5
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8308
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$7
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$7
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8329
+        </td>
+        <td>
+          4585
+          -
+          4585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Column.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Column.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8302
+        </td>
+        <td>
+          4640
+          -
+          4644
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          scala.Predef.boolean2Boolean
+        </td>
+        <td style="background: #AEF1AE">
+          scala.this.Predef.boolean2Boolean(true)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8311
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$10
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$10
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8320
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$8
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8323
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$11
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8332
+        </td>
+        <td>
+          4585
+          -
+          4665
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Column.apply
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Column.apply(x$105, x$107, x$108, x$109, x$110, x$106, x$111)
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8305
+        </td>
+        <td>
+          4628
+          -
+          4628
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.Font.apply$default$4
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.Font.apply$default$4
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          8314
+        </td>
+        <td>
+          4611
+          -
+          4611
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+        <td style="background: #AEF1AE">
+          com.norbitltd.spoiwo.model.CellStyle.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          8334
+        </td>
+        <td>
+          4726
+          -
+          4746
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[com.norbitltd.spoiwo.model.Sheet](exportWorkbook)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          8336
+        </td>
+        <td>
+          4837
+          -
+          4916
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #F0ADAD">
+          SpreadsheetExport.this.logger.warn(({
+  val arg$macro$6: Any = e.getMessage();
+  new scala.collection.immutable.StringOps(&quot;Exception on parsing GetObservationResponse: %s&quot;).format(arg$macro$6)
+}: String), e)
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          8337
+        </td>
+        <td>
+          4925
+          -
+          4929
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

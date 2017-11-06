@@ -48,254 +48,255 @@
 </span>24 <span style=''>import java.util.UUID
 </span>25 <span style=''>import javax.inject._
 </span>26 <span style=''>
-</span>27 <span style=''>import controllers.ProfileJs
-</span>28 <span style=''>import models.db.DatabaseSessionHolder
-</span>29 <span style=''>import models.users._
-</span>30 <span style=''>import play.api.Configuration
-</span>31 <span style=''>import play.api.cache.CacheApi
-</span>32 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
-</span>33 <span style=''>
-</span>34 <span style=''>@Singleton
-</span>35 <span style=''>class AdminService @Inject()(dbSession: DatabaseSessionHolder,
-</span>36 <span style=''>                             val passwordHashing: PasswordHashing,
-</span>37 <span style=''>                             cache: CacheApi,
-</span>38 <span style=''>                             configuration: Configuration) extends ClassnameLogger {
-</span>39 <span style=''>
-</span>40 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
-</span>41 <span style=''>
-</span>42 <span style=''>  /**
-</span>43 <span style=''>    * check if email is allowed in configured admin list
-</span>44 <span style=''>    *
-</span>45 <span style=''>    * @param email
-</span>46 <span style=''>    * @return
-</span>47 <span style=''>    */
-</span>48 <span style=''>  def isAdmin(email: String): Boolean = {
-</span>49 <span style=''>    </span><span style='background: #F0ADAD'>configuration.getStringList(&quot;smart.admin.emails&quot;).fold(false)(
-</span>50 <span style=''></span><span style='background: #F0ADAD'>      adminList =&gt; if (adminList.contains(email)) true else false)</span><span style=''>
-</span>51 <span style=''>  }
-</span>52 <span style=''>
-</span>53 <span style=''>  /**
-</span>54 <span style=''>    * list all users, of course (also for admin) must not see password
-</span>55 <span style=''>    *
-</span>56 <span style=''>    * @return
-</span>57 <span style=''>    */
-</span>58 <span style=''>  def getallUsers: Seq[User] = {
-</span>59 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>60 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.getAllUsers
-</span>61 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>62 <span style=''>  }
-</span>63 <span style=''>
-</span>64 <span style=''>  /**
-</span>65 <span style=''>    * list all active sessions
-</span>66 <span style=''>    *
-</span>67 <span style=''>    * @return
-</span>68 <span style=''>    */
-</span>69 <span style=''>  def getActiveSessions(max: Option[Int]): Seq[UserSession] = {
-</span>70 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>71 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
-</span>72 <span style=''></span><span style='background: #F0ADAD'>      UserSession.getAllUserSessions(count)
-</span>73 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>74 <span style=''>  }
-</span>75 <span style=''>
-</span>76 <span style=''>  /**
-</span>77 <span style=''>    * list all active sessions
-</span>78 <span style=''>    *
-</span>79 <span style=''>    * @return
-</span>80 <span style=''>    */
-</span>81 <span style=''>  def queryActiveSessions(token: Option[String], max: Option[Int], email: Option[String]): Seq[UserSession] = {
-</span>82 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection{ implicit connection =&gt;
-</span>83 <span style=''></span><span style='background: #F0ADAD'>
-</span>84 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
-</span>85 <span style=''></span><span style='background: #F0ADAD'>      (token, email) match {
-</span>86 <span style=''></span><span style='background: #F0ADAD'>        case (Some(to), Some(em)) =&gt;
-</span>87 <span style=''></span><span style='background: #F0ADAD'>          val viaToken = UserSession.findUserSessionByToken(to, count).toSeq
-</span>88 <span style=''></span><span style='background: #F0ADAD'>          val viaEmail = UserSession.findUserSessionByEmail(em, count)
-</span>89 <span style=''></span><span style='background: #F0ADAD'>          (viaToken ++ viaEmail).filter(ul =&gt; ul.token.contains(to) &amp;&amp; ul.email.contains(em))
-</span>90 <span style=''></span><span style='background: #F0ADAD'>        case (Some(to), None) =&gt;
-</span>91 <span style=''></span><span style='background: #F0ADAD'>          UserSession.findUserSessionByToken(to, count).toSeq
-</span>92 <span style=''></span><span style='background: #F0ADAD'>        case (None, Some(em)) =&gt;
-</span>93 <span style=''></span><span style='background: #F0ADAD'>          UserSession.findUserSessionByEmail(em, count)
-</span>94 <span style=''></span><span style='background: #F0ADAD'>        case (None, None) =&gt;
-</span>95 <span style=''></span><span style='background: #F0ADAD'>          UserSession.getAllUserSessions(count)
-</span>96 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>97 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>98 <span style=''>  }
-</span>99 <span style=''>
-</span>100 <span style=''>  def blockUnblockUsers(command: String, email: String): Option[User] = {
-</span>101 <span style=''>    val userOpt = </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>102 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(email)
-</span>103 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>104 <span style=''>    </span><span style='background: #F0ADAD'>userOpt.fold[Option[User]]{
-</span>105 <span style=''></span><span style='background: #F0ADAD'>      None
-</span>106 <span style=''></span><span style='background: #F0ADAD'>    } {
-</span>107 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
-</span>108 <span style=''></span><span style='background: #F0ADAD'>        val statusToken = if (command.equalsIgnoreCase(&quot;BLOCK&quot;)) StatusToken.BLOCKED else StatusToken.ACTIVE
-</span>109 <span style=''></span><span style='background: #F0ADAD'>        val updateUser = User(
-</span>110 <span style=''></span><span style='background: #F0ADAD'>          user.email,
-</span>111 <span style=''></span><span style='background: #F0ADAD'>          user.accountSubject,
-</span>112 <span style=''></span><span style='background: #F0ADAD'>          user.firstname,
-</span>113 <span style=''></span><span style='background: #F0ADAD'>          user.lastname,
-</span>114 <span style=''></span><span style='background: #F0ADAD'>          &quot;***&quot;,
-</span>115 <span style=''></span><span style='background: #F0ADAD'>          s&quot;${statusToken.value}:BY-ADMIN&quot;,
-</span>116 <span style=''></span><span style='background: #F0ADAD'>          ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
-</span>117 <span style=''></span><span style='background: #F0ADAD'>
-</span>118 <span style=''></span><span style='background: #F0ADAD'>        // result of Option can be evaluated upstream in controller
-</span>119 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction { implicit connection =&gt;
-</span>120 <span style=''></span><span style='background: #F0ADAD'>          UserDAO.updateNoPass(updateUser)
-</span>121 <span style=''></span><span style='background: #F0ADAD'>        }
-</span>122 <span style=''></span><span style='background: #F0ADAD'>
-</span>123 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>124 <span style=''>  }
-</span>125 <span style=''>
-</span>126 <span style=''>  /**
-</span>127 <span style=''>    * list all files uploaded by users (for admin)
-</span>128 <span style=''>    *
-</span>129 <span style=''>    * @return
-</span>130 <span style=''>    */
-</span>131 <span style=''>  def getallUserFiles: Seq[UserFile] = {
-</span>132 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>133 <span style=''></span><span style='background: #F0ADAD'>      UserFile.getAllUserFiles
-</span>134 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>135 <span style=''>  }
-</span>136 <span style=''>
-</span>137 <span style=''>  /**
-</span>138 <span style=''>    * list all csw meta entries uploaded by users (for admin)
-</span>139 <span style=''>    *
-</span>140 <span style=''>    * @return
-</span>141 <span style=''>    */
-</span>142 <span style=''>  def getallUserMetaRecords: Seq[UserMetaRecord] = {
-</span>143 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>144 <span style=''></span><span style='background: #F0ADAD'>      UserMetaRecord.getAllUserMetaRecords
-</span>145 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>146 <span style=''>  }
-</span>147 <span style=''>
-</span>148 <span style=''>  /**
-</span>149 <span style=''>    * list all file request loggings (for admin)
-</span>150 <span style=''>    *
-</span>151 <span style=''>    * @return
-</span>152 <span style=''>    */
-</span>153 <span style=''>  def getAllUserLinkLoggings(max: Option[Int]): Seq[UserLinkLogging] = {
-</span>154 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
-</span>155 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
-</span>156 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.getAllUserLinkLoggings(count)
-</span>157 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>158 <span style=''>  }
-</span>159 <span style=''>
-</span>160 <span style=''>  /**
-</span>161 <span style=''>    * find file request loggings (for admin)
-</span>162 <span style=''>    *
-</span>163 <span style=''>    * @return
-</span>164 <span style=''>    */
-</span>165 <span style=''>  def queryUserLinkLoggings(link: Option[String], max: Option[Int], email: Option[String]): Seq[UserLinkLogging] = {
-</span>166 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection{ implicit connection =&gt;
-</span>167 <span style=''></span><span style='background: #F0ADAD'>
-</span>168 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
-</span>169 <span style=''></span><span style='background: #F0ADAD'>      (link, email) match {
-</span>170 <span style=''></span><span style='background: #F0ADAD'>        case (Some(li), Some(em)) =&gt;
-</span>171 <span style=''></span><span style='background: #F0ADAD'>          val viaLinks = UserLinkLogging.findUserLinkLoggingsByLink(li, count)
-</span>172 <span style=''></span><span style='background: #F0ADAD'>          val viaEmail = UserLinkLogging.findUserLinkLoggingByEmail(em, count)
-</span>173 <span style=''></span><span style='background: #F0ADAD'>          (viaLinks ++ viaLinks).filter(ul =&gt; ul.link.contains(li) &amp;&amp; ul.email.contains(em))
-</span>174 <span style=''></span><span style='background: #F0ADAD'>        case (Some(li), None) =&gt;
-</span>175 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.findUserLinkLoggingsByLink(li, count)
-</span>176 <span style=''></span><span style='background: #F0ADAD'>        case (None, Some(em)) =&gt;
-</span>177 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.findUserLinkLoggingByEmail(em, count)
-</span>178 <span style=''></span><span style='background: #F0ADAD'>        case (None, None) =&gt;
-</span>179 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.getAllUserLinkLoggings(count)
-</span>180 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>181 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
-</span>182 <span style=''>  }
-</span>183 <span style=''>
-</span>184 <span style=''>  /**
-</span>185 <span style=''>    * The first 5 fuctions handle user groups overall,
-</span>186 <span style=''>    * user groups have users with certain level of right,
-</span>187 <span style=''>    * and related owc contexts with a certain level of visibility and regulation to be edited
-</span>188 <span style=''>    *
-</span>189 <span style=''>    * the second row (3) functions allow access/modification of user rights within a group
-</span>190 <span style=''>    *
-</span>191 <span style=''>    * and third row (3) of functions expose owccontext regultation level
-</span>192 <span style=''>    *
-</span>193 <span style=''>    * However, access is unified via UserGroup object which has cascading awareness of
-</span>194 <span style=''>    * its user rigths and owccontext visibilty dependents
-</span>195 <span style=''>    *
-</span>196 <span style=''>    */
-</span>197 <span style=''>
-</span>198 <span style=''>  def getAllUserGroups: Seq[UserGroup] = {
-</span>199 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>200 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.getAllUserGroups
-</span>201 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>202 <span style=''>  }
-</span>203 <span style=''>
-</span>204 <span style=''>  def findUserGroupsById(uuid: UUID): Option[UserGroup] = {
-</span>205 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>206 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsById(uuid)
-</span>207 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>208 <span style=''>  }
-</span>209 <span style=''>
-</span>210 <span style=''>  def createUserGroup(userGroup: UserGroup): Option[UserGroup] = {
-</span>211 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>212 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.createUserGroup(userGroup: UserGroup)
-</span>213 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>214 <span style=''>  }
-</span>215 <span style=''>
-</span>216 <span style=''>  def updateUserGroup(userGroup: UserGroup): Option[UserGroup] = {
-</span>217 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>218 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.updateUserGroup(userGroup: UserGroup)
-</span>219 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>220 <span style=''>  }
-</span>221 <span style=''>
-</span>222 <span style=''>  def deleteUserGroup(userGroup: UserGroup): Boolean = {
-</span>223 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>224 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.deleteUserGroup(userGroup: UserGroup)
-</span>225 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>226 <span style=''>  }
-</span>227 <span style=''>
-</span>228 <span style=''>  /**
-</span>229 <span style=''>    * access to user rights via userGroupUsersLevels
-</span>230 <span style=''>    *
-</span>231 <span style=''>    */
-</span>232 <span style=''>
-</span>233 <span style=''>  def createUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
-</span>234 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>235 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)
-</span>236 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>237 <span style=''>  }
-</span>238 <span style=''>
-</span>239 <span style=''>  def updateUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
-</span>240 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>241 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.updateUserGroupUsersLevel(userGroupUsersLevel)
-</span>242 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>243 <span style=''>  }
-</span>244 <span style=''>
-</span>245 <span style=''>  def deleteUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Boolean = {
-</span>246 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>247 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)
-</span>248 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>249 <span style=''>  }
-</span>250 <span style=''>
-</span>251 <span style=''>  /**
-</span>252 <span style=''>    * access to user rights via userGroupUsersLevels
-</span>253 <span style=''>    *
-</span>254 <span style=''>    */
-</span>255 <span style=''>
-</span>256 <span style=''>  def createUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
-</span>257 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>258 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.createUserGroupContextsVisibility(userGroupContextsVisibility)
-</span>259 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>260 <span style=''>  }
-</span>261 <span style=''>
-</span>262 <span style=''>  def updateUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
-</span>263 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>264 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.updateUserGroupContextsVisibility(userGroupContextsVisibility)
-</span>265 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>266 <span style=''>  }
-</span>267 <span style=''>
-</span>268 <span style=''>  def deleteUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Boolean = {
-</span>269 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
-</span>270 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)
-</span>271 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
-</span>272 <span style=''>  }
-</span>273 <span style=''>
-</span>274 <span style=''>}
+</span>27 <span style=''>import com.google.cloud.storage.Blob
+</span>28 <span style=''>import controllers.ProfileJs
+</span>29 <span style=''>import models.db.DatabaseSessionHolder
+</span>30 <span style=''>import models.users._
+</span>31 <span style=''>import play.api.Configuration
+</span>32 <span style=''>import play.api.cache.CacheApi
+</span>33 <span style=''>import utils.{ClassnameLogger, PasswordHashing}
+</span>34 <span style=''>
+</span>35 <span style=''>@Singleton
+</span>36 <span style=''>class AdminService @Inject()(dbSession: DatabaseSessionHolder,
+</span>37 <span style=''>                             val passwordHashing: PasswordHashing,
+</span>38 <span style=''>                             cache: CacheApi,
+</span>39 <span style=''>                             configuration: Configuration) extends ClassnameLogger {
+</span>40 <span style=''>
+</span>41 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
+</span>42 <span style=''>
+</span>43 <span style=''>  /**
+</span>44 <span style=''>    * check if email is allowed in configured admin list
+</span>45 <span style=''>    *
+</span>46 <span style=''>    * @param email
+</span>47 <span style=''>    * @return
+</span>48 <span style=''>    */
+</span>49 <span style=''>  def isAdmin(email: String): Boolean = {
+</span>50 <span style=''>    </span><span style='background: #F0ADAD'>configuration.getStringList(&quot;smart.admin.emails&quot;).fold(false)(
+</span>51 <span style=''></span><span style='background: #F0ADAD'>      adminList =&gt; if (adminList.contains(email)) true else false)</span><span style=''>
+</span>52 <span style=''>  }
+</span>53 <span style=''>
+</span>54 <span style=''>  /**
+</span>55 <span style=''>    * list all users, of course (also for admin) must not see password
+</span>56 <span style=''>    *
+</span>57 <span style=''>    * @return
+</span>58 <span style=''>    */
+</span>59 <span style=''>  def getallUsers: Seq[User] = {
+</span>60 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>61 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.getAllUsers
+</span>62 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>63 <span style=''>  }
+</span>64 <span style=''>
+</span>65 <span style=''>  /**
+</span>66 <span style=''>    * list all active sessions
+</span>67 <span style=''>    *
+</span>68 <span style=''>    * @return
+</span>69 <span style=''>    */
+</span>70 <span style=''>  def getActiveSessions(max: Option[Int]): Seq[UserSession] = {
+</span>71 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>72 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
+</span>73 <span style=''></span><span style='background: #F0ADAD'>      UserSession.getAllUserSessions(count)
+</span>74 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>75 <span style=''>  }
+</span>76 <span style=''>
+</span>77 <span style=''>  /**
+</span>78 <span style=''>    * list all active sessions
+</span>79 <span style=''>    *
+</span>80 <span style=''>    * @return
+</span>81 <span style=''>    */
+</span>82 <span style=''>  def queryActiveSessions(token: Option[String], max: Option[Int], email: Option[String]): Seq[UserSession] = {
+</span>83 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection{ implicit connection =&gt;
+</span>84 <span style=''></span><span style='background: #F0ADAD'>
+</span>85 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
+</span>86 <span style=''></span><span style='background: #F0ADAD'>      (token, email) match {
+</span>87 <span style=''></span><span style='background: #F0ADAD'>        case (Some(to), Some(em)) =&gt;
+</span>88 <span style=''></span><span style='background: #F0ADAD'>          val viaToken = UserSession.findUserSessionByToken(to, count).toSeq
+</span>89 <span style=''></span><span style='background: #F0ADAD'>          val viaEmail = UserSession.findUserSessionByEmail(em, count)
+</span>90 <span style=''></span><span style='background: #F0ADAD'>          (viaToken ++ viaEmail).filter(ul =&gt; ul.token.contains(to) &amp;&amp; ul.email.contains(em))
+</span>91 <span style=''></span><span style='background: #F0ADAD'>        case (Some(to), None) =&gt;
+</span>92 <span style=''></span><span style='background: #F0ADAD'>          UserSession.findUserSessionByToken(to, count).toSeq
+</span>93 <span style=''></span><span style='background: #F0ADAD'>        case (None, Some(em)) =&gt;
+</span>94 <span style=''></span><span style='background: #F0ADAD'>          UserSession.findUserSessionByEmail(em, count)
+</span>95 <span style=''></span><span style='background: #F0ADAD'>        case (None, None) =&gt;
+</span>96 <span style=''></span><span style='background: #F0ADAD'>          UserSession.getAllUserSessions(count)
+</span>97 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>98 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>99 <span style=''>  }
+</span>100 <span style=''>
+</span>101 <span style=''>  def blockUnblockUsers(command: String, email: String): Option[User] = {
+</span>102 <span style=''>    val userOpt = </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>103 <span style=''></span><span style='background: #F0ADAD'>      UserDAO.findUserByEmailAsString(email)
+</span>104 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>105 <span style=''>    </span><span style='background: #F0ADAD'>userOpt.fold[Option[User]]{
+</span>106 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>107 <span style=''></span><span style='background: #F0ADAD'>    } {
+</span>108 <span style=''></span><span style='background: #F0ADAD'>      user =&gt;
+</span>109 <span style=''></span><span style='background: #F0ADAD'>        val statusToken = if (command.equalsIgnoreCase(&quot;BLOCK&quot;)) StatusToken.BLOCKED else StatusToken.ACTIVE
+</span>110 <span style=''></span><span style='background: #F0ADAD'>        val updateUser = User(
+</span>111 <span style=''></span><span style='background: #F0ADAD'>          user.email,
+</span>112 <span style=''></span><span style='background: #F0ADAD'>          user.accountSubject,
+</span>113 <span style=''></span><span style='background: #F0ADAD'>          user.firstname,
+</span>114 <span style=''></span><span style='background: #F0ADAD'>          user.lastname,
+</span>115 <span style=''></span><span style='background: #F0ADAD'>          &quot;***&quot;,
+</span>116 <span style=''></span><span style='background: #F0ADAD'>          s&quot;${statusToken.value}:BY-ADMIN&quot;,
+</span>117 <span style=''></span><span style='background: #F0ADAD'>          ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+</span>118 <span style=''></span><span style='background: #F0ADAD'>
+</span>119 <span style=''></span><span style='background: #F0ADAD'>        // result of Option can be evaluated upstream in controller
+</span>120 <span style=''></span><span style='background: #F0ADAD'>        dbSession.viaTransaction { implicit connection =&gt;
+</span>121 <span style=''></span><span style='background: #F0ADAD'>          UserDAO.updateNoPass(updateUser)
+</span>122 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>123 <span style=''></span><span style='background: #F0ADAD'>
+</span>124 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>125 <span style=''>  }
+</span>126 <span style=''>
+</span>127 <span style=''>  /**
+</span>128 <span style=''>    * list all files uploaded by users (for admin)
+</span>129 <span style=''>    *
+</span>130 <span style=''>    * @return
+</span>131 <span style=''>    */
+</span>132 <span style=''>  def getallUserFiles: Seq[UserFile] = {
+</span>133 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>134 <span style=''></span><span style='background: #F0ADAD'>      UserFile.getAllUserFiles
+</span>135 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>136 <span style=''>  }
+</span>137 <span style=''>
+</span>138 <span style=''>  /**
+</span>139 <span style=''>    * list all csw meta entries uploaded by users (for admin)
+</span>140 <span style=''>    *
+</span>141 <span style=''>    * @return
+</span>142 <span style=''>    */
+</span>143 <span style=''>  def getallUserMetaRecords: Seq[UserMetaRecord] = {
+</span>144 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>145 <span style=''></span><span style='background: #F0ADAD'>      UserMetaRecord.getAllUserMetaRecords
+</span>146 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>147 <span style=''>  }
+</span>148 <span style=''>
+</span>149 <span style=''>  /**
+</span>150 <span style=''>    * list all file request loggings (for admin)
+</span>151 <span style=''>    *
+</span>152 <span style=''>    * @return
+</span>153 <span style=''>    */
+</span>154 <span style=''>  def getAllUserLinkLoggings(max: Option[Int]): Seq[UserLinkLogging] = {
+</span>155 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection( implicit connection =&gt; {
+</span>156 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
+</span>157 <span style=''></span><span style='background: #F0ADAD'>      UserLinkLogging.getAllUserLinkLoggings(count)
+</span>158 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>159 <span style=''>  }
+</span>160 <span style=''>
+</span>161 <span style=''>  /**
+</span>162 <span style=''>    * find file request loggings (for admin)
+</span>163 <span style=''>    *
+</span>164 <span style=''>    * @return
+</span>165 <span style=''>    */
+</span>166 <span style=''>  def queryUserLinkLoggings(link: Option[String], max: Option[Int], email: Option[String]): Seq[UserLinkLogging] = {
+</span>167 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection{ implicit connection =&gt;
+</span>168 <span style=''></span><span style='background: #F0ADAD'>
+</span>169 <span style=''></span><span style='background: #F0ADAD'>      val count = max.getOrElse(100)
+</span>170 <span style=''></span><span style='background: #F0ADAD'>      (link, email) match {
+</span>171 <span style=''></span><span style='background: #F0ADAD'>        case (Some(li), Some(em)) =&gt;
+</span>172 <span style=''></span><span style='background: #F0ADAD'>          val viaLinks = UserLinkLogging.findUserLinkLoggingsByLink(li, count)
+</span>173 <span style=''></span><span style='background: #F0ADAD'>          val viaEmail = UserLinkLogging.findUserLinkLoggingByEmail(em, count)
+</span>174 <span style=''></span><span style='background: #F0ADAD'>          (viaLinks ++ viaLinks).filter(ul =&gt; ul.link.contains(li) &amp;&amp; ul.email.contains(em))
+</span>175 <span style=''></span><span style='background: #F0ADAD'>        case (Some(li), None) =&gt;
+</span>176 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.findUserLinkLoggingsByLink(li, count)
+</span>177 <span style=''></span><span style='background: #F0ADAD'>        case (None, Some(em)) =&gt;
+</span>178 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.findUserLinkLoggingByEmail(em, count)
+</span>179 <span style=''></span><span style='background: #F0ADAD'>        case (None, None) =&gt;
+</span>180 <span style=''></span><span style='background: #F0ADAD'>          UserLinkLogging.getAllUserLinkLoggings(count)
+</span>181 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>182 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>183 <span style=''>  }
+</span>184 <span style=''>
+</span>185 <span style=''>  /**
+</span>186 <span style=''>    * The first 5 fuctions handle user groups overall,
+</span>187 <span style=''>    * user groups have users with certain level of right,
+</span>188 <span style=''>    * and related owc contexts with a certain level of visibility and regulation to be edited
+</span>189 <span style=''>    *
+</span>190 <span style=''>    * the second row (3) functions allow access/modification of user rights within a group
+</span>191 <span style=''>    *
+</span>192 <span style=''>    * and third row (3) of functions expose owccontext regultation level
+</span>193 <span style=''>    *
+</span>194 <span style=''>    * However, access is unified via UserGroup object which has cascading awareness of
+</span>195 <span style=''>    * its user rigths and owccontext visibilty dependents
+</span>196 <span style=''>    *
+</span>197 <span style=''>    */
+</span>198 <span style=''>
+</span>199 <span style=''>  def getAllUserGroups: Seq[UserGroup] = {
+</span>200 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>201 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.getAllUserGroups
+</span>202 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>203 <span style=''>  }
+</span>204 <span style=''>
+</span>205 <span style=''>  def findUserGroupsById(uuid: UUID): Option[UserGroup] = {
+</span>206 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>207 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsById(uuid)
+</span>208 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>209 <span style=''>  }
+</span>210 <span style=''>
+</span>211 <span style=''>  def createUserGroup(userGroup: UserGroup): Option[UserGroup] = {
+</span>212 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>213 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.createUserGroup(userGroup: UserGroup)
+</span>214 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>215 <span style=''>  }
+</span>216 <span style=''>
+</span>217 <span style=''>  def updateUserGroup(userGroup: UserGroup): Option[UserGroup] = {
+</span>218 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>219 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.updateUserGroup(userGroup: UserGroup)
+</span>220 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>221 <span style=''>  }
+</span>222 <span style=''>
+</span>223 <span style=''>  def deleteUserGroup(userGroup: UserGroup): Boolean = {
+</span>224 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>225 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.deleteUserGroup(userGroup: UserGroup)
+</span>226 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>227 <span style=''>  }
+</span>228 <span style=''>
+</span>229 <span style=''>  /**
+</span>230 <span style=''>    * access to user rights via userGroupUsersLevels
+</span>231 <span style=''>    *
+</span>232 <span style=''>    */
+</span>233 <span style=''>
+</span>234 <span style=''>  def createUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
+</span>235 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>236 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.createUserGroupUsersLevel(userGroupUsersLevel)
+</span>237 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>238 <span style=''>  }
+</span>239 <span style=''>
+</span>240 <span style=''>  def updateUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Option[UserGroupUsersLevel] = {
+</span>241 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>242 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.updateUserGroupUsersLevel(userGroupUsersLevel)
+</span>243 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>244 <span style=''>  }
+</span>245 <span style=''>
+</span>246 <span style=''>  def deleteUserGroupUsersLevel(userGroupUsersLevel: UserGroupUsersLevel): Boolean = {
+</span>247 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>248 <span style=''></span><span style='background: #F0ADAD'>      UserGroupUsersLevel.deleteUserGroupUsersLevel(userGroupUsersLevel)
+</span>249 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>250 <span style=''>  }
+</span>251 <span style=''>
+</span>252 <span style=''>  /**
+</span>253 <span style=''>    * access to user rights via userGroupUsersLevels
+</span>254 <span style=''>    *
+</span>255 <span style=''>    */
+</span>256 <span style=''>
+</span>257 <span style=''>  def createUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
+</span>258 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>259 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.createUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>260 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>261 <span style=''>  }
+</span>262 <span style=''>
+</span>263 <span style=''>  def updateUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Option[UserGroupContextsVisibility] = {
+</span>264 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>265 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.updateUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>266 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>267 <span style=''>  }
+</span>268 <span style=''>
+</span>269 <span style=''>  def deleteUserGroupContextsVisibility(userGroupContextsVisibility: UserGroupContextsVisibility): Boolean = {
+</span>270 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>271 <span style=''></span><span style='background: #F0ADAD'>      UserGroupContextsVisibility.deleteUserGroupContextsVisibility(userGroupContextsVisibility)
+</span>272 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>273 <span style=''>  }
+</span>274 <span style=''>
+</span>275 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -309,15 +310,15 @@
         <th>Code</th>
       </tr><tr>
         <td>
-          40
+          41
         </td>
         <td>
-          9096
+          9857
         </td>
         <td>
-          1497
+          1534
           -
-          1571
+          1608
         </td>
         <td>
           Apply
@@ -330,15 +331,36 @@
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          9104
+          9859
         </td>
         <td>
-          1728
+          1820
           -
-          1857
+          1825
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr><tr>
+        <td>
+          50
+        </td>
+        <td>
+          9865
+        </td>
+        <td>
+          1765
+          -
+          1894
         </td>
         <td>
           Apply
@@ -354,36 +376,15 @@ else
         </td>
       </tr><tr>
         <td>
-          49
+          50
         </td>
         <td>
-          9098
+          9858
         </td>
         <td>
-          1783
+          1793
           -
-          1788
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          false
-        </td>
-      </tr><tr>
-        <td>
-          49
-        </td>
-        <td>
-          9097
-        </td>
-        <td>
-          1756
-          -
-          1776
+          1813
         </td>
         <td>
           Literal
@@ -396,18 +397,18 @@ else
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9100
+          9862
         </td>
         <td>
-          1841
+          1878
           -
-          1845
+          1882
         </td>
         <td>
-          Literal
+          Block
         </td>
         <td>
           &lt;nosymbol&gt;
@@ -417,15 +418,15 @@ else
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9103
+          9864
         </td>
         <td>
-          1851
+          1888
           -
-          1856
+          1893
         </td>
         <td>
           Block
@@ -438,15 +439,36 @@ else
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9102
+          9861
         </td>
         <td>
-          1851
+          1878
           -
-          1856
+          1882
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          true
+        </td>
+      </tr><tr>
+        <td>
+          51
+        </td>
+        <td>
+          9863
+        </td>
+        <td>
+          1888
+          -
+          1893
         </td>
         <td>
           Literal
@@ -459,15 +481,15 @@ else
         </td>
       </tr><tr>
         <td>
-          50
+          51
         </td>
         <td>
-          9099
+          9860
         </td>
         <td>
-          1814
+          1851
           -
-          1839
+          1876
         </td>
         <td>
           Apply
@@ -480,36 +502,15 @@ else
         </td>
       </tr><tr>
         <td>
-          50
+          60
         </td>
         <td>
-          9101
+          9867
         </td>
         <td>
-          1841
+          2041
           -
-          1845
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          true
-        </td>
-      </tr><tr>
-        <td>
-          59
-        </td>
-        <td>
-          9106
-        </td>
-        <td>
-          2004
-          -
-          2086
+          2123
         </td>
         <td>
           Apply
@@ -522,15 +523,15 @@ else
         </td>
       </tr><tr>
         <td>
-          60
+          61
         </td>
         <td>
-          9105
+          9866
         </td>
         <td>
-          2060
+          2097
           -
-          2079
+          2116
         </td>
         <td>
           ApplyToImplicitArgs
@@ -543,15 +544,15 @@ else
         </td>
       </tr><tr>
         <td>
-          70
+          71
         </td>
         <td>
-          9109
+          9870
         </td>
         <td>
-          2224
+          2261
           -
-          2361
+          2398
         </td>
         <td>
           Apply
@@ -567,15 +568,15 @@ else
         </td>
       </tr><tr>
         <td>
-          71
+          72
         </td>
         <td>
-          9107
+          9868
         </td>
         <td>
-          2292
+          2329
           -
-          2310
+          2347
         </td>
         <td>
           Apply
@@ -588,15 +589,15 @@ else
         </td>
       </tr><tr>
         <td>
-          72
+          73
         </td>
         <td>
-          9108
+          9869
         </td>
         <td>
-          2317
-          -
           2354
+          -
+          2391
         </td>
         <td>
           ApplyToImplicitArgs
@@ -609,15 +610,15 @@ else
         </td>
       </tr><tr>
         <td>
-          82
+          83
         </td>
         <td>
-          9122
+          9883
         </td>
         <td>
-          2547
+          2584
           -
-          3215
+          3252
         </td>
         <td>
           Apply
@@ -642,15 +643,15 @@ else
         </td>
       </tr><tr>
         <td>
-          84
+          85
         </td>
         <td>
-          9110
+          9871
         </td>
         <td>
-          2614
+          2651
           -
-          2632
+          2669
         </td>
         <td>
           Apply
@@ -663,15 +664,15 @@ else
         </td>
       </tr><tr>
         <td>
-          87
+          88
         </td>
         <td>
-          9112
+          9873
         </td>
         <td>
-          2724
+          2761
           -
-          2775
+          2812
         </td>
         <td>
           Select
@@ -684,15 +685,15 @@ else
         </td>
       </tr><tr>
         <td>
-          87
+          88
         </td>
         <td>
-          9111
+          9872
         </td>
         <td>
-          2724
+          2761
           -
-          2769
+          2806
         </td>
         <td>
           ApplyToImplicitArgs
@@ -705,15 +706,15 @@ else
         </td>
       </tr><tr>
         <td>
-          88
+          89
         </td>
         <td>
-          9113
+          9874
         </td>
         <td>
-          2801
+          2838
           -
-          2846
+          2883
         </td>
         <td>
           ApplyToImplicitArgs
@@ -726,57 +727,15 @@ else
         </td>
       </tr><tr>
         <td>
-          89
+          90
         </td>
         <td>
-          9114
+          9877
         </td>
         <td>
-          2867
+          2930
           -
-          2867
-        </td>
-        <td>
-          TypeApply
-        </td>
-        <td>
-          scala.collection.Seq.canBuildFrom
-        </td>
-        <td style="background: #F0ADAD">
-          collection.this.Seq.canBuildFrom[models.users.UserSession]
-        </td>
-      </tr><tr>
-        <td>
-          89
-        </td>
-        <td>
-          9117
-        </td>
-        <td>
-          2858
-          -
-          2940
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.collection.TraversableLike.filter
-        </td>
-        <td style="background: #F0ADAD">
-          viaToken.++[models.users.UserSession, Seq[models.users.UserSession]](viaEmail)(collection.this.Seq.canBuildFrom[models.users.UserSession]).filter(((ul: models.users.UserSession) =&gt; ul.token.contains(to).&amp;&amp;(ul.email.contains(em))))
-        </td>
-      </tr><tr>
-        <td>
-          89
-        </td>
-        <td>
-          9116
-        </td>
-        <td>
-          2893
-          -
-          2939
+          2976
         </td>
         <td>
           Apply
@@ -789,15 +748,15 @@ else
         </td>
       </tr><tr>
         <td>
-          89
+          90
         </td>
         <td>
-          9115
+          9876
         </td>
         <td>
-          2918
+          2955
           -
-          2939
+          2976
         </td>
         <td>
           Apply
@@ -810,36 +769,57 @@ else
         </td>
       </tr><tr>
         <td>
-          91
+          90
         </td>
         <td>
-          9118
+          9878
         </td>
         <td>
-          2984
+          2895
           -
-          3029
+          2977
         </td>
         <td>
-          ApplyToImplicitArgs
+          Apply
         </td>
         <td>
-          models.users.UserSession.findUserSessionByToken
+          scala.collection.TraversableLike.filter
         </td>
         <td style="background: #F0ADAD">
-          models.users.UserSession.findUserSessionByToken(to, count)(connection)
+          viaToken.++[models.users.UserSession, Seq[models.users.UserSession]](viaEmail)(collection.this.Seq.canBuildFrom[models.users.UserSession]).filter(((ul: models.users.UserSession) =&gt; ul.token.contains(to).&amp;&amp;(ul.email.contains(em))))
         </td>
       </tr><tr>
         <td>
-          91
+          90
         </td>
         <td>
-          9119
+          9875
         </td>
         <td>
-          2984
+          2904
           -
-          3035
+          2904
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[models.users.UserSession]
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          9880
+        </td>
+        <td>
+          3021
+          -
+          3072
         </td>
         <td>
           Select
@@ -852,15 +832,36 @@ else
         </td>
       </tr><tr>
         <td>
-          93
+          92
         </td>
         <td>
-          9120
+          9879
         </td>
         <td>
-          3079
+          3021
           -
-          3124
+          3066
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserSession.findUserSessionByToken
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserSession.findUserSessionByToken(to, count)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          9881
+        </td>
+        <td>
+          3116
+          -
+          3161
         </td>
         <td>
           ApplyToImplicitArgs
@@ -873,15 +874,15 @@ else
         </td>
       </tr><tr>
         <td>
-          95
+          96
         </td>
         <td>
-          9121
+          9882
         </td>
         <td>
-          3164
-          -
           3201
+          -
+          3238
         </td>
         <td>
           ApplyToImplicitArgs
@@ -894,15 +895,15 @@ else
         </td>
       </tr><tr>
         <td>
-          101
+          102
         </td>
         <td>
-          9124
+          9885
         </td>
         <td>
-          3313
+          3350
           -
-          3414
+          3451
         </td>
         <td>
           Apply
@@ -915,15 +916,15 @@ else
         </td>
       </tr><tr>
         <td>
-          102
+          103
         </td>
         <td>
-          9123
+          9884
         </td>
         <td>
-          3369
+          3406
           -
-          3407
+          3444
         </td>
         <td>
           ApplyToImplicitArgs
@@ -936,15 +937,15 @@ else
         </td>
       </tr><tr>
         <td>
-          105
+          106
         </td>
         <td>
-          9125
+          9886
         </td>
         <td>
-          3453
+          3490
           -
-          3457
+          3494
         </td>
         <td>
           Select
@@ -957,15 +958,15 @@ else
         </td>
       </tr><tr>
         <td>
-          106
+          107
         </td>
         <td>
-          9145
+          9906
         </td>
         <td>
-          3419
+          3456
           -
-          4044
+          4081
         </td>
         <td>
           Apply
@@ -985,78 +986,15 @@ else
         </td>
       </tr><tr>
         <td>
-          108
+          109
         </td>
         <td>
-          9127
+          9889
         </td>
         <td>
-          3545
+          3582
           -
-          3564
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.StatusToken.BLOCKED
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.StatusToken.BLOCKED
-        </td>
-      </tr><tr>
-        <td>
-          108
-        </td>
-        <td>
-          9129
-        </td>
-        <td>
-          3570
-          -
-          3588
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.StatusToken.ACTIVE
-        </td>
-        <td style="background: #F0ADAD">
-          models.users.StatusToken.ACTIVE
-        </td>
-      </tr><tr>
-        <td>
-          108
-        </td>
-        <td>
-          9126
-        </td>
-        <td>
-          3510
-          -
-          3543
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.String.equalsIgnoreCase
-        </td>
-        <td style="background: #F0ADAD">
-          command.equalsIgnoreCase(&quot;BLOCK&quot;)
-        </td>
-      </tr><tr>
-        <td>
-          108
-        </td>
-        <td>
-          9128
-        </td>
-        <td>
-          3545
-          -
-          3564
+          3601
         </td>
         <td>
           Block
@@ -1069,15 +1007,15 @@ else
         </td>
       </tr><tr>
         <td>
-          108
+          109
         </td>
         <td>
-          9130
+          9891
         </td>
         <td>
-          3570
+          3607
           -
-          3588
+          3625
         </td>
         <td>
           Block
@@ -1093,12 +1031,75 @@ else
           109
         </td>
         <td>
-          9142
+          9888
         </td>
         <td>
-          3614
+          3582
           -
-          3857
+          3601
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.BLOCKED
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.BLOCKED
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          9887
+        </td>
+        <td>
+          3547
+          -
+          3580
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.equalsIgnoreCase
+        </td>
+        <td style="background: #F0ADAD">
+          command.equalsIgnoreCase(&quot;BLOCK&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          109
+        </td>
+        <td>
+          9890
+        </td>
+        <td>
+          3607
+          -
+          3625
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.ACTIVE
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.StatusToken.ACTIVE
+        </td>
+      </tr><tr>
+        <td>
+          110
+        </td>
+        <td>
+          9903
+        </td>
+        <td>
+          3651
+          -
+          3894
         </td>
         <td>
           Apply
@@ -1111,15 +1112,15 @@ else
         </td>
       </tr><tr>
         <td>
-          110
+          111
         </td>
         <td>
-          9131
+          9892
         </td>
         <td>
-          3630
+          3667
           -
-          3640
+          3677
         </td>
         <td>
           Select
@@ -1132,15 +1133,15 @@ else
         </td>
       </tr><tr>
         <td>
-          111
+          112
         </td>
         <td>
-          9132
+          9893
         </td>
         <td>
-          3652
+          3689
           -
-          3671
+          3708
         </td>
         <td>
           Select
@@ -1153,15 +1154,15 @@ else
         </td>
       </tr><tr>
         <td>
-          112
+          113
         </td>
         <td>
-          9133
+          9894
         </td>
         <td>
-          3683
+          3720
           -
-          3697
+          3734
         </td>
         <td>
           Select
@@ -1174,15 +1175,15 @@ else
         </td>
       </tr><tr>
         <td>
-          113
+          114
         </td>
         <td>
-          9134
+          9895
         </td>
         <td>
-          3709
+          3746
           -
-          3722
+          3759
         </td>
         <td>
           Select
@@ -1195,15 +1196,15 @@ else
         </td>
       </tr><tr>
         <td>
-          114
+          115
         </td>
         <td>
-          9135
+          9896
         </td>
         <td>
-          3734
+          3771
           -
-          3739
+          3776
         </td>
         <td>
           Literal
@@ -1216,57 +1217,15 @@ else
         </td>
       </tr><tr>
         <td>
-          115
+          116
         </td>
         <td>
-          9136
+          9898
         </td>
         <td>
-          3753
+          3810
           -
-          3754
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;&quot;
-        </td>
-      </tr><tr>
-        <td>
-          115
-        </td>
-        <td>
-          9138
-        </td>
-        <td>
-          3755
-          -
-          3772
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.StatusToken.value
-        </td>
-        <td style="background: #F0ADAD">
-          statusToken.value
-        </td>
-      </tr><tr>
-        <td>
-          115
-        </td>
-        <td>
-          9137
-        </td>
-        <td>
-          3773
-          -
-          3783
+          3820
         </td>
         <td>
           Literal
@@ -1279,15 +1238,15 @@ else
         </td>
       </tr><tr>
         <td>
-          115
+          116
         </td>
         <td>
-          9139
+          9900
         </td>
         <td>
-          3751
+          3788
           -
-          3783
+          3820
         </td>
         <td>
           Apply
@@ -1303,33 +1262,54 @@ else
           116
         </td>
         <td>
-          9141
+          9897
         </td>
         <td>
-          3795
+          3790
           -
-          3856
+          3791
         </td>
         <td>
-          Apply
+          Literal
         </td>
         <td>
-          java.time.ZonedDateTime.withZoneSameInstant
+          &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(AdminService.this.appTimeZone))
+          &quot;&quot;
         </td>
       </tr><tr>
         <td>
           116
         </td>
         <td>
-          9140
+          9899
         </td>
         <td>
-          3833
+          3792
           -
-          3855
+          3809
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.StatusToken.value
+        </td>
+        <td style="background: #F0ADAD">
+          statusToken.value
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          9901
+        </td>
+        <td>
+          3870
+          -
+          3892
         </td>
         <td>
           Apply
@@ -1342,15 +1322,36 @@ else
         </td>
       </tr><tr>
         <td>
-          119
+          117
         </td>
         <td>
-          9144
+          9902
         </td>
         <td>
-          3935
+          3832
           -
-          4037
+          3893
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZonedDateTime.withZoneSameInstant
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(AdminService.this.appTimeZone))
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          9905
+        </td>
+        <td>
+          3972
+          -
+          4074
         </td>
         <td>
           Apply
@@ -1363,15 +1364,15 @@ else
         </td>
       </tr><tr>
         <td>
-          120
+          121
         </td>
         <td>
-          9143
+          9904
         </td>
         <td>
-          3995
+          4032
           -
-          4027
+          4064
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1384,15 +1385,15 @@ else
         </td>
       </tr><tr>
         <td>
-          132
+          133
         </td>
         <td>
-          9147
+          9908
         </td>
         <td>
-          4179
+          4216
           -
-          4266
+          4303
         </td>
         <td>
           Apply
@@ -1405,15 +1406,15 @@ else
         </td>
       </tr><tr>
         <td>
-          133
+          134
         </td>
         <td>
-          9146
+          9907
         </td>
         <td>
-          4235
+          4272
           -
-          4259
+          4296
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1426,15 +1427,15 @@ else
         </td>
       </tr><tr>
         <td>
-          143
+          144
         </td>
         <td>
-          9149
+          9910
         </td>
         <td>
-          4424
+          4461
           -
-          4523
+          4560
         </td>
         <td>
           Apply
@@ -1447,15 +1448,15 @@ else
         </td>
       </tr><tr>
         <td>
-          144
+          145
         </td>
         <td>
-          9148
+          9909
         </td>
         <td>
-          4480
+          4517
           -
-          4516
+          4553
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1468,15 +1469,15 @@ else
         </td>
       </tr><tr>
         <td>
-          154
+          155
         </td>
         <td>
-          9152
+          9913
         </td>
         <td>
-          4688
+          4725
           -
-          4833
+          4870
         </td>
         <td>
           Apply
@@ -1492,15 +1493,15 @@ else
         </td>
       </tr><tr>
         <td>
-          155
+          156
         </td>
         <td>
-          9150
+          9911
         </td>
         <td>
-          4756
+          4793
           -
-          4774
+          4811
         </td>
         <td>
           Apply
@@ -1513,15 +1514,15 @@ else
         </td>
       </tr><tr>
         <td>
-          156
+          157
         </td>
         <td>
-          9151
+          9912
         </td>
         <td>
-          4781
+          4818
           -
-          4826
+          4863
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1534,15 +1535,15 @@ else
         </td>
       </tr><tr>
         <td>
-          166
+          167
         </td>
         <td>
-          9163
+          9924
         </td>
         <td>
-          5038
+          5075
           -
-          5732
+          5769
         </td>
         <td>
           Apply
@@ -1567,15 +1568,15 @@ else
         </td>
       </tr><tr>
         <td>
-          168
+          169
         </td>
         <td>
-          9153
+          9914
         </td>
         <td>
-          5105
+          5142
           -
-          5123
+          5160
         </td>
         <td>
           Apply
@@ -1588,15 +1589,15 @@ else
         </td>
       </tr><tr>
         <td>
-          171
+          172
         </td>
         <td>
-          9154
+          9915
         </td>
         <td>
-          5214
+          5251
           -
-          5267
+          5304
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1609,15 +1610,15 @@ else
         </td>
       </tr><tr>
         <td>
-          172
+          173
         </td>
         <td>
-          9155
+          9916
         </td>
         <td>
-          5293
+          5330
           -
-          5346
+          5383
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1630,57 +1631,15 @@ else
         </td>
       </tr><tr>
         <td>
-          173
+          174
         </td>
         <td>
-          9156
+          9919
         </td>
         <td>
-          5367
+          5430
           -
-          5367
-        </td>
-        <td>
-          TypeApply
-        </td>
-        <td>
-          scala.collection.Seq.canBuildFrom
-        </td>
-        <td style="background: #F0ADAD">
-          collection.this.Seq.canBuildFrom[models.users.UserLinkLogging]
-        </td>
-      </tr><tr>
-        <td>
-          173
-        </td>
-        <td>
-          9159
-        </td>
-        <td>
-          5358
-          -
-          5439
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.collection.TraversableLike.filter
-        </td>
-        <td style="background: #F0ADAD">
-          viaLinks.++[models.users.UserLinkLogging, Seq[models.users.UserLinkLogging]](viaLinks)(collection.this.Seq.canBuildFrom[models.users.UserLinkLogging]).filter(((ul: models.users.UserLinkLogging) =&gt; ul.link.contains(li).&amp;&amp;(ul.email.contains[String](em))))
-        </td>
-      </tr><tr>
-        <td>
-          173
-        </td>
-        <td>
-          9158
-        </td>
-        <td>
-          5393
-          -
-          5438
+          5475
         </td>
         <td>
           Apply
@@ -1693,15 +1652,15 @@ else
         </td>
       </tr><tr>
         <td>
-          173
+          174
         </td>
         <td>
-          9157
+          9918
         </td>
         <td>
-          5417
+          5454
           -
-          5438
+          5475
         </td>
         <td>
           Apply
@@ -1714,15 +1673,57 @@ else
         </td>
       </tr><tr>
         <td>
-          175
+          174
         </td>
         <td>
-          9160
+          9917
         </td>
         <td>
-          5483
+          5404
           -
-          5536
+          5404
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[models.users.UserLinkLogging]
+        </td>
+      </tr><tr>
+        <td>
+          174
+        </td>
+        <td>
+          9920
+        </td>
+        <td>
+          5395
+          -
+          5476
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableLike.filter
+        </td>
+        <td style="background: #F0ADAD">
+          viaLinks.++[models.users.UserLinkLogging, Seq[models.users.UserLinkLogging]](viaLinks)(collection.this.Seq.canBuildFrom[models.users.UserLinkLogging]).filter(((ul: models.users.UserLinkLogging) =&gt; ul.link.contains(li).&amp;&amp;(ul.email.contains[String](em))))
+        </td>
+      </tr><tr>
+        <td>
+          176
+        </td>
+        <td>
+          9921
+        </td>
+        <td>
+          5520
+          -
+          5573
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1735,15 +1736,15 @@ else
         </td>
       </tr><tr>
         <td>
-          177
+          178
         </td>
         <td>
-          9161
+          9922
         </td>
         <td>
-          5580
+          5617
           -
-          5633
+          5670
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1756,15 +1757,15 @@ else
         </td>
       </tr><tr>
         <td>
-          179
+          180
         </td>
         <td>
-          9162
+          9923
         </td>
         <td>
-          5673
+          5710
           -
-          5718
+          5755
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1777,15 +1778,15 @@ else
         </td>
       </tr><tr>
         <td>
-          199
+          200
         </td>
         <td>
-          9165
+          9926
         </td>
         <td>
-          6339
+          6376
           -
-          6428
+          6465
         </td>
         <td>
           Apply
@@ -1798,15 +1799,15 @@ else
         </td>
       </tr><tr>
         <td>
-          200
+          201
         </td>
         <td>
-          9164
+          9925
         </td>
         <td>
-          6395
+          6432
           -
-          6421
+          6458
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1819,15 +1820,15 @@ else
         </td>
       </tr><tr>
         <td>
-          205
+          206
         </td>
         <td>
-          9167
+          9928
         </td>
         <td>
-          6498
+          6535
           -
-          6595
+          6632
         </td>
         <td>
           Apply
@@ -1840,15 +1841,15 @@ else
         </td>
       </tr><tr>
         <td>
-          206
+          207
         </td>
         <td>
-          9166
+          9927
         </td>
         <td>
-          6554
+          6591
           -
-          6588
+          6625
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1861,15 +1862,15 @@ else
         </td>
       </tr><tr>
         <td>
-          211
+          212
         </td>
         <td>
-          9169
+          9930
         </td>
         <td>
-          6672
+          6709
           -
-          6782
+          6819
         </td>
         <td>
           Apply
@@ -1882,15 +1883,15 @@ else
         </td>
       </tr><tr>
         <td>
-          212
+          213
         </td>
         <td>
-          9168
+          9929
         </td>
         <td>
-          6728
+          6765
           -
-          6775
+          6812
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1903,15 +1904,15 @@ else
         </td>
       </tr><tr>
         <td>
-          217
+          218
         </td>
         <td>
-          9171
+          9932
         </td>
         <td>
-          6859
+          6896
           -
-          6969
+          7006
         </td>
         <td>
           Apply
@@ -1924,15 +1925,15 @@ else
         </td>
       </tr><tr>
         <td>
-          218
+          219
         </td>
         <td>
-          9170
+          9931
         </td>
         <td>
-          6915
+          6952
           -
-          6962
+          6999
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1945,15 +1946,15 @@ else
         </td>
       </tr><tr>
         <td>
-          223
+          224
         </td>
         <td>
-          9173
+          9934
         </td>
         <td>
-          7036
+          7073
           -
-          7146
+          7183
         </td>
         <td>
           Apply
@@ -1966,15 +1967,15 @@ else
         </td>
       </tr><tr>
         <td>
-          224
+          225
         </td>
         <td>
-          9172
+          9933
         </td>
         <td>
-          7092
+          7129
           -
-          7139
+          7176
         </td>
         <td>
           ApplyToImplicitArgs
@@ -1987,15 +1988,15 @@ else
         </td>
       </tr><tr>
         <td>
-          234
+          235
         </td>
         <td>
-          9175
+          9936
         </td>
         <td>
-          7336
+          7373
           -
-          7465
+          7502
         </td>
         <td>
           Apply
@@ -2008,15 +2009,15 @@ else
         </td>
       </tr><tr>
         <td>
-          235
+          236
         </td>
         <td>
-          9174
+          9935
         </td>
         <td>
-          7392
+          7429
           -
-          7458
+          7495
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2029,15 +2030,15 @@ else
         </td>
       </tr><tr>
         <td>
-          240
+          241
         </td>
         <td>
-          9177
+          9938
         </td>
         <td>
-          7582
+          7619
           -
-          7711
+          7748
         </td>
         <td>
           Apply
@@ -2050,15 +2051,15 @@ else
         </td>
       </tr><tr>
         <td>
-          241
+          242
         </td>
         <td>
-          9176
+          9937
         </td>
         <td>
-          7638
+          7675
           -
-          7704
+          7741
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2071,15 +2072,15 @@ else
         </td>
       </tr><tr>
         <td>
-          246
+          247
         </td>
         <td>
-          9179
+          9940
         </td>
         <td>
-          7808
+          7845
           -
-          7937
+          7974
         </td>
         <td>
           Apply
@@ -2092,15 +2093,15 @@ else
         </td>
       </tr><tr>
         <td>
-          247
+          248
         </td>
         <td>
-          9178
+          9939
         </td>
         <td>
-          7864
+          7901
           -
-          7930
+          7967
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2113,15 +2114,15 @@ else
         </td>
       </tr><tr>
         <td>
-          257
+          258
         </td>
         <td>
-          9181
+          9942
         </td>
         <td>
-          8159
+          8196
           -
-          8312
+          8349
         </td>
         <td>
           Apply
@@ -2134,15 +2135,15 @@ else
         </td>
       </tr><tr>
         <td>
-          258
+          259
         </td>
         <td>
-          9180
+          9941
         </td>
         <td>
-          8215
+          8252
           -
-          8305
+          8342
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2155,15 +2156,15 @@ else
         </td>
       </tr><tr>
         <td>
-          263
+          264
         </td>
         <td>
-          9183
+          9944
         </td>
         <td>
-          8461
+          8498
           -
-          8614
+          8651
         </td>
         <td>
           Apply
@@ -2176,15 +2177,15 @@ else
         </td>
       </tr><tr>
         <td>
-          264
+          265
         </td>
         <td>
-          9182
+          9943
         </td>
         <td>
-          8517
+          8554
           -
-          8607
+          8644
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2197,15 +2198,15 @@ else
         </td>
       </tr><tr>
         <td>
-          269
+          270
         </td>
         <td>
-          9185
+          9946
         </td>
         <td>
-          8735
+          8772
           -
-          8888
+          8925
         </td>
         <td>
           Apply
@@ -2218,15 +2219,15 @@ else
         </td>
       </tr><tr>
         <td>
-          270
+          271
         </td>
         <td>
-          9184
+          9945
         </td>
         <td>
-          8791
+          8828
           -
-          8881
+          8918
         </td>
         <td>
           ApplyToImplicitArgs

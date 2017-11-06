@@ -218,11 +218,11 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
         if (blobDel) {
           None
         } else {
-          logger.error(s"Blob delete from cloud storage failed. No details here.")
+          logger.error("Blob delete from cloud storage failed. No details here.")
           Some(ErrorResult("Blob delete from cloud storage failed.", Some(s"$fileName not found.")))
         }
       case Failure(ex) =>
-        logger.error(s"Blob delete from cloud storage failed. ${ex.getLocalizedMessage}")
+        logger.error("Blob delete from cloud storage failed. ${ex.getLocalizedMessage}")
         Some(ErrorResult("Blob delete from cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
   }

@@ -100,6 +100,17 @@ class CswController @Inject()(implicit configuration: Configuration,
   }
 
   /**
+    * get user-owned metarecords references
+    *
+    * @return
+    */
+  def getUserMetaRecords: Action[Unit] = (authenticationAction andThen userAction)(parse.empty) {
+    request =>
+      val metarecords = userService.findUserMetaRecordByAccountSubject(request.user).map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "metarecords" -> JsArray(metarecords)))
+  }
+
+  /**
     * trying to generalise for all transaction types
     *
     * @param transaction

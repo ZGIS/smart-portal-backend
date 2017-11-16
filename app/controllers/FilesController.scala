@@ -30,7 +30,7 @@ import models.ErrorResult
 import models.users.UserLinkLogging
 import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
-import play.api.libs.json.Json
+import play.api.libs.json.{JsArray, Json}
 import play.api.mvc._
 import services.{GoogleServicesDAO, LocalBlobInfo, OwcCollectionsService, UserService}
 import utils.ClassnameLogger
@@ -139,6 +139,17 @@ class FilesController @Inject()(implicit configuration: Configuration,
   }
 
   /**
+    * returns user-owned file object references
+    *
+    * @return
+    */
+  def getUserFiles: Action[Unit] = (authenticationAction andThen userAction)(parse.empty) {
+    request =>
+      val userfiles = userService.findUserFileByAccountSubject(request.user).map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userfiles)))
+  }
+
+  /**
     * get remote blob details for user owning it
     *
     * @param uuid
@@ -186,7 +197,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
           .map { userFile =>
             googleService.deleteFileBlob(userFile.originalfilename).fold[Result] {
               // if empty
-              Ok(Json.obj("status" -> "OK", "deleted" -> userFile.originalfilename))
+              Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference, "originalfilename" -> userFile.originalfilename, "message" -> "deleted"))
             } {
               error => BadRequest(Json.toJson(error)).as(JSON)
             }

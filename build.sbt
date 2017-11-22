@@ -55,7 +55,13 @@ libraryDependencies ++= Seq(
   // "com.vividsolutions" % "jts-core" % "1.14.0",
   "org.locationtech.spatial4j" % "spatial4j" % "0.6",
   // "org.noggit" % "noggit" % "0.7",
+
+  // the xlsx stuff
   "com.norbitltd" %% "spoiwo" % "1.2.0",
+  // depends on apache poi anyways org.apache.poi:poi:3.14:jar
+  "org.apache.poi" % "poi" % "3.14",
+  "org.apache.poi" % "poi-ooxml" % "3.14",
+
 
   "com.google.oauth-client" % "google-oauth-client" % googleVersion,
   "com.google.oauth-client" % "google-oauth-client-java6" % googleVersion,

@@ -317,7 +317,7 @@ class SosDataController @Inject()(implicit configuration: Configuration,
     */
   def exportToFile(responseFormat: Option[String], sosResponseAsText: String,
                    sosCapabilities: SosCapabilities, sosXmlRequest: String): Either[ErrorResult, File] = {
-    // FIXME here build braching for different export formats such as Excel spreadheet
+
     val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
     val fileNameTmpl = "export-" + Try(URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8")
       + "-" + updatedTime.format(formatter)).getOrElse("-sosdata")
@@ -368,10 +368,12 @@ class SosDataController @Inject()(implicit configuration: Configuration,
         wb =>
           if (format.equals(XLS)) {
             import com.norbitltd.spoiwo.natures.xlsx.Model2XlsxConversions._
+            // TODO here add spreadsheet with metadata export info
             wb.saveAsXlsx(filename)
             None
           } else if (format.equals(CSV)) {
             import com.norbitltd.spoiwo.natures.csv.Model2CsvConversions._
+            // TODO here add metadata export info after last two empty lines
             val defCsvProps = CsvProperties(separator = ",", defaultDateFormat = "yyyy-MM-dd")
             wb.saveAsCsv(filename, defCsvProps)
             None

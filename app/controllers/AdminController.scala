@@ -28,13 +28,14 @@ import controllers.security._
 import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
+import org.apache.poi.ss.usermodel.WorkbookFactory
 import play.api.Configuration
 import play.api.http.MimeTypes
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc._
 import services._
-import utils.{ClassnameLogger, PasswordHashing}
+import utils.{ClassnameLogger, PasswordHashing, ResearchPGHolder, XlsToSparqlRdfConverter}
 
 @Singleton
 class AdminController @Inject()(implicit configuration: Configuration,
@@ -168,7 +169,38 @@ class AdminController @Inject()(implicit configuration: Configuration,
           logger.info(s"${tuple1._1} + ${tuple1._2.mkString("; ")}")
         )
 
-        NotImplemented(Json.obj("status" -> "NotImplemented", "message" -> s"vocab/sparql collection file uploaded $filename."))
+        val converter = new XlsToSparqlRdfConverter
+
+        val resultCollectionAsString: String = filename match {
+          case "PortalCategories.xlsx" => // FIXME in case of Categories
+            val workbook = WorkbookFactory.create(tmpFile)
+            val worksheet = workbook.getSheet("science domain categories")
+            val synonyms_sheets = workbook.getSheet("synonyms")
+            val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
+            val comment = """<!-- # Generated on: 2017-11-17 from Excel GW portal list of icons new structure 20170830.xlsx / Worksheet: science domain categories -->"""
+            val fullRdfString: String = converter.rdfHeader +
+              "\n" +
+              comment +
+              "\n" +
+              converter.rdfClassdef +
+              rdfCategories.mkString("\n") +
+              converter.rdfFooter
+            fullRdfString
+          case "ResearchPrgrm.xlsx" => // TODO in case of Research Programme
+            val workbook = WorkbookFactory.create(tmpFile)
+            val worksheet = workbook.getSheet("Research programmes")
+            val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
+            val fullRdfString: String = converter.rdfSkosDcHeader +
+              ResearchPGHolder.toCollectionRdf(rdfResearchPGs) +
+              rdfResearchPGs.map(pg => pg.toRdf).mkString("\n") +
+              converter.rdfFooter
+            fullRdfString
+          case _ => logger.error("no file name retrieved unable to proceed")
+            ""
+        }
+        logger.debug(resultCollectionAsString)
+
+        NotImplemented(Json.obj("status" -> "NotImplemented", "message" -> s"vocab/sparql collection file uploaded $resultCollectionAsString."))
       } getOrElse {
         logger.error("file upload from client failed")
         val error = ErrorResult("File upload from client failed.", None)

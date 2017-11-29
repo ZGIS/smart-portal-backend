@@ -346,7 +346,7 @@ class CswController @Inject()(implicit configuration: Configuration,
     *
     * @return
     */
-  def deleteMetadataRecord(uuid: String): Action[JsValue] = (authenticationAction andThen userAction).async(parse.json) {
+  def deleteMetadataRecord(uuid: String): Action[Unit] = (authenticationAction andThen userAction).async(parse.empty) {
     request =>
       val foundMeta = userService.findUserMetaRecordByAccountSubject(request.user).exists(f => f.originaluuid.equals(uuid))
       val notFoundBlock = {

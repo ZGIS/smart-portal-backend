@@ -143,7 +143,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
     *
     * @return
     */
-  def getUserFiles: Action[Unit] = (authenticationAction andThen userAction)(parse.empty) {
+  def getUserFiles: Action[Unit] = (authenticationAction andThen userAction) (parse.empty) {
     request =>
       val userfiles = userService.findUserFileByAccountSubject(request.user).map(u => Json.toJson(u))
       Ok(Json.obj("status" -> "OK", "userfiles" -> JsArray(userfiles)))
@@ -196,8 +196,16 @@ class FilesController @Inject()(implicit configuration: Configuration,
         userService.findUserFileByUuid(UUID.fromString(uuid))
           .map { userFile =>
             googleService.deleteFileBlob(userFile.originalfilename).fold[Result] {
-              // if empty
-              Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference, "originalfilename" -> userFile.originalfilename, "message" -> "deleted"))
+              // if empty means no ErrorResult
+              // now also remove userFile db ref
+              userService.deleteUserFile(userFile.uuid) match {
+                case true => Ok(Json.obj("status" -> "OK", "linkreference" -> userFile.linkreference,
+                  "originalfilename" -> userFile.originalfilename, "message" -> "deleted"))
+                case false => logger.error("user file db delete not succesful")
+                  val error = ErrorResult("user file db delete not succesful.", None)
+                  BadRequest(Json.toJson(error)).as(JSON)
+              }
+
             } {
               error => BadRequest(Json.toJson(error)).as(JSON)
             }

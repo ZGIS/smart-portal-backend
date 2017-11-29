@@ -410,6 +410,19 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     )
   }
 
+
+  /**
+    * for finding the record ref by its original CSW mata xml fileidentifier uuid
+    *
+    * @param uuid
+    * @return
+    */
+  def findUserMetaRecordByXmlMetaOriginalUuid(uuid: UUID): Option[UserMetaRecord] = {
+    dbSession.viaConnection( implicit connection =>
+      UserMetaRecord.findUserMetaRecordByXmlMetaOriginalUuid(uuid)
+    )
+  }
+
   /**
     * for reverse mapping finding the  record ref
     *

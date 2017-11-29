@@ -90,6 +90,12 @@ CREATE TABLE usermetarecords (
     ).as(userMetaRecordsParser.singleOpt)
   }
 
+  def findUserMetaRecordByXmlMetaOriginalUuid(uuid: UUID)(implicit connection: Connection): Option[UserMetaRecord] = {
+    SQL(s"select * from $table_usermetarecords where originaluuid = {uuid}").on(
+      'uuid -> uuid.toString
+    ).as(userMetaRecordsParser.singleOpt)
+  }
+
   def createUserMetaRecord(userMetaRecord: UserMetaRecord)(implicit connection: Connection): Option[UserMetaRecord] = {
     val nps = Seq[NamedParameter](// Tuples as NamedParameter
       "uuid" -> userMetaRecord.uuid.toString,

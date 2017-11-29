@@ -243,8 +243,8 @@ class CswController @Inject()(implicit configuration: Configuration,
                     val owcresource = collectionsService.generateMdResource(CSW_URL, mdMetadata, userMetaEntry)
                     val added = collectionsService.addMdResourceToUserDefaultCollection(CSW_URL, owcresource, userMetaEntry)
                     if (added) {
-                      Ok(Json.obj("type" -> "success", "fileIdentifier" -> uuid.toString,
-                        "message" -> s"Inserted as ${uuid.toString} and reference entry added to your data collection."))
+                      Ok(Json.obj("type" -> "success", "fileIdentifier" -> userMetaEntry.originaluuid.toString, "userMetaRecord" -> Json.toJson(userMetaEntry),
+                        "message" -> s"Inserted as ${uuid.toString} and reference entry with with refUuid ${userMetaEntry.uuid} added to your data collection."))
                     } else {
                       val error = ErrorResult(s"Could not add ${mdMetadata.fileIdentifier} to your collection of ${request.user.email}.", None)
                       logger.warn(error.message)
@@ -276,7 +276,7 @@ class CswController @Inject()(implicit configuration: Configuration,
         mdMetadata => {
           logger.trace(Json.prettyPrint(mdMetadata.toJson()))
           logger.debug(s"MD_Metadata XML: ${mdMetadata.toXml()}")
-          val foundMeta = userService.findUserMetaRecordByAccountSubject(request.user).exists(f => f.uuid.equals(UUID.fromString(mdMetadata.fileIdentifier)))
+          val foundMeta = userService.findUserMetaRecordByAccountSubject(request.user).exists(f => f.originaluuid.equals(mdMetadata.fileIdentifier))
           val notFoundBlock = {
             logger.error("metadata ref not found")
             val error = ErrorResult("metadata ref not found.", None)
@@ -300,7 +300,7 @@ class CswController @Inject()(implicit configuration: Configuration,
             }
 
             futureResponse.map { response =>
-              // TODO all the stuff
+              // do all the stuff
               logger.debug("Ingester Update: " + response._2.body)
               val responseEval = evaluateTransactionResponse(response._1, updateTransaction)
               responseEval.fold[Result](
@@ -310,7 +310,7 @@ class CswController @Inject()(implicit configuration: Configuration,
                 },
                 uuid => {
                   logger.debug(s"Updating ${mdMetadata.fileIdentifier} in default collection of ${request.user.email}.")
-                  val userMetaEntryUpdateOk = userService.findUserMetaRecordByUuid(uuid)
+                  val userMetaEntryUpdateOk = userService.findUserMetaRecordByXmlMetaOriginalUuid(uuid)
                     .flatMap { mt =>
                       val newMeta = mt.copy(laststatustoken = "UPDATE",
                         laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
@@ -324,10 +324,10 @@ class CswController @Inject()(implicit configuration: Configuration,
                   } {
                     userMetaEntry =>
                       val owcresource = collectionsService.generateMdResource(CSW_URL, mdMetadata, userMetaEntry)
-                      val added = collectionsService.updateMdResourceInUserDefaultCollection(CSW_URL, owcresource, userMetaEntry)
-                      if (added) {
-                        Ok(Json.obj("type" -> "success", "fileIdentifier" -> uuid.toString,
-                          "message" -> s"Updated ${uuid.toString} and reference entry in your data collection."))
+                      val updated = collectionsService.updateMdResourceInUserDefaultCollection(CSW_URL, owcresource, userMetaEntry)
+                      if (updated) {
+                        Ok(Json.obj("type" -> "success", "fileIdentifier" -> userMetaEntry.originaluuid.toString, "userMetaRecord" -> Json.toJson(userMetaEntry),
+                          "message" -> s"Updated ${uuid.toString} and reference entry with refUuid ${userMetaEntry.uuid} in your data collection."))
                       } else {
                         val error = ErrorResult(s"Could not update ${mdMetadata.fileIdentifier} in your collection of ${request.user.email}.", None)
                         logger.warn(error.message)
@@ -348,7 +348,7 @@ class CswController @Inject()(implicit configuration: Configuration,
     */
   def deleteMetadataRecord(uuid: String): Action[JsValue] = (authenticationAction andThen userAction).async(parse.json) {
     request =>
-      val foundMeta = userService.findUserMetaRecordByAccountSubject(request.user).exists(f => f.uuid.equals(UUID.fromString(uuid)))
+      val foundMeta = userService.findUserMetaRecordByAccountSubject(request.user).exists(f => f.originaluuid.equals(uuid))
       val notFoundBlock = {
         logger.error("metadata ref not found")
         val error = ErrorResult("metadata ref not found.", None)
@@ -370,7 +370,7 @@ class CswController @Inject()(implicit configuration: Configuration,
             InternalServerError(Json.toJson(error)).as(JSON)
         }
 
-        // TODO all the stuff
+        // do all the stuff
         futureResponse.map { response =>
           val responseEval = evaluateTransactionResponse(response._1, deleteTransaction)
           responseEval.fold[Result](
@@ -380,13 +380,13 @@ class CswController @Inject()(implicit configuration: Configuration,
             },
             deletedUuid => {
               logger.debug(s"Deleting MetaRecord of ${deletedUuid.toString} in default collection of ${request.user.email}.")
-              val userMetaEntryDeleteOk: Boolean = userService.findUserMetaRecordByUuid(deletedUuid)
+              val userMetaEntryDeleteOk: Boolean = userService.findUserMetaRecordByXmlMetaOriginalUuid(deletedUuid)
                 .exists ( mt => userService.deleteUserMetaRecord(mt.uuid))
               if (userMetaEntryDeleteOk) {
                 Ok(Json.obj("type" -> "success", "fileIdentifier" -> deletedUuid.toString,
-                  "message" -> s"Deleted metadata record ${deletedUuid.toString}."))
+                  "message" -> s"Deleted metadata record ${deletedUuid.toString} and reference entry from your data collection."))
               } else {
-                val error = ErrorResult(s"Could not delete ${deletedUuid.toString} in your collection of ${request.user.email}.", None)
+                val error = ErrorResult(s"Could not delete ${deletedUuid.toString} in your data collection of ${request.user.email}.", None)
                 logger.warn(error.message)
                 BadRequest(Json.toJson(error)).as(JSON)
               }

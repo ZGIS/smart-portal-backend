@@ -126,19 +126,22 @@ object UserSession extends ClassnameLogger {
     ).executeUpdate()
 
     rowCount match {
-      case 1 => true
+      case i if i > 0 => true
       case _ => false
     }
   }
 
+  // technically there won't be multiple sessions by same token possible?
   def deleteUserSessionByToken(token: String)(implicit connection: Connection): Boolean = {
     val rowCount = SQL(s"delete from $table_sessions where token = {token}").on(
       'token -> token
     ).executeUpdate()
 
     rowCount match {
-      case 1 => true
+      case i if i > 0 => true
       case _ => false
     }
   }
+
+
 }

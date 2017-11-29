@@ -244,6 +244,12 @@ class AdminController @Inject()(implicit configuration: Configuration,
 
   }
 
+  def removeActiveSessions(token: String, email: String): Action[Unit] = defaultAdminAction(parse.empty) {
+    request =>
+      val sessions = adminService.queryActiveSessions(token, max, email).map(u => Json.toJson(u))
+      Ok(Json.obj("status" -> "OK", "sessions" -> JsArray(sessions)))
+  }
+
   /**
     * for admin view list all user files
     *

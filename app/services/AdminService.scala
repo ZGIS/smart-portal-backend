@@ -75,6 +75,26 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   /**
+    * remove one active session for one specific user
+    *
+    * @param token
+    * @param email
+    * @return
+    */
+  def removeActiveSessions(token: String, email: String): Boolean = {
+    dbSession.viaTransaction( implicit connection => {
+      val viaToken = UserSession.findUserSessionByToken(token, 1)
+      viaToken.exists{sess =>
+        if (sess.email.equals(email)) {
+          UserSession.deleteUserSessionByToken(sess.token)
+        } else {
+          false
+        }
+      }
+    })
+  }
+
+  /**
     * list all active sessions
     *
     * @return
@@ -98,6 +118,12 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
+  /**
+    * block and Unblock Users by setting status token
+    * @param command
+    * @param email
+    * @return
+    */
   def blockUnblockUsers(command: String, email: String): Option[User] = {
     val userOpt = dbSession.viaConnection( implicit connection => {
       UserDAO.findUserByEmailAsString(email)
@@ -115,6 +141,14 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
           "***",
           s"${statusToken.value}:BY-ADMIN",
           ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+
+        // remove any latent active sessions
+        val sessions = dbSession.viaConnection { implicit connection =>
+          UserSession.deleteUserSessionByEmail(user.email.value)
+        }
+        if (!sessions) {
+          logger.warn(s"There was a not completely successful sessions delete for ${user.email.value} when setting status to ${statusToken.value}?")
+        }
 
         // result of Option can be evaluated upstream in controller
         dbSession.viaTransaction { implicit connection =>

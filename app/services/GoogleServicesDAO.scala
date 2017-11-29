@@ -171,7 +171,9 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
     import scala.collection.JavaConverters._
 
     val blobTry = Try {
-      bucket.list().iterateAll().asScala.map( blob => LocalBlobInfo.newFrom(blob)).toSeq
+      bucket.list().iterateAll().asScala.filter(blob => blob != null ).map{
+        blob => LocalBlobInfo.newFrom(blob)
+      }.toSeq
     }
     blobTry match {
       case Success(blobSeq) => Right(blobSeq)

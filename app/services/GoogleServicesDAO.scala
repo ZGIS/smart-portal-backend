@@ -194,7 +194,10 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
       bucket.get(fileName)
     }
     blobTry match {
-      case Success(blob) => Right(LocalBlobInfo.newFrom(blob))
+      case Success(blob) if blob != null => Right(LocalBlobInfo.newFrom(blob))
+      case Success(blob) if blob == null =>
+        logger.error(s"Blob for $fileName retrieve from cloud storage returns file not found.")
+        Left(ErrorResult("Blob for $fileName retrieve from cloud storage returns file not found.", Some("Blob is NULL")))
       case Failure(ex) =>
         logger.error(s"Blob retrieve from cloud storage failed. ${ex.getLocalizedMessage}")
         Left(ErrorResult("Blob retrieve from cloud storage failed.", Some(ex.getLocalizedMessage)))

@@ -32,7 +32,7 @@ import org.apache.poi.ss.usermodel.WorkbookFactory
 import play.api.Configuration
 import play.api.http.MimeTypes
 import play.api.libs.Files.TemporaryFile
-import play.api.libs.json.{JsArray, JsError, JsValue, Json}
+import play.api.libs.json._
 import play.api.mvc._
 import services._
 import utils.{ClassnameLogger, PasswordHashing, ResearchPGHolder, XlsToSparqlRdfConverter}
@@ -244,10 +244,17 @@ class AdminController @Inject()(implicit configuration: Configuration,
 
   }
 
+  /**
+    * remove a specific session, will force that user device/browser combo to login again
+    *
+    * @param token
+    * @param email
+    * @return
+    */
   def removeActiveSessions(token: String, email: String): Action[Unit] = defaultAdminAction(parse.empty) {
     request =>
-      val sessions = adminService.queryActiveSessions(token, max, email).map(u => Json.toJson(u))
-      Ok(Json.obj("status" -> "OK", "sessions" -> JsArray(sessions)))
+      val sessions = adminService.removeActiveSessions(token, email)
+      Ok(Json.obj("status" -> "OK", "token" -> token, "email" -> email, "removed" -> sessions))
   }
 
   /**

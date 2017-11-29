@@ -22,9 +22,7 @@ import java.io.{File, FileInputStream}
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import utils.{ResearchPGHolder, XlsToSparqlRdfConverter}
 
-import scala.io.Source
 import scala.xml.NodeSeq
-
 
 class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
@@ -33,7 +31,6 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
   private lazy val researchPgResource1 = this.getClass().getResource("sparql/ResearchPrgrm.xlsx")
   private lazy val researchPgResource2 = this.getClass().getResource("sparql/research-pg.rdf")
-
 
   "Categories XLSX to RDFS Writer" should {
 
@@ -61,19 +58,6 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
     println(rdfCategories.last)
     categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-  }
-
-  "transformer" should {
-
-    val converter = new XlsToSparqlRdfConverter
-    println(converter.transformEncoding("Ngāti Hauā", "Cp1252", "UTF-8"))
-    println(converter.transformEncoding("Ngāti Hauā", "Cp1251", "UTF-8"))
-    println(converter.transformEncoding("Ngāti Hauā", "Cp1250", "UTF-8"))
-    println(converter.transformEncoding("Ngāti Hauā", "UTF-8", "UTF-8"))
-    println(converter.transformEncoding("Ngāti Hauā", "UTF-8", "latin1"))
-    println(converter.transformEncoding("Ngāti Hauā", "Cp1252", "latin1"))
-
-
   }
 
   "Research PG XLSX to RDF/SKOS Writer" should {

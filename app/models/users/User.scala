@@ -70,7 +70,7 @@ case class User(email: EmailAddress,
     * @return
     */
   def asProfileJs: ProfileJs = {
-    ProfileJs(email, accountSubject, firstname, lastname)
+    ProfileJs(email, accountSubject, firstname, lastname, Some(laststatustoken), Some(laststatuschange))
   }
 
   def isActive: Boolean = {

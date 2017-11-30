@@ -29,6 +29,7 @@ import play.api.libs.json._
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.PasswordHashing
 
+
 /**
   * Test Spec for [[User]] and [[UserDAO]]
   */
@@ -191,23 +192,35 @@ class UserDAOSpec extends WithDefaultTestFullAppAndDatabase {
            |}""".stripMargin).validate[User](controllers.userReads).get mustEqual testUser2
 
       // ProfileJs Reads and Writes
-      testUser2.asProfileJs mustEqual ProfileJs(testUser2.email, testUser2.accountSubject, testUser2.firstname, testUser2.lastname)
+      testUser2.asProfileJs mustEqual ProfileJs(testUser2.email, testUser2.accountSubject, testUser2.firstname, testUser2.lastname, Some(testUser2.laststatustoken), Some(testUser2.laststatuschange))
 
       Json.toJson(testUser2.asProfileJs)(controllers.profileJsWrites) mustEqual Json.parse(
-        """{
+        s"""{
           |"email":"test2@blubb.com",
           |"accountSubject":"local:test2@blubb.com",
           |"firstname":"Hans",
-          |"lastname":"Wurst"
+          |"lastname":"Wurst",
+          |"laststatustoken":"ACTIVE:REGCONFIRMED",
+          |"laststatuschange":"${testUser2.laststatuschange.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)}"
           |}""".stripMargin)
 
       Json.parse(
-        """{
+        s"""{
           |"email":"test2@blubb.com",
           |"accountSubject":"local:test2@blubb.com",
           |"firstname":"Hans",
-          |"lastname":"Wurst"
+          |"lastname":"Wurst",
+          |"laststatustoken":"ACTIVE:REGCONFIRMED",
+          |"laststatuschange":"${testUser2.laststatuschange.format(DateTimeFormatter.ISO_ZONED_DATE_TIME)}"
           |}""".stripMargin).validate[ProfileJs].get mustEqual testUser2.asProfileJs
+
+      Json.parse(
+        s"""{
+           |"email":"test2@blubb.com",
+           |"accountSubject":"local:test2@blubb.com",
+           |"firstname":"Hans",
+           |"lastname":"Wurst"
+           |}""".stripMargin).validate[ProfileJs].get.firstname mustEqual "Hans"
 
       // RegisterJs Reads
       Json.parse(

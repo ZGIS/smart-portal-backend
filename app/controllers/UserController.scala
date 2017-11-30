@@ -46,7 +46,9 @@ import scala.util.{Failure, Success, Try}
 case class ProfileJs(email: EmailAddress,
                      accountSubject: String,
                      firstname: String,
-                     lastname: String)
+                     lastname: String,
+                     laststatustoken: Option[String] = None,
+                     laststatuschange: Option[ZonedDateTime] = None)
 
 /**
   * here password is compulsory

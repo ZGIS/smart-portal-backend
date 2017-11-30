@@ -19,22 +19,23 @@
 
 import java.time.ZonedDateTime
 
-import com.google.cloud.storage.Blob
 import models.users.{PasswordUpdateCredentials, _}
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
-import play.api.libs.json.Writes._
 import play.api.libs.json._
 import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}
 
 package object controllers {
 
+  implicit val emailAddressReads: Reads[EmailAddress] = PlayJsonFormats.emailAddressReads
+  implicit val emailAddressWrites: Writes[EmailAddress] = PlayJsonFormats.emailAddressWrites
+
   implicit val LoginCredentialsFromJsonReads: Reads[LoginCredentials] = (
-    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
       (JsPath \ "password").read[String](minLength[String](8))) (LoginCredentials.apply _)
 
   implicit val passwordUpdateCredentialsJsReads: Reads[PasswordUpdateCredentials] = (
-    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
       (JsPath \ "oldpassword").read[String](minLength[String](8)) and
       (JsPath \ "newpassword").read[String](minLength[String](8))
     ) (PasswordUpdateCredentials.apply _).filterNot(p => p.oldPassword.equalsIgnoreCase(p.newPassword))
@@ -43,17 +44,17 @@ package object controllers {
     (JsPath \ "authcode").read[String] and
       (JsPath \ "accesstype").read[String]
     ) (GAuthCredentials.apply _).filter(p =>
-      p.accesstype.equalsIgnoreCase("LOGIN") || p.accesstype.equalsIgnoreCase("REGISTER"))
+    p.accesstype.equalsIgnoreCase("LOGIN") || p.accesstype.equalsIgnoreCase("REGISTER"))
 
   implicit val registerJsReads: Reads[RegisterJs] = (
-    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
       (JsPath \ "password").read[String](minLength[String](8))) (RegisterJs.apply _)
 
   implicit val userReads: Reads[User] = (
-    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
       (JsPath \ "lastname").read[String] and
@@ -61,26 +62,22 @@ package object controllers {
       (JsPath \ "laststatustoken").read[String] and
       (JsPath \ "laststatuschange").read[ZonedDateTime]) (User.apply _)
 
-  implicit val userWrites: Writes[User] = (
-    (JsPath \ "email").write[EmailAddress](PlayJsonFormats.emailAddressWrites) and
-      (JsPath \ "accountSubject").write[String] and
-      (JsPath \ "firstname").write[String] and
-      (JsPath \ "lastname").write[String] and
-      (JsPath \ "password").write[String] and
-      (JsPath \ "laststatustoken").write[String] and
-      (JsPath \ "laststatuschange").write[ZonedDateTime]) (unlift(User.unapply))
+  implicit val userWrites: Writes[User] = Json.writes[User]
 
+  //  implicit val profileJsReads: Reads[ProfileJs] = (
+  //    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
+  //      (JsPath \ "accountSubject").read[String] and
+  //      (JsPath \ "firstname").read[String] and
+  //      (JsPath \ "lastname").read[String]) ((email: EmailAddress, accountSubject: String, firstname: String, lastname: String) => ProfileJs.apply(email, accountSubject, firstname, lastname))
   implicit val profileJsReads: Reads[ProfileJs] = (
-    (JsPath \ "email").read[EmailAddress](PlayJsonFormats.emailAddressReads) and
+    (JsPath \ "email").read[EmailAddress](emailAddressReads) and
       (JsPath \ "accountSubject").read[String] and
       (JsPath \ "firstname").read[String] and
-      (JsPath \ "lastname").read[String]) (ProfileJs.apply _)
+      (JsPath \ "lastname").read[String] and
+      (JsPath \ "laststatustoken").readNullable[String] and
+      (JsPath \ "laststatuschange").readNullable[ZonedDateTime]) (ProfileJs.apply _)
 
-  implicit val profileJsWrites: Writes[ProfileJs] = (
-    (JsPath \ "email").write[EmailAddress](PlayJsonFormats.emailAddressWrites) and
-      (JsPath \ "accountSubject").write[String] and
-      (JsPath \ "firstname").write[String] and
-      (JsPath \ "lastname").write[String]) (unlift(ProfileJs.unapply))
+  implicit val profileJsWrites: Writes[ProfileJs] = Json.writes[ProfileJs]
 
   implicit val userFilesFormat: Format[UserFile] = Json.format[UserFile]
   implicit val userMetaRecordsFormat: Format[UserMetaRecord] = Json.format[UserMetaRecord]
@@ -93,6 +90,7 @@ package object controllers {
   implicit val userGroupFormat: Format[UserGroup] = Json.format[UserGroup]
 
   def appTimeZone()(implicit configuration: play.api.Configuration): String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+
   def uploadDataPath()(implicit configuration: play.api.Configuration): String = configuration.getString("smart.upload.datapath").getOrElse("/tmp")
 
 }

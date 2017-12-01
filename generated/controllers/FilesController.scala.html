@@ -167,7 +167,7 @@
 </span>143 <span style=''>    *
 </span>144 <span style=''>    * @return
 </span>145 <span style=''>    */
-</span>146 <span style=''>  def getUserFiles: Action[Unit] = </span><span style='background: #F0ADAD'>(authenticationAction andThen userAction)(parse.empty) {
+</span>146 <span style=''>  def getUserFiles: Action[Unit] = </span><span style='background: #F0ADAD'>(authenticationAction andThen userAction) (parse.empty) {
 </span>147 <span style=''></span><span style='background: #F0ADAD'>    request =&gt;
 </span>148 <span style=''></span><span style='background: #F0ADAD'>      val userfiles = userService.findUserFileByAccountSubject(request.user).map(u =&gt; Json.toJson(u))
 </span>149 <span style=''></span><span style='background: #F0ADAD'>      Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;userfiles&quot; -&gt; JsArray(userfiles)))
@@ -220,39 +220,47 @@
 </span>196 <span style=''></span><span style='background: #F0ADAD'>        userService.findUserFileByUuid(UUID.fromString(uuid))
 </span>197 <span style=''></span><span style='background: #F0ADAD'>          .map { userFile =&gt;
 </span>198 <span style=''></span><span style='background: #F0ADAD'>            googleService.deleteFileBlob(userFile.originalfilename).fold[Result] {
-</span>199 <span style=''></span><span style='background: #F0ADAD'>              // if empty
-</span>200 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;linkreference&quot; -&gt; userFile.linkreference, &quot;originalfilename&quot; -&gt; userFile.originalfilename, &quot;message&quot; -&gt; &quot;deleted&quot;))
-</span>201 <span style=''></span><span style='background: #F0ADAD'>            } {
-</span>202 <span style=''></span><span style='background: #F0ADAD'>              error =&gt; BadRequest(Json.toJson(error)).as(JSON)
-</span>203 <span style=''></span><span style='background: #F0ADAD'>            }
-</span>204 <span style=''></span><span style='background: #F0ADAD'>          }
-</span>205 <span style=''></span><span style='background: #F0ADAD'>          .getOrElse(notFoundBlock)
-</span>206 <span style=''></span><span style='background: #F0ADAD'>      }
-</span>207 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>208 <span style=''>
-</span>209 <span style=''>  /**
-</span>210 <span style=''>    * fire an entry into db for a url (somebody clicked ok to conset download file)
-</span>211 <span style=''>    *
-</span>212 <span style=''>    * @param link
-</span>213 <span style=''>    * @return
-</span>214 <span style=''>    */
-</span>215 <span style=''>  def logLinkInfo(link: String): Action[Unit] = </span><span style='background: #F0ADAD'>optionalAuthenticationAction(parse.empty) {
-</span>216 <span style=''></span><span style='background: #F0ADAD'>    request =&gt;
-</span>217 <span style=''></span><span style='background: #F0ADAD'>      val logRequest = UserLinkLogging(id = None,
-</span>218 <span style=''></span><span style='background: #F0ADAD'>        timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
-</span>219 <span style=''></span><span style='background: #F0ADAD'>        ipaddress = Some(request.remoteAddress),
-</span>220 <span style=''></span><span style='background: #F0ADAD'>        useragent = request.headers.get(UserAgentHeader),
-</span>221 <span style=''></span><span style='background: #F0ADAD'>        email = request.optionalSession.map(_.email),
-</span>222 <span style=''></span><span style='background: #F0ADAD'>        link = link,
-</span>223 <span style=''></span><span style='background: #F0ADAD'>        referer = request.headers.get(RefererHeader))
-</span>224 <span style=''></span><span style='background: #F0ADAD'>
-</span>225 <span style=''></span><span style='background: #F0ADAD'>      val updated = userService.logLinkInfo(logRequest)
-</span>226 <span style=''></span><span style='background: #F0ADAD'>
-</span>227 <span style=''></span><span style='background: #F0ADAD'>      logger.trace(logRequest.toString)
-</span>228 <span style=''></span><span style='background: #F0ADAD'>      Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;message&quot; -&gt; s&quot;$updated file request logged.&quot;))
-</span>229 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
-</span>230 <span style=''>
-</span>231 <span style=''>}
+</span>199 <span style=''></span><span style='background: #F0ADAD'>              // if empty means no ErrorResult
+</span>200 <span style=''></span><span style='background: #F0ADAD'>              // now also remove userFile db ref
+</span>201 <span style=''></span><span style='background: #F0ADAD'>              userService.deleteUserFile(userFile.uuid) match {
+</span>202 <span style=''></span><span style='background: #F0ADAD'>                case true =&gt; Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;linkreference&quot; -&gt; userFile.linkreference,
+</span>203 <span style=''></span><span style='background: #F0ADAD'>                  &quot;originalfilename&quot; -&gt; userFile.originalfilename, &quot;message&quot; -&gt; &quot;deleted&quot;))
+</span>204 <span style=''></span><span style='background: #F0ADAD'>                case false =&gt; logger.error(&quot;user file db delete not succesful&quot;)
+</span>205 <span style=''></span><span style='background: #F0ADAD'>                  val error = ErrorResult(&quot;user file db delete not succesful.&quot;, None)
+</span>206 <span style=''></span><span style='background: #F0ADAD'>                  BadRequest(Json.toJson(error)).as(JSON)
+</span>207 <span style=''></span><span style='background: #F0ADAD'>              }
+</span>208 <span style=''></span><span style='background: #F0ADAD'>
+</span>209 <span style=''></span><span style='background: #F0ADAD'>            } {
+</span>210 <span style=''></span><span style='background: #F0ADAD'>              error =&gt; BadRequest(Json.toJson(error)).as(JSON)
+</span>211 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>212 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>213 <span style=''></span><span style='background: #F0ADAD'>          .getOrElse(notFoundBlock)
+</span>214 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>215 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>216 <span style=''>
+</span>217 <span style=''>  /**
+</span>218 <span style=''>    * fire an entry into db for a url (somebody clicked ok to conset download file)
+</span>219 <span style=''>    *
+</span>220 <span style=''>    * @param link
+</span>221 <span style=''>    * @return
+</span>222 <span style=''>    */
+</span>223 <span style=''>  def logLinkInfo(link: String): Action[Unit] = </span><span style='background: #F0ADAD'>optionalAuthenticationAction(parse.empty) {
+</span>224 <span style=''></span><span style='background: #F0ADAD'>    request =&gt;
+</span>225 <span style=''></span><span style='background: #F0ADAD'>      val logRequest = UserLinkLogging(id = None,
+</span>226 <span style=''></span><span style='background: #F0ADAD'>        timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+</span>227 <span style=''></span><span style='background: #F0ADAD'>        ipaddress = Some(request.remoteAddress),
+</span>228 <span style=''></span><span style='background: #F0ADAD'>        useragent = request.headers.get(UserAgentHeader),
+</span>229 <span style=''></span><span style='background: #F0ADAD'>        email = request.optionalSession.map(_.email),
+</span>230 <span style=''></span><span style='background: #F0ADAD'>        link = link,
+</span>231 <span style=''></span><span style='background: #F0ADAD'>        referer = request.headers.get(RefererHeader))
+</span>232 <span style=''></span><span style='background: #F0ADAD'>
+</span>233 <span style=''></span><span style='background: #F0ADAD'>      val updated = userService.logLinkInfo(logRequest)
+</span>234 <span style=''></span><span style='background: #F0ADAD'>
+</span>235 <span style=''></span><span style='background: #F0ADAD'>      logger.trace(logRequest.toString)
+</span>236 <span style=''></span><span style='background: #F0ADAD'>      Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;message&quot; -&gt; s&quot;$updated file request logged.&quot;))
+</span>237 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>238 <span style=''>
+</span>239 <span style=''>}
 </span></pre>
           </div>
           <div class="tab-pane" id="statementlist">
@@ -269,49 +277,7 @@
           59
         </td>
         <td>
-          1698
-        </td>
-        <td>
-          2324
-          -
-          2347
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.BodyParsers.parse.multipartFormData
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.parse.multipartFormData
-        </td>
-      </tr><tr>
-        <td>
-          59
-        </td>
-        <td>
-          1697
-        </td>
-        <td>
-          2311
-          -
-          2321
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.FilesController.userAction
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.userAction
-        </td>
-      </tr><tr>
-        <td>
-          59
-        </td>
-        <td>
-          1830
+          1844
         </td>
         <td>
           2281
@@ -375,10 +341,52 @@
         </td>
       </tr><tr>
         <td>
+          59
+        </td>
+        <td>
+          1712
+        </td>
+        <td>
+          2324
+          -
+          2347
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.multipartFormData
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.parse.multipartFormData
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          1711
+        </td>
+        <td>
+          2311
+          -
+          2321
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.FilesController.userAction
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.userAction
+        </td>
+      </tr><tr>
+        <td>
           61
         </td>
         <td>
-          1699
+          1713
         </td>
         <td>
           2390
@@ -399,7 +407,7 @@
           63
         </td>
         <td>
-          1700
+          1714
         </td>
         <td>
           2439
@@ -420,7 +428,7 @@
           64
         </td>
         <td>
-          1701
+          1715
         </td>
         <td>
           2482
@@ -441,7 +449,28 @@
           65
         </td>
         <td>
-          1704
+          1716
+        </td>
+        <td>
+          2542
+          -
+          2542
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.FilesController.configuration
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.configuration
+        </td>
+      </tr><tr>
+        <td>
+          65
+        </td>
+        <td>
+          1718
         </td>
         <td>
           2532
@@ -462,7 +491,7 @@
           65
         </td>
         <td>
-          1703
+          1717
         </td>
         <td>
           2542
@@ -480,31 +509,10 @@
         </td>
       </tr><tr>
         <td>
-          65
-        </td>
-        <td>
-          1702
-        </td>
-        <td>
-          2542
-          -
-          2542
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.FilesController.configuration
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.configuration
-        </td>
-      </tr><tr>
-        <td>
           66
         </td>
         <td>
-          1705
+          1719
         </td>
         <td>
           2586
@@ -525,7 +533,7 @@
           67
         </td>
         <td>
-          1707
+          1721
         </td>
         <td>
           2666
@@ -546,7 +554,7 @@
           67
         </td>
         <td>
-          1706
+          1720
         </td>
         <td>
           2675
@@ -567,28 +575,7 @@
           68
         </td>
         <td>
-          1709
-        </td>
-        <td>
-          2753
-          -
-          2780
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.Files.TemporaryFile.moveTo
-        </td>
-        <td style="background: #F0ADAD">
-          theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2)
-        </td>
-      </tr><tr>
-        <td>
-          68
-        </td>
-        <td>
-          1708
+          1722
         </td>
         <td>
           2765
@@ -606,10 +593,31 @@
         </td>
       </tr><tr>
         <td>
+          68
+        </td>
+        <td>
+          1723
+        </td>
+        <td>
+          2753
+          -
+          2780
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.Files.TemporaryFile.moveTo
+        </td>
+        <td style="background: #F0ADAD">
+          theFile.ref.moveTo(tmpFile, theFile.ref.moveTo$default$2)
+        </td>
+      </tr><tr>
+        <td>
           69
         </td>
         <td>
-          1710
+          1724
         </td>
         <td>
           2805
@@ -630,7 +638,7 @@
           71
         </td>
         <td>
-          1711
+          1725
         </td>
         <td>
           2835
@@ -651,7 +659,28 @@
           73
         </td>
         <td>
-          1713
+          1728
+        </td>
+        <td>
+          2949
+          -
+          2999
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          errorResult.message.+(scala.this.Option.option2Iterable[String](errorResult.details).mkString)
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          1727
         </td>
         <td>
           2971
@@ -672,7 +701,7 @@
           73
         </td>
         <td>
-          1712
+          1726
         </td>
         <td>
           2971
@@ -693,7 +722,7 @@
           73
         </td>
         <td>
-          1715
+          1729
         </td>
         <td>
           2936
@@ -711,115 +740,31 @@
         </td>
       </tr><tr>
         <td>
-          73
-        </td>
-        <td>
-          1714
-        </td>
-        <td>
-          2949
-          -
-          2999
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.String.+
-        </td>
-        <td style="background: #F0ADAD">
-          errorResult.message.+(scala.this.Option.option2Iterable[String](errorResult.details).mkString)
-        </td>
-      </tr><tr>
-        <td>
           74
         </td>
         <td>
-          1716
+          1734
         </td>
         <td>
-          3044
+          3062
           -
-          3044
+          3066
         </td>
         <td>
           Select
         </td>
         <td>
-          models.ErrorResult.writes
+          play.api.http.ContentTypes.JSON
         </td>
         <td style="background: #F0ADAD">
-          models.this.ErrorResult.writes
+          FilesController.this.JSON
         </td>
       </tr><tr>
         <td>
           74
         </td>
         <td>
-          1719
-        </td>
-        <td>
-          3032
-          -
-          3032
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          74
-        </td>
-        <td>
-          1721
-        </td>
-        <td>
-          3013
-          -
-          3067
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](errorResult)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
-          74
-        </td>
-        <td>
-          1718
-        </td>
-        <td>
-          3032
-          -
-          3032
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          74
-        </td>
-        <td>
-          1717
+          1731
         </td>
         <td>
           3033
@@ -840,28 +785,112 @@
           74
         </td>
         <td>
-          1720
+          1730
         </td>
         <td>
-          3062
+          3044
           -
-          3066
+          3044
         </td>
         <td>
           Select
         </td>
         <td>
-          play.api.http.ContentTypes.JSON
+          models.ErrorResult.writes
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.JSON
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1733
+        </td>
+        <td>
+          3032
+          -
+          3032
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1735
+        </td>
+        <td>
+          3013
+          -
+          3067
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.InternalServerError.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](errorResult)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          1732
+        </td>
+        <td>
+          3032
+          -
+          3032
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
         </td>
       </tr><tr>
         <td>
           77
         </td>
         <td>
-          1725
+          1737
+        </td>
+        <td>
+          3225
+          -
+          3243
+        </td>
+        <td>
+          ApplyImplicitView
+        </td>
+        <td>
+          uk.gov.hmrc.emailaddress.StringValue.stringValueToString
+        </td>
+        <td style="background: #F0ADAD">
+          emailaddress.this.StringValue.stringValueToString(request.user.email)
+        </td>
+      </tr><tr>
+        <td>
+          77
+        </td>
+        <td>
+          1739
         </td>
         <td>
           3183
@@ -882,7 +911,7 @@
           77
         </td>
         <td>
-          1722
+          1736
         </td>
         <td>
           3225
@@ -903,7 +932,7 @@
           77
         </td>
         <td>
-          1724
+          1738
         </td>
         <td>
           3245
@@ -921,31 +950,10 @@
         </td>
       </tr><tr>
         <td>
-          77
-        </td>
-        <td>
-          1723
-        </td>
-        <td>
-          3225
-          -
-          3243
-        </td>
-        <td>
-          ApplyImplicitView
-        </td>
-        <td>
-          uk.gov.hmrc.emailaddress.StringValue.stringValueToString
-        </td>
-        <td style="background: #F0ADAD">
-          emailaddress.this.StringValue.stringValueToString(request.user.email)
-        </td>
-      </tr><tr>
-        <td>
           79
         </td>
         <td>
-          1726
+          1740
         </td>
         <td>
           3314
@@ -966,7 +974,28 @@
           80
         </td>
         <td>
-          1728
+          1743
+        </td>
+        <td>
+          3385
+          -
+          3434
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;File metadata insert failed.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          80
+        </td>
+        <td>
+          1742
         </td>
         <td>
           3429
@@ -987,7 +1016,7 @@
           80
         </td>
         <td>
-          1727
+          1741
         </td>
         <td>
           3397
@@ -1005,31 +1034,31 @@
         </td>
       </tr><tr>
         <td>
-          80
+          81
         </td>
         <td>
-          1729
+          1746
         </td>
         <td>
-          3385
+          3459
           -
-          3434
+          3459
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          models.ErrorResult.apply
+          play.api.mvc.Codec.utf_8
         </td>
         <td style="background: #F0ADAD">
-          models.ErrorResult.apply(&quot;File metadata insert failed.&quot;, scala.None)
+          mvc.this.Codec.utf_8
         </td>
       </tr><tr>
         <td>
           81
         </td>
         <td>
-          1734
+          1748
         </td>
         <td>
           3483
@@ -1050,7 +1079,7 @@
           81
         </td>
         <td>
-          1731
+          1745
         </td>
         <td>
           3460
@@ -1071,7 +1100,7 @@
           81
         </td>
         <td>
-          1730
+          1744
         </td>
         <td>
           3471
@@ -1092,7 +1121,7 @@
           81
         </td>
         <td>
-          1733
+          1747
         </td>
         <td>
           3459
@@ -1113,7 +1142,7 @@
           81
         </td>
         <td>
-          1735
+          1749
         </td>
         <td>
           3449
@@ -1131,31 +1160,10 @@
         </td>
       </tr><tr>
         <td>
-          81
-        </td>
-        <td>
-          1732
-        </td>
-        <td>
-          3459
-          -
-          3459
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
           82
         </td>
         <td>
-          1808
+          1822
         </td>
         <td>
           3277
@@ -1195,7 +1203,28 @@
           83
         </td>
         <td>
-          1737
+          1752
+        </td>
+        <td>
+          3549
+          -
+          3634
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.OwcCollectionsService.fileMetadata
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.collectionsService.fileMetadata(userFile, contentType, scala.util.Try.apply[Int](kilobytes.toInt).toOption)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          1751
         </td>
         <td>
           3604
@@ -1216,7 +1245,7 @@
           83
         </td>
         <td>
-          1736
+          1750
         </td>
         <td>
           3608
@@ -1234,52 +1263,10 @@
         </td>
       </tr><tr>
         <td>
-          83
-        </td>
-        <td>
-          1738
-        </td>
-        <td>
-          3549
-          -
-          3634
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          services.OwcCollectionsService.fileMetadata
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.collectionsService.fileMetadata(userFile, contentType, scala.util.Try.apply[Int](kilobytes.toInt).toOption)
-        </td>
-      </tr><tr>
-        <td>
           84
         </td>
         <td>
-          1739
-        </td>
-        <td>
-          3679
-          -
-          3697
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcResource.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          owcResource.toJson
-        </td>
-      </tr><tr>
-        <td>
-          84
-        </td>
-        <td>
-          1741
+          1755
         </td>
         <td>
           3649
@@ -1300,7 +1287,7 @@
           84
         </td>
         <td>
-          1740
+          1754
         </td>
         <td>
           3662
@@ -1318,325 +1305,31 @@
         </td>
       </tr><tr>
         <td>
-          85
-        </td>
-        <td>
-          1752
-        </td>
-        <td>
-          3756
-          -
-          3774
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          services.LocalBlobInfo.mediaLink
-        </td>
-        <td style="background: #F0ADAD">
-          blobInfo.mediaLink
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1743
-        </td>
-        <td>
-          3750
-          -
-          3755
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot; to &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1761
-        </td>
-        <td>
-          3714
-          -
-          3953
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.debug
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot; with reference &quot;, &quot;; bob details: &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(filename, blobInfo.mediaLink, userFile.linkreference, blobInfo.name, blobInfo.bucket, blobInfo.contentType, blobInfo.contentEncoding, blobInfo.size, blobInfo.md5))
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1746
-        </td>
-        <td>
-          3847
-          -
-          3849
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot; &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1755
-        </td>
-        <td>
-          3850
-          -
-          3865
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          services.LocalBlobInfo.bucket
-        </td>
-        <td style="background: #F0ADAD">
-          blobInfo.bucket
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1754
-        </td>
-        <td>
-          3833
-          -
-          3846
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          services.LocalBlobInfo.name
-        </td>
-        <td style="background: #F0ADAD">
-          blobInfo.name
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1757
-        </td>
-        <td>
-          3893
-          -
-          3917
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          services.LocalBlobInfo.contentEncoding
-        </td>
-        <td style="background: #F0ADAD">
-          blobInfo.contentEncoding
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1748
-        </td>
-        <td>
-          3890
-          -
-          3892
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot; &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1751
-        </td>
-        <td>
-          3951
-          -
-          3952
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;&quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1742
-        </td>
-        <td>
-          3729
-          -
-          3742
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;file upload &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1760
-        </td>
-        <td>
-          3727
-          -
-          3952
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot; with reference &quot;, &quot;; bob details: &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(filename, blobInfo.mediaLink, userFile.linkreference, blobInfo.name, blobInfo.bucket, blobInfo.contentType, blobInfo.contentEncoding, blobInfo.size, blobInfo.md5)
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1745
-        </td>
-        <td>
-          3816
-          -
-          3832
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;; bob details: &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1744
-        </td>
-        <td>
-          3775
-          -
-          3792
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot; with reference &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
+          84
         </td>
         <td>
           1753
         </td>
         <td>
-          3793
+          3679
           -
-          3815
+          3697
         </td>
         <td>
           Select
         </td>
         <td>
-          models.users.UserFile.linkreference
+          info.smart.models.owc100.OwcResource.toJson
         </td>
         <td style="background: #F0ADAD">
-          userFile.linkreference
+          owcResource.toJson
         </td>
       </tr><tr>
         <td>
           85
         </td>
         <td>
-          1747
-        </td>
-        <td>
-          3866
-          -
-          3868
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot; &quot;
-        </td>
-      </tr><tr>
-        <td>
-          85
-        </td>
-        <td>
-          1756
+          1770
         </td>
         <td>
           3869
@@ -1657,12 +1350,12 @@
           85
         </td>
         <td>
-          1750
+          1761
         </td>
         <td>
-          3935
+          3866
           -
-          3937
+          3868
         </td>
         <td>
           Literal
@@ -1678,7 +1371,7 @@
           85
         </td>
         <td>
-          1759
+          1773
         </td>
         <td>
           3938
@@ -1699,7 +1392,28 @@
           85
         </td>
         <td>
-          1749
+          1764
+        </td>
+        <td>
+          3935
+          -
+          3937
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1763
         </td>
         <td>
           3918
@@ -1720,7 +1434,7 @@
           85
         </td>
         <td>
-          1758
+          1772
         </td>
         <td>
           3921
@@ -1738,10 +1452,325 @@
         </td>
       </tr><tr>
         <td>
+          85
+        </td>
+        <td>
+          1757
+        </td>
+        <td>
+          3750
+          -
+          3755
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; to &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1766
+        </td>
+        <td>
+          3756
+          -
+          3774
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.LocalBlobInfo.mediaLink
+        </td>
+        <td style="background: #F0ADAD">
+          blobInfo.mediaLink
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1775
+        </td>
+        <td>
+          3714
+          -
+          3953
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.debug
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.logger.debug(scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot; with reference &quot;, &quot;; bob details: &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(filename, blobInfo.mediaLink, userFile.linkreference, blobInfo.name, blobInfo.bucket, blobInfo.contentType, blobInfo.contentEncoding, blobInfo.size, blobInfo.md5))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1769
+        </td>
+        <td>
+          3850
+          -
+          3865
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.LocalBlobInfo.bucket
+        </td>
+        <td style="background: #F0ADAD">
+          blobInfo.bucket
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1760
+        </td>
+        <td>
+          3847
+          -
+          3849
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1762
+        </td>
+        <td>
+          3890
+          -
+          3892
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1771
+        </td>
+        <td>
+          3893
+          -
+          3917
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.LocalBlobInfo.contentEncoding
+        </td>
+        <td style="background: #F0ADAD">
+          blobInfo.contentEncoding
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1765
+        </td>
+        <td>
+          3951
+          -
+          3952
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1774
+        </td>
+        <td>
+          3727
+          -
+          3952
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;file upload &quot;, &quot; to &quot;, &quot; with reference &quot;, &quot;; bob details: &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot; &quot;, &quot;&quot;).s(filename, blobInfo.mediaLink, userFile.linkreference, blobInfo.name, blobInfo.bucket, blobInfo.contentType, blobInfo.contentEncoding, blobInfo.size, blobInfo.md5)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1756
+        </td>
+        <td>
+          3729
+          -
+          3742
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;file upload &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1768
+        </td>
+        <td>
+          3833
+          -
+          3846
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.LocalBlobInfo.name
+        </td>
+        <td style="background: #F0ADAD">
+          blobInfo.name
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1759
+        </td>
+        <td>
+          3816
+          -
+          3832
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;; bob details: &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1758
+        </td>
+        <td>
+          3775
+          -
+          3792
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; with reference &quot;
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          1767
+        </td>
+        <td>
+          3793
+          -
+          3815
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserFile.linkreference
+        </td>
+        <td style="background: #F0ADAD">
+          userFile.linkreference
+        </td>
+      </tr><tr>
+        <td>
           86
         </td>
         <td>
-          1764
+          1779
+        </td>
+        <td>
+          3968
+          -
+          4043
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.util.Try.map
+        </td>
+        <td style="background: #F0ADAD">
+          scala.util.Try.apply[Boolean](handle.delete()).failed.map[Unit](((ex: Throwable) =&gt; FilesController.this.logger.error(ex.getLocalizedMessage())))
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          1778
         </td>
         <td>
           4006
@@ -1762,7 +1791,7 @@
           86
         </td>
         <td>
-          1763
+          1777
         </td>
         <td>
           4019
@@ -1783,7 +1812,7 @@
           86
         </td>
         <td>
-          1762
+          1776
         </td>
         <td>
           3972
@@ -1801,73 +1830,10 @@
         </td>
       </tr><tr>
         <td>
-          86
-        </td>
-        <td>
-          1765
-        </td>
-        <td>
-          3968
-          -
-          4043
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.util.Try.map
-        </td>
-        <td style="background: #F0ADAD">
-          scala.util.Try.apply[Boolean](handle.delete()).failed.map[Unit](((ex: Throwable) =&gt; FilesController.this.logger.error(ex.getLocalizedMessage())))
-        </td>
-      </tr><tr>
-        <td>
           87
         </td>
         <td>
-          1766
-        </td>
-        <td>
-          4062
-          -
-          4089
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.nio.file.Files.delete
-        </td>
-        <td style="background: #F0ADAD">
-          java.nio.file.Files.delete(intermTempDir)
-        </td>
-      </tr><tr>
-        <td>
-          87
-        </td>
-        <td>
-          1769
-        </td>
-        <td>
-          4058
-          -
-          4145
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.util.Try.map
-        </td>
-        <td style="background: #F0ADAD">
-          scala.util.Try.apply[Unit](java.nio.file.Files.delete(intermTempDir)).failed.map[Unit](((ex: Throwable) =&gt; FilesController.this.logger.error(ex.getLocalizedMessage())))
-        </td>
-      </tr><tr>
-        <td>
-          87
-        </td>
-        <td>
-          1768
+          1782
         </td>
         <td>
           4108
@@ -1888,7 +1854,7 @@
           87
         </td>
         <td>
-          1767
+          1781
         </td>
         <td>
           4121
@@ -1906,10 +1872,52 @@
         </td>
       </tr><tr>
         <td>
+          87
+        </td>
+        <td>
+          1780
+        </td>
+        <td>
+          4062
+          -
+          4089
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.nio.file.Files.delete
+        </td>
+        <td style="background: #F0ADAD">
+          java.nio.file.Files.delete(intermTempDir)
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          1783
+        </td>
+        <td>
+          4058
+          -
+          4145
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.util.Try.map
+        </td>
+        <td style="background: #F0ADAD">
+          scala.util.Try.apply[Unit](java.nio.file.Files.delete(intermTempDir)).failed.map[Unit](((ex: Throwable) =&gt; FilesController.this.logger.error(ex.getLocalizedMessage())))
+        </td>
+      </tr><tr>
+        <td>
           90
         </td>
         <td>
-          1770
+          1784
         </td>
         <td>
           4391
@@ -1930,7 +1938,7 @@
           90
         </td>
         <td>
-          1771
+          1785
         </td>
         <td>
           4315
@@ -1951,448 +1959,7 @@
           92
         </td>
         <td>
-          1779
-        </td>
-        <td>
-          4491
-          -
-          4491
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1788
-        </td>
-        <td>
-          4565
-          -
-          4583
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          info.smart.models.owc100.OwcResource.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          owcResource.toJson
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1782
-        </td>
-        <td>
-          4520
-          -
-          4526
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;file&quot;
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1791
-        </td>
-        <td>
-          4554
-          -
-          4583
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1773
-        </td>
-        <td>
-          4472
-          -
-          4476
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;OK&quot;
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1781
-        </td>
-        <td>
-          4478
-          -
-          4518
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1790
-        </td>
-        <td>
-          4565
-          -
-          4583
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites)
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1772
-        </td>
-        <td>
-          4460
-          -
-          4468
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1793
-        </td>
-        <td>
-          4450
-          -
-          4450
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1784
-        </td>
-        <td>
-          4539
-          -
-          4539
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1775
-        </td>
-        <td>
-          4472
-          -
-          4476
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1778
-        </td>
-        <td>
-          4491
-          -
-          4518
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.StringContext.s
-        </td>
-        <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename)
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1787
-        </td>
-        <td>
-          4554
-          -
-          4561
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;entry&quot;
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1796
-        </td>
-        <td>
-          4448
-          -
-          4585
-        </td>
-        <td>
-          Block
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1786
-        </td>
-        <td>
-          4520
-          -
-          4552
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1795
-        </td>
-        <td>
-          4448
-          -
-          4585
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1777
-        </td>
-        <td>
-          4478
-          -
-          4487
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1789
-        </td>
-        <td>
-          4577
-          -
-          4577
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.JsValueWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.JsValueWrites
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1780
-        </td>
-        <td>
-          4491
-          -
-          4518
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1783
-        </td>
-        <td>
-          4530
-          -
-          4552
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.UserFile.linkreference
-        </td>
-        <td style="background: #F0ADAD">
-          userFile.linkreference
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1774
-        </td>
-        <td>
-          4472
-          -
-          4472
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          92
-        </td>
-        <td>
-          1792
+          1806
         </td>
         <td>
           4451
@@ -2413,7 +1980,91 @@
           92
         </td>
         <td>
-          1794
+          1788
+        </td>
+        <td>
+          4472
+          -
+          4472
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1797
+        </td>
+        <td>
+          4530
+          -
+          4552
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserFile.linkreference
+        </td>
+        <td style="background: #F0ADAD">
+          userFile.linkreference
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1791
+        </td>
+        <td>
+          4478
+          -
+          4487
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1799
+        </td>
+        <td>
+          4530
+          -
+          4552
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1808
         </td>
         <td>
           4450
@@ -2434,7 +2085,7 @@
           92
         </td>
         <td>
-          1776
+          1790
         </td>
         <td>
           4460
@@ -2455,12 +2106,159 @@
           92
         </td>
         <td>
-          1785
+          1793
         </td>
         <td>
-          4530
+          4491
           -
-          4552
+          4491
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1802
+        </td>
+        <td>
+          4565
+          -
+          4583
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          info.smart.models.owc100.OwcResource.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          owcResource.toJson
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1787
+        </td>
+        <td>
+          4472
+          -
+          4476
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1796
+        </td>
+        <td>
+          4520
+          -
+          4526
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;file&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1805
+        </td>
+        <td>
+          4554
+          -
+          4583
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1786
+        </td>
+        <td>
+          4460
+          -
+          4468
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1795
+        </td>
+        <td>
+          4478
+          -
+          4518
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1804
+        </td>
+        <td>
+          4565
+          -
+          4583
         </td>
         <td>
           ApplyToImplicitArgs
@@ -2469,14 +2267,224 @@
           play.api.libs.json.Json.toJsFieldJsValueWrapper
         </td>
         <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1789
+        </td>
+        <td>
+          4472
+          -
+          4476
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1798
+        </td>
+        <td>
+          4539
+          -
+          4539
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1807
+        </td>
+        <td>
+          4450
+          -
+          4450
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1810
+        </td>
+        <td>
+          4448
+          -
+          4585
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1792
+        </td>
+        <td>
+          4491
+          -
+          4518
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1801
+        </td>
+        <td>
+          4554
+          -
+          4561
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;entry&quot;
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1800
+        </td>
+        <td>
+          4520
+          -
+          4552
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1809
+        </td>
+        <td>
+          4448
+          -
+          4585
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;file&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;entry&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](owcResource.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1794
+        </td>
+        <td>
+          4491
+          -
+          4518
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;file uploaded &quot;, &quot;.&quot;).s(filename))(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          92
+        </td>
+        <td>
+          1803
+        </td>
+        <td>
+          4577
+          -
+          4577
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
         </td>
       </tr><tr>
         <td>
           93
         </td>
         <td>
-          1807
+          1821
         </td>
         <td>
           4607
@@ -2501,7 +2509,7 @@
           94
         </td>
         <td>
-          1797
+          1811
         </td>
         <td>
           4625
@@ -2522,7 +2530,28 @@
           95
         </td>
         <td>
-          1799
+          1814
+        </td>
+        <td>
+          4704
+          -
+          4759
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Insert into own collection failed.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          1813
         </td>
         <td>
           4754
@@ -2543,7 +2572,7 @@
           95
         </td>
         <td>
-          1798
+          1812
         </td>
         <td>
           4716
@@ -2561,31 +2590,52 @@
         </td>
       </tr><tr>
         <td>
-          95
+          96
         </td>
         <td>
-          1800
+          1815
         </td>
         <td>
-          4704
+          4798
           -
-          4759
+          4798
         </td>
         <td>
-          Apply
+          Select
         </td>
         <td>
-          models.ErrorResult.apply
+          models.ErrorResult.writes
         </td>
         <td style="background: #F0ADAD">
-          models.ErrorResult.apply(&quot;Insert into own collection failed.&quot;, scala.None)
+          models.this.ErrorResult.writes
         </td>
       </tr><tr>
         <td>
           96
         </td>
         <td>
-          1806
+          1817
+        </td>
+        <td>
+          4786
+          -
+          4786
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          1820
         </td>
         <td>
           4776
@@ -2606,7 +2656,7 @@
           96
         </td>
         <td>
-          1802
+          1816
         </td>
         <td>
           4787
@@ -2627,7 +2677,7 @@
           96
         </td>
         <td>
-          1805
+          1819
         </td>
         <td>
           4810
@@ -2648,7 +2698,7 @@
           96
         </td>
         <td>
-          1804
+          1818
         </td>
         <td>
           4786
@@ -2666,52 +2716,10 @@
         </td>
       </tr><tr>
         <td>
-          96
-        </td>
-        <td>
-          1801
-        </td>
-        <td>
-          4798
-          -
-          4798
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.ErrorResult.writes
-        </td>
-        <td style="background: #F0ADAD">
-          models.this.ErrorResult.writes
-        </td>
-      </tr><tr>
-        <td>
-          96
-        </td>
-        <td>
-          1803
-        </td>
-        <td>
-          4786
-          -
-          4786
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
           100
         </td>
         <td>
-          1809
+          1823
         </td>
         <td>
           4878
@@ -2732,28 +2740,7 @@
           101
         </td>
         <td>
-          1811
-        </td>
-        <td>
-          5006
-          -
-          5010
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          101
-        </td>
-        <td>
-          1810
+          1824
         </td>
         <td>
           4966
@@ -2774,7 +2761,7 @@
           101
         </td>
         <td>
-          1812
+          1826
         </td>
         <td>
           4954
@@ -2792,10 +2779,52 @@
         </td>
       </tr><tr>
         <td>
+          101
+        </td>
+        <td>
+          1825
+        </td>
+        <td>
+          5006
+          -
+          5010
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
           102
         </td>
         <td>
-          1815
+          1832
+        </td>
+        <td>
+          5024
+          -
+          5063
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1829
         </td>
         <td>
           5034
@@ -2816,28 +2845,7 @@
           102
         </td>
         <td>
-          1814
-        </td>
-        <td>
-          5035
-          -
-          5053
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          102
-        </td>
-        <td>
-          1817
+          1831
         </td>
         <td>
           5058
@@ -2858,7 +2866,28 @@
           102
         </td>
         <td>
-          1813
+          1828
+        </td>
+        <td>
+          5035
+          -
+          5053
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          1827
         </td>
         <td>
           5046
@@ -2879,7 +2908,7 @@
           102
         </td>
         <td>
-          1816
+          1830
         </td>
         <td>
           5034
@@ -2897,31 +2926,10 @@
         </td>
       </tr><tr>
         <td>
-          102
-        </td>
-        <td>
-          1818
-        </td>
-        <td>
-          5024
-          -
-          5063
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
           104
         </td>
         <td>
-          1829
+          1843
         </td>
         <td>
           2372
@@ -2988,7 +2996,7 @@
           105
         </td>
         <td>
-          1819
+          1833
         </td>
         <td>
           5102
@@ -3009,7 +3017,28 @@
           106
         </td>
         <td>
-          1820
+          1835
+        </td>
+        <td>
+          5243
+          -
+          5247
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          1834
         </td>
         <td>
           5195
@@ -3030,7 +3059,7 @@
           106
         </td>
         <td>
-          1822
+          1836
         </td>
         <td>
           5183
@@ -3048,115 +3077,10 @@
         </td>
       </tr><tr>
         <td>
-          106
-        </td>
-        <td>
-          1821
-        </td>
-        <td>
-          5243
-          -
-          5247
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
           107
         </td>
         <td>
-          1824
-        </td>
-        <td>
-          5268
-          -
-          5286
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          107
-        </td>
-        <td>
-          1823
-        </td>
-        <td>
-          5279
-          -
-          5279
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.ErrorResult.writes
-        </td>
-        <td style="background: #F0ADAD">
-          models.this.ErrorResult.writes
-        </td>
-      </tr><tr>
-        <td>
-          107
-        </td>
-        <td>
-          1826
-        </td>
-        <td>
-          5267
-          -
-          5267
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          107
-        </td>
-        <td>
-          1825
-        </td>
-        <td>
-          5267
-          -
-          5267
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          107
-        </td>
-        <td>
-          1828
+          1842
         </td>
         <td>
           5257
@@ -3177,7 +3101,7 @@
           107
         </td>
         <td>
-          1827
+          1841
         </td>
         <td>
           5291
@@ -3195,31 +3119,94 @@
         </td>
       </tr><tr>
         <td>
-          119
+          107
         </td>
         <td>
-          1831
+          1838
         </td>
         <td>
-          5680
+          5268
           -
-          5691
+          5286
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1837
+        </td>
+        <td>
+          5279
+          -
+          5279
         </td>
         <td>
           Select
         </td>
         <td>
-          play.api.mvc.BodyParsers.parse.empty
+          models.ErrorResult.writes
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.parse.empty
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1840
+        </td>
+        <td>
+          5267
+          -
+          5267
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          107
+        </td>
+        <td>
+          1839
+        </td>
+        <td>
+          5267
+          -
+          5267
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
         </td>
       </tr><tr>
         <td>
           119
         </td>
         <td>
-          1881
+          1895
         </td>
         <td>
           5651
@@ -3246,10 +3233,31 @@
         </td>
       </tr><tr>
         <td>
+          119
+        </td>
+        <td>
+          1845
+        </td>
+        <td>
+          5680
+          -
+          5691
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
           121
         </td>
         <td>
-          1832
+          1846
         </td>
         <td>
           5747
@@ -3270,7 +3278,7 @@
           122
         </td>
         <td>
-          1833
+          1847
         </td>
         <td>
           5785
@@ -3291,7 +3299,28 @@
           123
         </td>
         <td>
-          1835
+          1850
+        </td>
+        <td>
+          5836
+          -
+          5872
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;file not found.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          1849
         </td>
         <td>
           5867
@@ -3312,7 +3341,7 @@
           123
         </td>
         <td>
-          1834
+          1848
         </td>
         <td>
           5848
@@ -3330,94 +3359,10 @@
         </td>
       </tr><tr>
         <td>
-          123
-        </td>
-        <td>
-          1836
-        </td>
-        <td>
-          5836
-          -
-          5872
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          models.ErrorResult.apply
-        </td>
-        <td style="background: #F0ADAD">
-          models.ErrorResult.apply(&quot;file not found.&quot;, scala.None)
-        </td>
-      </tr><tr>
-        <td>
           124
         </td>
         <td>
-          1842
-        </td>
-        <td>
-          5881
-          -
-          5920
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
-          124
-        </td>
-        <td>
-          1841
-        </td>
-        <td>
-          5915
-          -
-          5919
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.http.ContentTypes.JSON
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.JSON
-        </td>
-      </tr><tr>
-        <td>
-          124
-        </td>
-        <td>
-          1838
-        </td>
-        <td>
-          5892
-          -
-          5910
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          124
-        </td>
-        <td>
-          1837
+          1851
         </td>
         <td>
           5903
@@ -3438,28 +3383,7 @@
           124
         </td>
         <td>
-          1840
-        </td>
-        <td>
-          5891
-          -
-          5891
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          124
-        </td>
-        <td>
-          1839
+          1853
         </td>
         <td>
           5891
@@ -3477,10 +3401,94 @@
         </td>
       </tr><tr>
         <td>
+          124
+        </td>
+        <td>
+          1856
+        </td>
+        <td>
+          5881
+          -
+          5920
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1855
+        </td>
+        <td>
+          5915
+          -
+          5919
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1852
+        </td>
+        <td>
+          5892
+          -
+          5910
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          1854
+        </td>
+        <td>
+          5891
+          -
+          5891
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
           125
         </td>
         <td>
-          1880
+          1894
         </td>
         <td>
           5716
@@ -3510,28 +3518,7 @@
           127
         </td>
         <td>
-          1843
-        </td>
-        <td>
-          5999
-          -
-          6003
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          127
-        </td>
-        <td>
-          1857
+          1871
         </td>
         <td>
           5978
@@ -3549,10 +3536,52 @@
         </td>
       </tr><tr>
         <td>
+          127
+        </td>
+        <td>
+          1857
+        </td>
+        <td>
+          5999
+          -
+          6003
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
           128
         </td>
         <td>
-          1844
+          1859
+        </td>
+        <td>
+          6077
+          -
+          6088
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          controllers.appTimeZone
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.appTimeZone()(FilesController.this.configuration)
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          1858
         </td>
         <td>
           6077
@@ -3573,7 +3602,7 @@
           128
         </td>
         <td>
-          1847
+          1861
         </td>
         <td>
           6029
@@ -3594,7 +3623,7 @@
           128
         </td>
         <td>
-          1846
+          1860
         </td>
         <td>
           6067
@@ -3612,52 +3641,10 @@
         </td>
       </tr><tr>
         <td>
-          128
-        </td>
-        <td>
-          1845
-        </td>
-        <td>
-          6077
-          -
-          6088
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          controllers.appTimeZone
-        </td>
-        <td style="background: #F0ADAD">
-          controllers.this.`package`.appTimeZone()(FilesController.this.configuration)
-        </td>
-      </tr><tr>
-        <td>
           129
         </td>
         <td>
-          1849
-        </td>
-        <td>
-          6116
-          -
-          6143
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Some.apply
-        </td>
-        <td style="background: #F0ADAD">
-          scala.Some.apply[String](request.remoteAddress)
-        </td>
-      </tr><tr>
-        <td>
-          129
-        </td>
-        <td>
-          1848
+          1862
         </td>
         <td>
           6121
@@ -3675,10 +3662,31 @@
         </td>
       </tr><tr>
         <td>
+          129
+        </td>
+        <td>
+          1863
+        </td>
+        <td>
+          6116
+          -
+          6143
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](request.remoteAddress)
+        </td>
+      </tr><tr>
+        <td>
           130
         </td>
         <td>
-          1851
+          1865
         </td>
         <td>
           6169
@@ -3699,7 +3707,7 @@
           130
         </td>
         <td>
-          1850
+          1864
         </td>
         <td>
           6189
@@ -3720,7 +3728,7 @@
           131
         </td>
         <td>
-          1853
+          1867
         </td>
         <td>
           6227
@@ -3741,7 +3749,7 @@
           131
         </td>
         <td>
-          1852
+          1866
         </td>
         <td>
           6255
@@ -3762,7 +3770,7 @@
           132
         </td>
         <td>
-          1854
+          1868
         </td>
         <td>
           6284
@@ -3783,7 +3791,7 @@
           133
         </td>
         <td>
-          1856
+          1870
         </td>
         <td>
           6330
@@ -3804,7 +3812,7 @@
           133
         </td>
         <td>
-          1855
+          1869
         </td>
         <td>
           6350
@@ -3825,7 +3833,7 @@
           135
         </td>
         <td>
-          1858
+          1872
         </td>
         <td>
           6391
@@ -3846,28 +3854,7 @@
           136
         </td>
         <td>
-          1859
-        </td>
-        <td>
-          6450
-          -
-          6469
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.lang.Object.toString
-        </td>
-        <td style="background: #F0ADAD">
-          logRequest.toString()
-        </td>
-      </tr><tr>
-        <td>
-          136
-        </td>
-        <td>
-          1860
+          1874
         </td>
         <td>
           6437
@@ -3885,304 +3872,31 @@
         </td>
       </tr><tr>
         <td>
-          137
-        </td>
-        <td>
-          1874
-        </td>
-        <td>
-          6576
-          -
-          6601
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1877
-        </td>
-        <td>
-          6483
-          -
-          6483
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1868
-        </td>
-        <td>
-          6539
-          -
-          6539
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1862
-        </td>
-        <td>
-          6505
-          -
-          6509
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;OK&quot;
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1871
-        </td>
-        <td>
-          6554
-          -
-          6572
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;originalfilename&quot;
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1865
-        </td>
-        <td>
-          6493
-          -
-          6509
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          137
+          136
         </td>
         <td>
           1873
         </td>
         <td>
-          6585
+          6450
           -
-          6585
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1864
-        </td>
-        <td>
-          6505
-          -
-          6509
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1876
-        </td>
-        <td>
-          6484
-          -
-          6602
+          6469
         </td>
         <td>
           Apply
         </td>
         <td>
-          play.api.libs.json.Json.obj
+          java.lang.Object.toString
         </td>
         <td style="background: #F0ADAD">
-          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)))
+          logRequest.toString()
         </td>
       </tr><tr>
         <td>
           137
         </td>
         <td>
-          1867
-        </td>
-        <td>
-          6530
-          -
-          6552
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          models.users.UserFile.linkreference
-        </td>
-        <td style="background: #F0ADAD">
-          userFile.linkreference
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1870
-        </td>
-        <td>
-          6511
-          -
-          6552
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1879
-        </td>
-        <td>
-          6481
-          -
-          6603
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.mvc.Results.Status.apply
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1861
-        </td>
-        <td>
-          6493
-          -
-          6501
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1878
-        </td>
-        <td>
-          6483
-          -
-          6483
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          137
-        </td>
-        <td>
-          1869
+          1883
         </td>
         <td>
           6530
@@ -4203,28 +3917,28 @@
           137
         </td>
         <td>
-          1863
+          1892
         </td>
         <td>
-          6505
+          6483
           -
-          6505
+          6483
         </td>
         <td>
-          Select
+          ApplyToImplicitArgs
         </td>
         <td>
-          play.api.libs.json.DefaultWrites.StringWrites
+          play.api.http.DefaultWriteables.writeableOf_JsValue
         </td>
         <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
         </td>
       </tr><tr>
         <td>
           137
         </td>
         <td>
-          1872
+          1886
         </td>
         <td>
           6576
@@ -4245,7 +3959,49 @@
           137
         </td>
         <td>
-          1875
+          1877
+        </td>
+        <td>
+          6505
+          -
+          6505
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1880
+        </td>
+        <td>
+          6511
+          -
+          6526
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;linkreference&quot;
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1889
         </td>
         <td>
           6554
@@ -4266,12 +4022,54 @@
           137
         </td>
         <td>
-          1866
+          1891
         </td>
         <td>
-          6511
+          6483
           -
-          6526
+          6483
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1882
+        </td>
+        <td>
+          6539
+          -
+          6539
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1876
+        </td>
+        <td>
+          6505
+          -
+          6509
         </td>
         <td>
           Literal
@@ -4280,19 +4078,229 @@
           &lt;nosymbol&gt;
         </td>
         <td style="background: #F0ADAD">
-          &quot;linkreference&quot;
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1885
+        </td>
+        <td>
+          6554
+          -
+          6572
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;originalfilename&quot;
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1888
+        </td>
+        <td>
+          6576
+          -
+          6601
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1879
+        </td>
+        <td>
+          6493
+          -
+          6509
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1878
+        </td>
+        <td>
+          6505
+          -
+          6509
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1887
+        </td>
+        <td>
+          6585
+          -
+          6585
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1881
+        </td>
+        <td>
+          6530
+          -
+          6552
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserFile.linkreference
+        </td>
+        <td style="background: #F0ADAD">
+          userFile.linkreference
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1890
+        </td>
+        <td>
+          6484
+          -
+          6602
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1875
+        </td>
+        <td>
+          6493
+          -
+          6501
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1884
+        </td>
+        <td>
+          6511
+          -
+          6552
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          137
+        </td>
+        <td>
+          1893
+        </td>
+        <td>
+          6481
+          -
+          6603
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
         </td>
       </tr><tr>
         <td>
           146
         </td>
         <td>
-          1883
+          1897
         </td>
         <td>
-          6775
+          6776
           -
-          6786
+          6787
         </td>
         <td>
           Select
@@ -4308,7 +4316,7 @@
           146
         </td>
         <td>
-          1882
+          1896
         </td>
         <td>
           6763
@@ -4329,12 +4337,12 @@
           146
         </td>
         <td>
-          1903
+          1917
         </td>
         <td>
           6733
           -
-          6982
+          6983
         </td>
         <td>
           Apply
@@ -4353,75 +4361,12 @@
           148
         </td>
         <td>
-          1886
+          1901
         </td>
         <td>
-          6891
+          6886
           -
-          6905
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.users.UserFile](u)(controllers.this.`package`.userFilesFormat)
-        </td>
-      </tr><tr>
-        <td>
-          148
-        </td>
-        <td>
-          1885
-        </td>
-        <td>
-          6902
-          -
-          6902
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.userFilesFormat
-        </td>
-        <td style="background: #F0ADAD">
-          controllers.this.`package`.userFilesFormat
-        </td>
-      </tr><tr>
-        <td>
-          148
-        </td>
-        <td>
-          1888
-        </td>
-        <td>
-          6827
-          -
-          6906
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          scala.collection.TraversableLike.map
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.userService.findUserFileByAccountSubject(request.user).map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((u: models.users.UserFile) =&gt; play.api.libs.json.Json.toJson[models.users.UserFile](u)(controllers.this.`package`.userFilesFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])
-        </td>
-      </tr><tr>
-        <td>
-          148
-        </td>
-        <td>
-          1887
-        </td>
-        <td>
-          6885
-          -
-          6885
+          6886
         </td>
         <td>
           TypeApply
@@ -4437,12 +4382,12 @@
           148
         </td>
         <td>
-          1884
+          1898
         </td>
         <td>
-          6868
+          6869
           -
-          6880
+          6881
         </td>
         <td>
           Select
@@ -4455,204 +4400,78 @@
         </td>
       </tr><tr>
         <td>
-          149
-        </td>
-        <td>
-          1901
-        </td>
-        <td>
-          6915
-          -
-          6915
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1892
-        </td>
-        <td>
-          6937
-          -
-          6941
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1895
-        </td>
-        <td>
-          6958
-          -
-          6976
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.libs.json.JsArray.apply
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.JsArray.apply(userfiles)
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1889
-        </td>
-        <td>
-          6925
-          -
-          6933
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1898
-        </td>
-        <td>
-          6943
-          -
-          6976
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;userfiles&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(userfiles))(json.this.Writes.JsValueWrites))
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1897
-        </td>
-        <td>
-          6958
-          -
-          6976
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(userfiles))(json.this.Writes.JsValueWrites)
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1891
-        </td>
-        <td>
-          6937
-          -
-          6937
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          149
+          148
         </td>
         <td>
           1900
         </td>
         <td>
-          6915
+          6892
           -
-          6915
+          6906
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.users.UserFile](u)(controllers.this.`package`.userFilesFormat)
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          1899
+        </td>
+        <td>
+          6903
+          -
+          6903
         </td>
         <td>
           Select
         </td>
         <td>
-          play.api.mvc.Codec.utf_8
+          controllers.userFilesFormat
         </td>
         <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
+          controllers.this.`package`.userFilesFormat
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          1902
+        </td>
+        <td>
+          6828
+          -
+          6907
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.userService.findUserFileByAccountSubject(request.user).map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((u: models.users.UserFile) =&gt; play.api.libs.json.Json.toJson[models.users.UserFile](u)(controllers.this.`package`.userFilesFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])
         </td>
       </tr><tr>
         <td>
           149
         </td>
         <td>
-          1894
+          1910
         </td>
         <td>
-          6943
+          6966
           -
-          6954
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;userfiles&quot;
-        </td>
-      </tr><tr>
-        <td>
-          149
-        </td>
-        <td>
-          1896
-        </td>
-        <td>
-          6965
-          -
-          6965
+          6966
         </td>
         <td>
           Select
@@ -4668,12 +4487,12 @@
           149
         </td>
         <td>
-          1890
+          1904
         </td>
         <td>
-          6937
+          6938
           -
-          6941
+          6942
         </td>
         <td>
           Literal
@@ -4689,12 +4508,12 @@
           149
         </td>
         <td>
-          1899
+          1913
         </td>
         <td>
-          6916
+          6917
           -
-          6977
+          6978
         </td>
         <td>
           Apply
@@ -4710,12 +4529,33 @@
           149
         </td>
         <td>
-          1902
+          1907
         </td>
         <td>
-          6913
+          6926
           -
-          6978
+          6942
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1916
+        </td>
+        <td>
+          6914
+          -
+          6979
         </td>
         <td>
           ApplyToImplicitArgs
@@ -4731,12 +4571,75 @@
           149
         </td>
         <td>
-          1893
+          1906
         </td>
         <td>
-          6925
+          6938
           -
-          6941
+          6942
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1915
+        </td>
+        <td>
+          6916
+          -
+          6916
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1909
+        </td>
+        <td>
+          6959
+          -
+          6977
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsArray.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsArray.apply(userfiles)
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1912
+        </td>
+        <td>
+          6944
+          -
+          6977
         </td>
         <td>
           Apply
@@ -4745,19 +4648,145 @@
           scala.Predef.ArrowAssoc.-&gt;
         </td>
         <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+          scala.this.Predef.ArrowAssoc[String](&quot;userfiles&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(userfiles))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1903
+        </td>
+        <td>
+          6926
+          -
+          6934
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1914
+        </td>
+        <td>
+          6916
+          -
+          6916
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1905
+        </td>
+        <td>
+          6938
+          -
+          6938
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1908
+        </td>
+        <td>
+          6944
+          -
+          6955
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;userfiles&quot;
+        </td>
+      </tr><tr>
+        <td>
+          149
+        </td>
+        <td>
+          1911
+        </td>
+        <td>
+          6959
+          -
+          6977
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(userfiles))(json.this.Writes.JsValueWrites)
         </td>
       </tr><tr>
         <td>
           158
         </td>
         <td>
-          1904
+          1919
         </td>
         <td>
-          7175
+          7189
           -
-          7185
+          7200
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          1918
+        </td>
+        <td>
+          7176
+          -
+          7186
         </td>
         <td>
           Select
@@ -4773,12 +4802,12 @@
           158
         </td>
         <td>
-          1924
+          1938
         </td>
         <td>
-          7145
+          7146
           -
-          7968
+          7969
         </td>
         <td>
           Apply
@@ -4802,36 +4831,36 @@
         </td>
       </tr><tr>
         <td>
-          158
+          160
         </td>
         <td>
-          1905
+          1922
         </td>
         <td>
-          7188
+          7308
           -
-          7199
+          7344
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          play.api.mvc.BodyParsers.parse.empty
+          java.util.UUID.equals
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.parse.empty
+          f.uuid.equals(java.util.UUID.fromString(uuid))
         </td>
       </tr><tr>
         <td>
           160
         </td>
         <td>
-          1907
+          1921
         </td>
         <td>
-          7321
+          7322
           -
-          7342
+          7343
         </td>
         <td>
           Apply
@@ -4847,12 +4876,12 @@
           160
         </td>
         <td>
-          1906
+          1920
         </td>
         <td>
-          7281
+          7282
           -
-          7293
+          7294
         </td>
         <td>
           Select
@@ -4868,12 +4897,12 @@
           160
         </td>
         <td>
-          1909
+          1923
         </td>
         <td>
-          7240
+          7241
           -
-          7344
+          7345
         </td>
         <td>
           Apply
@@ -4886,36 +4915,15 @@
         </td>
       </tr><tr>
         <td>
-          160
-        </td>
-        <td>
-          1908
-        </td>
-        <td>
-          7307
-          -
-          7343
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.equals
-        </td>
-        <td style="background: #F0ADAD">
-          f.uuid.equals(java.util.UUID.fromString(uuid))
-        </td>
-      </tr><tr>
-        <td>
           162
         </td>
         <td>
-          1910
+          1924
         </td>
         <td>
-          7381
+          7382
           -
-          7411
+          7412
         </td>
         <td>
           Apply
@@ -4931,12 +4939,33 @@
           163
         </td>
         <td>
-          1913
+          1925
         </td>
         <td>
-          7432
+          7445
           -
-          7468
+          7462
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;file not found.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          163
+        </td>
+        <td>
+          1927
+        </td>
+        <td>
+          7433
+          -
+          7469
         </td>
         <td>
           Apply
@@ -4952,12 +4981,12 @@
           163
         </td>
         <td>
-          1912
+          1926
         </td>
         <td>
-          7463
+          7464
           -
-          7467
+          7468
         </td>
         <td>
           Select
@@ -4970,120 +4999,15 @@
         </td>
       </tr><tr>
         <td>
-          163
-        </td>
-        <td>
-          1911
-        </td>
-        <td>
-          7444
-          -
-          7461
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;file not found.&quot;
-        </td>
-      </tr><tr>
-        <td>
           164
         </td>
         <td>
-          1919
+          1928
         </td>
         <td>
-          7477
+          7500
           -
-          7516
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
-          164
-        </td>
-        <td>
-          1916
-        </td>
-        <td>
-          7487
-          -
-          7487
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          164
-        </td>
-        <td>
-          1915
-        </td>
-        <td>
-          7488
-          -
-          7506
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          164
-        </td>
-        <td>
-          1918
-        </td>
-        <td>
-          7511
-          -
-          7515
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.http.ContentTypes.JSON
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.JSON
-        </td>
-      </tr><tr>
-        <td>
-          164
-        </td>
-        <td>
-          1914
-        </td>
-        <td>
-          7499
-          -
-          7499
+          7500
         </td>
         <td>
           Select
@@ -5099,12 +5023,12 @@
           164
         </td>
         <td>
-          1917
+          1931
         </td>
         <td>
-          7487
+          7488
           -
-          7487
+          7488
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5117,15 +5041,99 @@
         </td>
       </tr><tr>
         <td>
+          164
+        </td>
+        <td>
+          1933
+        </td>
+        <td>
+          7478
+          -
+          7517
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1930
+        </td>
+        <td>
+          7488
+          -
+          7488
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1929
+        </td>
+        <td>
+          7489
+          -
+          7507
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          164
+        </td>
+        <td>
+          1932
+        </td>
+        <td>
+          7512
+          -
+          7516
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
           166
         </td>
         <td>
-          1920
+          1934
         </td>
         <td>
-          7535
+          7536
           -
-          7545
+          7546
         </td>
         <td>
           Select
@@ -5141,12 +5149,12 @@
           167
         </td>
         <td>
-          1921
+          1935
         </td>
         <td>
-          7557
+          7558
           -
-          7570
+          7571
         </td>
         <td>
           Ident
@@ -5162,33 +5170,12 @@
           175
         </td>
         <td>
-          1922
+          1937
         </td>
         <td>
-          7594
+          7595
           -
-          7956
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.getFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)), ((blobInfo: services.LocalBlobInfo) =&gt; FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;blobinfo&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](blobInfo.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))))).getOrElse[play.api.mvc.Result](notFoundBlock)
-        </td>
-      </tr><tr>
-        <td>
-          175
-        </td>
-        <td>
-          1923
-        </td>
-        <td>
-          7594
-          -
-          7956
+          7957
         </td>
         <td>
           Block
@@ -5201,15 +5188,57 @@
         </td>
       </tr><tr>
         <td>
+          175
+        </td>
+        <td>
+          1936
+        </td>
+        <td>
+          7595
+          -
+          7957
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.getFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)), ((blobInfo: services.LocalBlobInfo) =&gt; FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;blobinfo&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](blobInfo.toJson)(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))))).getOrElse[play.api.mvc.Result](notFoundBlock)
+        </td>
+      </tr><tr>
+        <td>
           185
         </td>
         <td>
-          1925
+          1940
         </td>
         <td>
-          8153
+          8167
           -
-          8163
+          8178
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          185
+        </td>
+        <td>
+          1939
+        </td>
+        <td>
+          8154
+          -
+          8164
         </td>
         <td>
           Select
@@ -5225,12 +5254,12 @@
           185
         </td>
         <td>
-          1945
+          1959
         </td>
         <td>
-          8123
+          8124
           -
-          9077
+          9486
         </td>
         <td>
           Apply
@@ -5249,41 +5278,48 @@
   if (foundfile.unary_!)
     notFoundBlock
   else
-    FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
+    FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.userService.deleteUserFile(userFile.uuid) match {
+  case true =&gt; FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  case false =&gt; {
+    FilesController.this.logger.error(&quot;user file db delete not succesful&quot;);
+    val error: models.ErrorResult = models.ErrorResult.apply(&quot;user file db delete not succesful.&quot;, scala.None);
+    FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+  }
+})(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
 }))
-        </td>
-      </tr><tr>
-        <td>
-          185
-        </td>
-        <td>
-          1926
-        </td>
-        <td>
-          8166
-          -
-          8177
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.BodyParsers.parse.empty
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.parse.empty
         </td>
       </tr><tr>
         <td>
           187
         </td>
         <td>
-          1928
+          1943
         </td>
         <td>
-          8299
+          8286
           -
-          8320
+          8322
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.equals
+        </td>
+        <td style="background: #F0ADAD">
+          f.uuid.equals(java.util.UUID.fromString(uuid))
+        </td>
+      </tr><tr>
+        <td>
+          187
+        </td>
+        <td>
+          1942
+        </td>
+        <td>
+          8300
+          -
+          8321
         </td>
         <td>
           Apply
@@ -5299,12 +5335,12 @@
           187
         </td>
         <td>
-          1927
+          1941
         </td>
         <td>
-          8259
+          8260
           -
-          8271
+          8272
         </td>
         <td>
           Select
@@ -5320,12 +5356,12 @@
           187
         </td>
         <td>
-          1930
+          1944
         </td>
         <td>
-          8218
+          8219
           -
-          8322
+          8323
         </td>
         <td>
           Apply
@@ -5338,36 +5374,15 @@
         </td>
       </tr><tr>
         <td>
-          187
-        </td>
-        <td>
-          1929
-        </td>
-        <td>
-          8285
-          -
-          8321
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.util.UUID.equals
-        </td>
-        <td style="background: #F0ADAD">
-          f.uuid.equals(java.util.UUID.fromString(uuid))
-        </td>
-      </tr><tr>
-        <td>
           189
         </td>
         <td>
-          1931
+          1945
         </td>
         <td>
-          8359
+          8360
           -
-          8389
+          8390
         </td>
         <td>
           Apply
@@ -5383,12 +5398,33 @@
           190
         </td>
         <td>
-          1934
+          1946
         </td>
         <td>
-          8410
+          8423
           -
-          8446
+          8440
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;file not found.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          190
+        </td>
+        <td>
+          1948
+        </td>
+        <td>
+          8411
+          -
+          8447
         </td>
         <td>
           Apply
@@ -5404,12 +5440,12 @@
           190
         </td>
         <td>
-          1933
+          1947
         </td>
         <td>
-          8441
+          8442
           -
-          8445
+          8446
         </td>
         <td>
           Select
@@ -5422,120 +5458,15 @@
         </td>
       </tr><tr>
         <td>
-          190
-        </td>
-        <td>
-          1932
-        </td>
-        <td>
-          8422
-          -
-          8439
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;file not found.&quot;
-        </td>
-      </tr><tr>
-        <td>
           191
         </td>
         <td>
-          1937
-        </td>
-        <td>
-          8465
-          -
-          8465
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          191
-        </td>
-        <td>
-          1940
-        </td>
-        <td>
-          8455
-          -
-          8494
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.mvc.Result.as
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
-        </td>
-      </tr><tr>
-        <td>
-          191
-        </td>
-        <td>
-          1936
+          1952
         </td>
         <td>
           8466
           -
-          8484
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJson
-        </td>
-        <td style="background: #F0ADAD">
-          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
-        </td>
-      </tr><tr>
-        <td>
-          191
-        </td>
-        <td>
-          1939
-        </td>
-        <td>
-          8489
-          -
-          8493
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.http.ContentTypes.JSON
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.JSON
-        </td>
-      </tr><tr>
-        <td>
-          191
-        </td>
-        <td>
-          1938
-        </td>
-        <td>
-          8465
-          -
-          8465
+          8466
         </td>
         <td>
           ApplyToImplicitArgs
@@ -5551,12 +5482,12 @@
           191
         </td>
         <td>
-          1935
+          1949
         </td>
         <td>
-          8477
+          8478
           -
-          8477
+          8478
         </td>
         <td>
           Select
@@ -5569,15 +5500,99 @@
         </td>
       </tr><tr>
         <td>
+          191
+        </td>
+        <td>
+          1951
+        </td>
+        <td>
+          8466
+          -
+          8466
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1954
+        </td>
+        <td>
+          8456
+          -
+          8495
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1950
+        </td>
+        <td>
+          8467
+          -
+          8485
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          191
+        </td>
+        <td>
+          1953
+        </td>
+        <td>
+          8490
+          -
+          8494
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
           193
         </td>
         <td>
-          1941
+          1955
         </td>
         <td>
-          8513
+          8514
           -
-          8523
+          8524
         </td>
         <td>
           Select
@@ -5593,12 +5608,12 @@
           194
         </td>
         <td>
-          1942
+          1956
         </td>
         <td>
-          8535
+          8536
           -
-          8548
+          8549
         </td>
         <td>
           Ident
@@ -5611,36 +5626,15 @@
         </td>
       </tr><tr>
         <td>
-          205
+          213
         </td>
         <td>
-          1943
+          1958
         </td>
         <td>
-          8572
+          8573
           -
-          9065
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.getOrElse
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
-        </td>
-      </tr><tr>
-        <td>
-          205
-        </td>
-        <td>
-          1944
-        </td>
-        <td>
-          8572
-          -
-          9065
+          9474
         </td>
         <td>
           Block
@@ -5649,19 +5643,54 @@
           scala.Option.getOrElse
         </td>
         <td style="background: #F0ADAD">
-          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
+          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.userService.deleteUserFile(userFile.uuid) match {
+  case true =&gt; FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  case false =&gt; {
+    FilesController.this.logger.error(&quot;user file db delete not succesful&quot;);
+    val error: models.ErrorResult = models.ErrorResult.apply(&quot;user file db delete not succesful.&quot;, scala.None);
+    FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+  }
+})(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
         </td>
       </tr><tr>
         <td>
-          215
+          213
         </td>
         <td>
-          1946
+          1957
         </td>
         <td>
-          9291
+          8573
           -
-          9302
+          9474
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          FilesController.this.userService.findUserFileByUuid(java.util.UUID.fromString(uuid)).map[play.api.mvc.Result](((userFile: models.users.UserFile) =&gt; FilesController.this.googleService.deleteFileBlob(userFile.originalfilename).fold[play.api.mvc.Result](FilesController.this.userService.deleteUserFile(userFile.uuid) match {
+  case true =&gt; FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;linkreference&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.linkreference)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;originalfilename&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](userFile.originalfilename)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;deleted&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  case false =&gt; {
+    FilesController.this.logger.error(&quot;user file db delete not succesful&quot;);
+    val error: models.ErrorResult = models.ErrorResult.apply(&quot;user file db delete not succesful.&quot;, scala.None);
+    FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON)
+  }
+})(((error: models.ErrorResult) =&gt; FilesController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(FilesController.this.JSON))))).getOrElse[play.api.mvc.Result](notFoundBlock)
+        </td>
+      </tr><tr>
+        <td>
+          223
+        </td>
+        <td>
+          1960
+        </td>
+        <td>
+          9700
+          -
+          9711
         </td>
         <td>
           Select
@@ -5674,15 +5703,15 @@
         </td>
       </tr><tr>
         <td>
-          215
+          223
         </td>
         <td>
-          1978
+          1992
         </td>
         <td>
-          9262
+          9671
           -
-          9875
+          10284
         </td>
         <td>
           Apply
@@ -5700,15 +5729,36 @@
         </td>
       </tr><tr>
         <td>
-          217
+          225
         </td>
         <td>
-          1960
+          1961
         </td>
         <td>
-          9344
+          9774
           -
-          9689
+          9778
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          225
+        </td>
+        <td>
+          1974
+        </td>
+        <td>
+          9753
+          -
+          10098
         </td>
         <td>
           Apply
@@ -5721,99 +5771,15 @@
         </td>
       </tr><tr>
         <td>
-          217
+          226
         </td>
         <td>
-          1947
+          1964
         </td>
         <td>
-          9365
+          9838
           -
-          9369
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          scala.None
-        </td>
-        <td style="background: #F0ADAD">
-          scala.None
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          1949
-        </td>
-        <td>
-          9439
-          -
-          9450
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          controllers.appTimeZone
-        </td>
-        <td style="background: #F0ADAD">
-          controllers.this.`package`.appTimeZone()(FilesController.this.configuration)
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          1951
-        </td>
-        <td>
-          9391
-          -
-          9452
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          java.time.ZonedDateTime.withZoneSameInstant
-        </td>
-        <td style="background: #F0ADAD">
-          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(controllers.this.`package`.appTimeZone()(FilesController.this.configuration)))
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          1948
-        </td>
-        <td>
-          9439
-          -
-          9439
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          controllers.FilesController.configuration
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.configuration
-        </td>
-      </tr><tr>
-        <td>
-          218
-        </td>
-        <td>
-          1950
-        </td>
-        <td>
-          9429
-          -
-          9451
+          9860
         </td>
         <td>
           Apply
@@ -5826,36 +5792,78 @@
         </td>
       </tr><tr>
         <td>
-          219
+          226
         </td>
         <td>
-          1952
+          1963
         </td>
         <td>
-          9479
+          9848
           -
-          9500
+          9859
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          controllers.appTimeZone
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.appTimeZone()(FilesController.this.configuration)
+        </td>
+      </tr><tr>
+        <td>
+          226
+        </td>
+        <td>
+          1965
+        </td>
+        <td>
+          9800
+          -
+          9861
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.time.ZonedDateTime.withZoneSameInstant
+        </td>
+        <td style="background: #F0ADAD">
+          java.time.ZonedDateTime.now().withZoneSameInstant(java.time.ZoneId.of(controllers.this.`package`.appTimeZone()(FilesController.this.configuration)))
+        </td>
+      </tr><tr>
+        <td>
+          226
+        </td>
+        <td>
+          1962
+        </td>
+        <td>
+          9848
+          -
+          9848
         </td>
         <td>
           Select
         </td>
         <td>
-          play.api.mvc.WrappedRequest.remoteAddress
+          controllers.FilesController.configuration
         </td>
         <td style="background: #F0ADAD">
-          request.remoteAddress
+          FilesController.this.configuration
         </td>
       </tr><tr>
         <td>
-          219
+          227
         </td>
         <td>
-          1953
+          1967
         </td>
         <td>
-          9474
+          9883
           -
-          9501
+          9910
         </td>
         <td>
           Apply
@@ -5868,15 +5876,36 @@
         </td>
       </tr><tr>
         <td>
-          220
+          227
         </td>
         <td>
-          1955
+          1966
         </td>
         <td>
-          9523
+          9888
           -
-          9559
+          9909
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.WrappedRequest.remoteAddress
+        </td>
+        <td style="background: #F0ADAD">
+          request.remoteAddress
+        </td>
+      </tr><tr>
+        <td>
+          228
+        </td>
+        <td>
+          1969
+        </td>
+        <td>
+          9932
+          -
+          9968
         </td>
         <td>
           Apply
@@ -5889,15 +5918,15 @@
         </td>
       </tr><tr>
         <td>
-          220
+          228
         </td>
         <td>
-          1954
+          1968
         </td>
         <td>
-          9543
+          9952
           -
-          9558
+          9967
         </td>
         <td>
           Select
@@ -5910,36 +5939,15 @@
         </td>
       </tr><tr>
         <td>
-          221
+          229
         </td>
         <td>
-          1957
+          1970
         </td>
         <td>
-          9577
+          10014
           -
-          9613
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Option.map
-        </td>
-        <td style="background: #F0ADAD">
-          request.optionalSession.map[String](((x$2: models.users.UserSession) =&gt; x$2.email))
-        </td>
-      </tr><tr>
-        <td>
-          221
-        </td>
-        <td>
-          1956
-        </td>
-        <td>
-          9605
-          -
-          9612
+          10021
         </td>
         <td>
           Select
@@ -5952,36 +5960,36 @@
         </td>
       </tr><tr>
         <td>
-          223
+          229
         </td>
         <td>
-          1958
+          1971
         </td>
         <td>
-          9674
+          9986
           -
-          9687
+          10022
         </td>
         <td>
-          Select
+          Apply
         </td>
         <td>
-          controllers.security.RefererHeader
+          scala.Option.map
         </td>
         <td style="background: #F0ADAD">
-          controllers.security.`package`.RefererHeader
+          request.optionalSession.map[String](((x$2: models.users.UserSession) =&gt; x$2.email))
         </td>
       </tr><tr>
         <td>
-          223
+          231
         </td>
         <td>
-          1959
+          1973
         </td>
         <td>
-          9654
+          10063
           -
-          9688
+          10097
         </td>
         <td>
           Apply
@@ -5994,15 +6002,36 @@
         </td>
       </tr><tr>
         <td>
-          225
+          231
         </td>
         <td>
-          1961
+          1972
         </td>
         <td>
-          9711
+          10083
           -
-          9746
+          10096
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.RefererHeader
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.security.`package`.RefererHeader
+        </td>
+      </tr><tr>
+        <td>
+          233
+        </td>
+        <td>
+          1975
+        </td>
+        <td>
+          10120
+          -
+          10155
         </td>
         <td>
           Apply
@@ -6015,36 +6044,15 @@
         </td>
       </tr><tr>
         <td>
-          227
+          235
         </td>
         <td>
-          1963
+          1976
         </td>
         <td>
-          9754
+          10176
           -
-          9787
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          play.api.LoggerLike.trace
-        </td>
-        <td style="background: #F0ADAD">
-          FilesController.this.logger.trace(logRequest.toString())
-        </td>
-      </tr><tr>
-        <td>
-          227
-        </td>
-        <td>
-          1962
-        </td>
-        <td>
-          9767
-          -
-          9786
+          10195
         </td>
         <td>
           Apply
@@ -6057,225 +6065,36 @@
         </td>
       </tr><tr>
         <td>
-          228
+          235
         </td>
         <td>
-          1970
+          1977
         </td>
         <td>
-          9837
+          10163
           -
-          9869
+          10196
         </td>
         <td>
           Apply
         </td>
         <td>
-          scala.StringContext.s
+          play.api.LoggerLike.trace
         </td>
         <td style="background: #F0ADAD">
-          scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated)
+          FilesController.this.logger.trace(logRequest.toString())
         </td>
       </tr><tr>
         <td>
-          228
+          236
         </td>
         <td>
-          1964
+          1979
         </td>
         <td>
-          9806
+          10227
           -
-          9814
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;status&quot;
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1973
-        </td>
-        <td>
-          9824
-          -
-          9869
-        </td>
-        <td>
-          Apply
-        </td>
-        <td>
-          scala.Predef.ArrowAssoc.-&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated))(json.this.Writes.StringWrites))
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1967
-        </td>
-        <td>
-          9818
-          -
-          9822
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1976
-        </td>
-        <td>
-          9796
-          -
-          9796
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.http.DefaultWriteables.writeableOf_JsValue
-        </td>
-        <td style="background: #F0ADAD">
-          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1975
-        </td>
-        <td>
-          9796
-          -
-          9796
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.mvc.Codec.utf_8
-        </td>
-        <td style="background: #F0ADAD">
-          mvc.this.Codec.utf_8
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1966
-        </td>
-        <td>
-          9818
-          -
-          9818
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1969
-        </td>
-        <td>
-          9824
-          -
-          9833
-        </td>
-        <td>
-          Literal
-        </td>
-        <td>
-          &lt;nosymbol&gt;
-        </td>
-        <td style="background: #F0ADAD">
-          &quot;message&quot;
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1972
-        </td>
-        <td>
-          9837
-          -
-          9869
-        </td>
-        <td>
-          ApplyToImplicitArgs
-        </td>
-        <td>
-          play.api.libs.json.Json.toJsFieldJsValueWrapper
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated))(json.this.Writes.StringWrites)
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1971
-        </td>
-        <td>
-          9837
-          -
-          9837
-        </td>
-        <td>
-          Select
-        </td>
-        <td>
-          play.api.libs.json.DefaultWrites.StringWrites
-        </td>
-        <td style="background: #F0ADAD">
-          json.this.Writes.StringWrites
-        </td>
-      </tr><tr>
-        <td>
-          228
-        </td>
-        <td>
-          1965
-        </td>
-        <td>
-          9818
-          -
-          9822
+          10231
         </td>
         <td>
           Literal
@@ -6288,15 +6107,15 @@
         </td>
       </tr><tr>
         <td>
-          228
+          236
         </td>
         <td>
-          1974
+          1988
         </td>
         <td>
-          9797
+          10206
           -
-          9870
+          10279
         </td>
         <td>
           Apply
@@ -6309,15 +6128,15 @@
         </td>
       </tr><tr>
         <td>
-          228
+          236
         </td>
         <td>
-          1968
+          1982
         </td>
         <td>
-          9806
+          10215
           -
-          9822
+          10231
         </td>
         <td>
           Apply
@@ -6330,15 +6149,15 @@
         </td>
       </tr><tr>
         <td>
-          228
+          236
         </td>
         <td>
-          1977
+          1991
         </td>
         <td>
-          9794
+          10203
           -
-          9871
+          10280
         </td>
         <td>
           ApplyToImplicitArgs
@@ -6348,6 +6167,216 @@
         </td>
         <td style="background: #F0ADAD">
           FilesController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated))(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1985
+        </td>
+        <td>
+          10246
+          -
+          10246
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1984
+        </td>
+        <td>
+          10246
+          -
+          10278
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1987
+        </td>
+        <td>
+          10233
+          -
+          10278
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated))(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1978
+        </td>
+        <td>
+          10215
+          -
+          10223
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1990
+        </td>
+        <td>
+          10205
+          -
+          10205
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1981
+        </td>
+        <td>
+          10227
+          -
+          10231
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1980
+        </td>
+        <td>
+          10227
+          -
+          10227
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1989
+        </td>
+        <td>
+          10205
+          -
+          10205
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1983
+        </td>
+        <td>
+          10233
+          -
+          10242
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          236
+        </td>
+        <td>
+          1986
+        </td>
+        <td>
+          10246
+          -
+          10278
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](scala.StringContext.apply(&quot;&quot;, &quot; file request logged.&quot;).s(updated))(json.this.Writes.StringWrites)
         </td>
       </tr>
     </table>

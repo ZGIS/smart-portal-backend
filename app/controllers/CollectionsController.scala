@@ -387,7 +387,7 @@ class CollectionsController @Inject()(userService: UserService,
     *
     * @return
     */
-  def generateSitemapFromPubliccollections: Action[AnyContent] = Action {
+  def generateSitemapFromPublicCollections: Action[AnyContent] = Action {
 
     val owcXmlElements: scala.collection.mutable.StringBuilder = new StringBuilder
     owcXmlElements.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")

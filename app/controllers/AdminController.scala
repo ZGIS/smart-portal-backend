@@ -78,28 +78,26 @@ class AdminController @Inject()(implicit configuration: Configuration,
       Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(usergroups)))
   }
 
-  def createUserGroupAsAdmin: Action[JsValue] = (authenticationAction
-    andThen userAction
-    andThen adminPermissionCheckAction) (parse.json) {
+  def createUserGroupAsAdmin: Action[JsValue] = defaultAdminAction(parse.json) {
 
     request =>
       request.body.validate[UserGroup].fold(
-        errors => {
-          logger.error(JsError.toJson(errors).toString())
-          val error: ErrorResult = ErrorResult("Usergroup format could not be read.",
-            Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+      errors => {
+        logger.error(JsError.toJson(errors).toString())
+        val error: ErrorResult = ErrorResult("Usergroup format could not be read.",
+          Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
+        BadRequest(Json.toJson(error)).as(JSON)
+      },
+      userGroup => {
+        adminService.createUserGroup(userGroup).fold {
+          logger.error("Error creating the user group.")
+          val error = ErrorResult("Error creating the user group.", None)
           BadRequest(Json.toJson(error)).as(JSON)
-        },
-        userGroup => {
-          adminService.createUserGroup(userGroup).fold {
-            logger.error("Error creating the user group.")
-            val error = ErrorResult("Error creating the user group.", None)
-            BadRequest(Json.toJson(error)).as(JSON)
-          } {
-            ugroup =>
-              Ok(Json.obj("status" -> "OK", "usergroup" -> Json.toJson(ugroup)))
-          }
-        })
+        } {
+          ugroup =>
+            Ok(Json.obj("status" -> "OK", "usergroup" -> Json.toJson(ugroup)))
+        }
+      })
   }
 
   def updateUserGroupAsAdmin: Action[JsValue] = defaultAdminAction(parse.json) {

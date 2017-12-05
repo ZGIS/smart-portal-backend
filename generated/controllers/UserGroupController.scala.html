@@ -1,0 +1,4593 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          controllers/UserGroupController.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package controllers
+</span>21 <span style=''>
+</span>22 <span style=''>import java.util.UUID
+</span>23 <span style=''>import javax.inject._
+</span>24 <span style=''>
+</span>25 <span style=''>import controllers.security._
+</span>26 <span style=''>import models.ErrorResult
+</span>27 <span style=''>import models.users._
+</span>28 <span style=''>import org.apache.commons.lang3.StringEscapeUtils
+</span>29 <span style=''>import play.api.Configuration
+</span>30 <span style=''>import play.api.libs.json.{JsArray, JsError, JsValue, Json}
+</span>31 <span style=''>import play.api.mvc._
+</span>32 <span style=''>import services._
+</span>33 <span style=''>import utils.ClassnameLogger
+</span>34 <span style=''>
+</span>35 <span style=''>@Singleton
+</span>36 <span style=''>class UserGroupController @Inject()(implicit configuration: Configuration,
+</span>37 <span style=''>                                    userService: UserService,
+</span>38 <span style=''>                                    userGroupService: UserGroupService,
+</span>39 <span style=''>                                    emailService: EmailService,
+</span>40 <span style=''>                                    collectionsService: OwcCollectionsService,
+</span>41 <span style=''>                                    googleService: GoogleServicesDAO,
+</span>42 <span style=''>                                    authenticationAction: AuthenticationAction,
+</span>43 <span style=''>                                    userAction: UserAction)
+</span>44 <span style=''>  extends Controller with ClassnameLogger {
+</span>45 <span style=''>
+</span>46 <span style=''>  /**
+</span>47 <span style=''>    * default actions composition, much more readable and &quot;composable than original HasToken style implementation
+</span>48 <span style=''>    */
+</span>49 <span style=''>  private val defaultAuthAction = </span><span style='background: #AEF1AE'>authenticationAction andThen userAction</span><span style=''>
+</span>50 <span style=''>
+</span>51 <span style=''>  /**
+</span>52 <span style=''>    * get user's own groups
+</span>53 <span style=''>    *
+</span>54 <span style=''>    * @return
+</span>55 <span style=''>    */
+</span>56 <span style=''>  def getUsersOwnUserGroups: Action[Unit] = </span><span style='background: #F0ADAD'>defaultAuthAction(parse.empty) {
+</span>57 <span style=''></span><span style='background: #F0ADAD'>    implicit request =&gt;
+</span>58 <span style=''></span><span style='background: #F0ADAD'>      val ugList = userGroupService.getUsersOwnUserGroups(request.user)
+</span>59 <span style=''></span><span style='background: #F0ADAD'>      Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;usergroups&quot; -&gt; JsArray(ugList.map(ug =&gt; Json.toJson(ug)))))
+</span>60 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>61 <span style=''>
+</span>62 <span style=''>  /**
+</span>63 <span style=''>    * get a specific group in the hope you are member
+</span>64 <span style=''>    *
+</span>65 <span style=''>    * @param id
+</span>66 <span style=''>    * @return
+</span>67 <span style=''>    */
+</span>68 <span style=''>  def findUsersOwnUserGroupsById(id: String): Action[Unit] = </span><span style='background: #F0ADAD'>defaultAuthAction(parse.empty) {
+</span>69 <span style=''></span><span style='background: #F0ADAD'>    implicit request =&gt;
+</span>70 <span style=''></span><span style='background: #F0ADAD'>      val ugList = userGroupService.findUsersOwnUserGroupsById(request.user, UUID.fromString(id))
+</span>71 <span style=''></span><span style='background: #F0ADAD'>      ugList.fold {
+</span>72 <span style=''></span><span style='background: #F0ADAD'>        Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;usergroups&quot; -&gt; JsArray(), &quot;message&quot; -&gt; &quot;not found&quot;))
+</span>73 <span style=''></span><span style='background: #F0ADAD'>      } {
+</span>74 <span style=''></span><span style='background: #F0ADAD'>        ug =&gt; Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;usergroup&quot; -&gt; Json.toJson(ug)))
+</span>75 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>76 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>77 <span style=''>
+</span>78 <span style=''>  /**
+</span>79 <span style=''>    * create a new user group. user must already be in the sent object rights list as power user
+</span>80 <span style=''>    *
+</span>81 <span style=''>    * @return
+</span>82 <span style=''>    */
+</span>83 <span style=''>  def createUsersOwnUserGroup: Action[JsValue] = </span><span style='background: #F0ADAD'>defaultAuthAction(parse.json) {
+</span>84 <span style=''></span><span style='background: #F0ADAD'>    request =&gt;
+</span>85 <span style=''></span><span style='background: #F0ADAD'>      request.body.validate[UserGroup].fold(
+</span>86 <span style=''></span><span style='background: #F0ADAD'>        errors =&gt; {
+</span>87 <span style=''></span><span style='background: #F0ADAD'>          logger.error(JsError.toJson(errors).toString())
+</span>88 <span style=''></span><span style='background: #F0ADAD'>          val error: ErrorResult = ErrorResult(&quot;Usergroup format could not be read.&quot;,
+</span>89 <span style=''></span><span style='background: #F0ADAD'>            Some(StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))))
+</span>90 <span style=''></span><span style='background: #F0ADAD'>          BadRequest(Json.toJson(error)).as(JSON)
+</span>91 <span style=''></span><span style='background: #F0ADAD'>        },
+</span>92 <span style=''></span><span style='background: #F0ADAD'>        userGroup =&gt; {
+</span>93 <span style=''></span><span style='background: #F0ADAD'>          // check if creating user is in the member list and has power user right
+</span>94 <span style=''></span><span style='background: #F0ADAD'>          val isPresent = userGroup.hasUsersLevel.exists(ul =&gt; ul.users_accountsubject.equals(request.user.accountSubject) &amp;&amp; ul.userlevel &gt;= 1)
+</span>95 <span style=''></span><span style='background: #F0ADAD'>          if (!isPresent) {
+</span>96 <span style=''></span><span style='background: #F0ADAD'>            logger.error(&quot;User not listed with adequate rights. We would create a group that you can't edit, aborting.&quot;)
+</span>97 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(&quot;User not listed with adequate rights. We would create a group that you can't edit, aborting.&quot;, None)
+</span>98 <span style=''></span><span style='background: #F0ADAD'>            BadRequest(Json.toJson(error)).as(JSON)
+</span>99 <span style=''></span><span style='background: #F0ADAD'>          } else {
+</span>100 <span style=''></span><span style='background: #F0ADAD'>            userGroupService.createUsersOwnUserGroup(request.user, userGroup).fold {
+</span>101 <span style=''></span><span style='background: #F0ADAD'>              logger.error(&quot;Error creating the user group.&quot;)
+</span>102 <span style=''></span><span style='background: #F0ADAD'>              val error = ErrorResult(&quot;Error creating the user group.&quot;, None)
+</span>103 <span style=''></span><span style='background: #F0ADAD'>              BadRequest(Json.toJson(error)).as(JSON)
+</span>104 <span style=''></span><span style='background: #F0ADAD'>            } {
+</span>105 <span style=''></span><span style='background: #F0ADAD'>              ugroup =&gt;
+</span>106 <span style=''></span><span style='background: #F0ADAD'>                Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;usergroup&quot; -&gt; Json.toJson(ugroup)))
+</span>107 <span style=''></span><span style='background: #F0ADAD'>            }
+</span>108 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>109 <span style=''></span><span style='background: #F0ADAD'>        })
+</span>110 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>111 <span style=''>
+</span>112 <span style=''>  /**
+</span>113 <span style=''>    * updates an exisiting user group. user must already be in the rights list of the database item as power user
+</span>114 <span style=''>    *
+</span>115 <span style=''>    * @return
+</span>116 <span style=''>    */
+</span>117 <span style=''>  def updateUsersOwnUserGroup: Action[JsValue] = </span><span style='background: #F0ADAD'>defaultAuthAction(parse.json) {
+</span>118 <span style=''></span><span style='background: #F0ADAD'>    request =&gt;
+</span>119 <span style=''></span><span style='background: #F0ADAD'>      request.body.validate[UserGroup].fold(
+</span>120 <span style=''></span><span style='background: #F0ADAD'>        errors =&gt; {
+</span>121 <span style=''></span><span style='background: #F0ADAD'>          logger.error(JsError.toJson(errors).toString())
+</span>122 <span style=''></span><span style='background: #F0ADAD'>          val error: ErrorResult = ErrorResult(&quot;Usergroup format could not be read.&quot;,
+</span>123 <span style=''></span><span style='background: #F0ADAD'>            Some(StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))))
+</span>124 <span style=''></span><span style='background: #F0ADAD'>          BadRequest(Json.toJson(error)).as(JSON)
+</span>125 <span style=''></span><span style='background: #F0ADAD'>        },
+</span>126 <span style=''></span><span style='background: #F0ADAD'>        userGroup =&gt; {
+</span>127 <span style=''></span><span style='background: #F0ADAD'>          // check if creating user is in the member list and has power user rights from the database happens in underlying service
+</span>128 <span style=''></span><span style='background: #F0ADAD'>          // (so that you cannot smuggle yourself in)
+</span>129 <span style=''></span><span style='background: #F0ADAD'>          // however, as a poweruser you can remove yourself from the group or degrade your rights (subsequently you won't be able to edit anymore)
+</span>130 <span style=''></span><span style='background: #F0ADAD'>          userGroupService.updateUsersOwnUserGroup(request.user, userGroup).fold {
+</span>131 <span style=''></span><span style='background: #F0ADAD'>            logger.error(&quot;Error updating the user group.&quot;)
+</span>132 <span style=''></span><span style='background: #F0ADAD'>            val error = ErrorResult(&quot;Error updating the user group.&quot;, None)
+</span>133 <span style=''></span><span style='background: #F0ADAD'>            BadRequest(Json.toJson(error)).as(JSON)
+</span>134 <span style=''></span><span style='background: #F0ADAD'>          } {
+</span>135 <span style=''></span><span style='background: #F0ADAD'>            ugroup =&gt;
+</span>136 <span style=''></span><span style='background: #F0ADAD'>              Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;usergroup&quot; -&gt; Json.toJson(ugroup)))
+</span>137 <span style=''></span><span style='background: #F0ADAD'>          }
+</span>138 <span style=''></span><span style='background: #F0ADAD'>        })
+</span>139 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>140 <span style=''>
+</span>141 <span style=''>  /**
+</span>142 <span style=''>    * delete a user group, user must be member with poweruser rights, checked in usergroupService
+</span>143 <span style=''>    * @param id
+</span>144 <span style=''>    * @return
+</span>145 <span style=''>    */
+</span>146 <span style=''>  def deleteUsersOwnUserGroup(id: String): Action[Unit] = </span><span style='background: #F0ADAD'>defaultAuthAction(parse.empty) {
+</span>147 <span style=''></span><span style='background: #F0ADAD'>    implicit request =&gt;
+</span>148 <span style=''></span><span style='background: #F0ADAD'>      val ugDel = userGroupService.deleteUsersOwnUserGroup(request.user, UUID.fromString(id))
+</span>149 <span style=''></span><span style='background: #F0ADAD'>      if (ugDel) {
+</span>150 <span style=''></span><span style='background: #F0ADAD'>        Ok(Json.obj(&quot;status&quot; -&gt; &quot;OK&quot;, &quot;message&quot; -&gt; &quot;usergroup deleted&quot;, &quot;usergroup&quot; -&gt; id))
+</span>151 <span style=''></span><span style='background: #F0ADAD'>      } else {
+</span>152 <span style=''></span><span style='background: #F0ADAD'>        logger.error(&quot;Error deleting the user group.&quot;)
+</span>153 <span style=''></span><span style='background: #F0ADAD'>        val error = ErrorResult(&quot;Error deleting the user group.&quot;, None)
+</span>154 <span style=''></span><span style='background: #F0ADAD'>        BadRequest(Json.toJson(error)).as(JSON)
+</span>155 <span style=''></span><span style='background: #F0ADAD'>      }
+</span>156 <span style=''></span><span style='background: #F0ADAD'>
+</span>157 <span style=''></span><span style='background: #F0ADAD'>  }</span><span style=''>
+</span>158 <span style=''>
+</span>159 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          3596
+        </td>
+        <td>
+          2012
+          -
+          2051
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.andThen
+        </td>
+        <td style="background: #AEF1AE">
+          UserGroupController.this.authenticationAction.andThen[controllers.security.UserRequest](UserGroupController.this.userAction)
+        </td>
+      </tr><tr>
+        <td>
+          49
+        </td>
+        <td>
+          3595
+        </td>
+        <td>
+          2041
+          -
+          2051
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.UserGroupController.userAction
+        </td>
+        <td style="background: #AEF1AE">
+          UserGroupController.this.userAction
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          3618
+        </td>
+        <td>
+          2158
+          -
+          2387
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.defaultAuthAction.apply[Unit](UserGroupController.this.parse.empty)(((implicit request: controllers.security.UserRequest[Unit]) =&gt; {
+  val ugList: Seq[models.users.UserGroup] = UserGroupController.this.userGroupService.getUsersOwnUserGroups(request.user);
+  UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          56
+        </td>
+        <td>
+          3597
+        </td>
+        <td>
+          2176
+          -
+          2187
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          3599
+        </td>
+        <td>
+          2234
+          -
+          2286
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserGroupService.getUsersOwnUserGroups
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.getUsersOwnUserGroups(request.user)
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          3598
+        </td>
+        <td>
+          2273
+          -
+          2285
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.UserRequest.user
+        </td>
+        <td style="background: #F0ADAD">
+          request.user
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3609
+        </td>
+        <td>
+          2347
+          -
+          2380
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          scala.collection.TraversableLike.map
+        </td>
+        <td style="background: #F0ADAD">
+          ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3600
+        </td>
+        <td>
+          2305
+          -
+          2313
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3612
+        </td>
+        <td>
+          2339
+          -
+          2381
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3603
+        </td>
+        <td>
+          2317
+          -
+          2321
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3606
+        </td>
+        <td>
+          2375
+          -
+          2375
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3615
+        </td>
+        <td>
+          2295
+          -
+          2295
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3614
+        </td>
+        <td>
+          2296
+          -
+          2382
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])))(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3605
+        </td>
+        <td>
+          2323
+          -
+          2335
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroups&quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3608
+        </td>
+        <td>
+          2357
+          -
+          2357
+        </td>
+        <td>
+          TypeApply
+        </td>
+        <td>
+          scala.collection.Seq.canBuildFrom
+        </td>
+        <td style="background: #F0ADAD">
+          collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue]
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3617
+        </td>
+        <td>
+          2293
+          -
+          2383
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3611
+        </td>
+        <td>
+          2346
+          -
+          2346
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3602
+        </td>
+        <td>
+          2317
+          -
+          2317
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3613
+        </td>
+        <td>
+          2323
+          -
+          2381
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue])))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3604
+        </td>
+        <td>
+          2305
+          -
+          2321
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3616
+        </td>
+        <td>
+          2295
+          -
+          2295
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3607
+        </td>
+        <td>
+          2364
+          -
+          2379
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3601
+        </td>
+        <td>
+          2317
+          -
+          2321
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          3610
+        </td>
+        <td>
+          2339
+          -
+          2381
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsArray.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsArray.apply(ugList.map[play.api.libs.json.JsValue, Seq[play.api.libs.json.JsValue]](((ug: models.users.UserGroup) =&gt; play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)))(collection.this.Seq.canBuildFrom[play.api.libs.json.JsValue]))
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          3659
+        </td>
+        <td>
+          2553
+          -
+          2918
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.defaultAuthAction.apply[Unit](UserGroupController.this.parse.empty)(((implicit request: controllers.security.UserRequest[Unit]) =&gt; {
+  val ugList: Option[models.users.UserGroup] = UserGroupController.this.userGroupService.findUsersOwnUserGroupsById(request.user, java.util.UUID.fromString(id));
+  ugList.fold[play.api.mvc.Result](UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((ug: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          3619
+        </td>
+        <td>
+          2571
+          -
+          2582
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          3621
+        </td>
+        <td>
+          2687
+          -
+          2706
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #F0ADAD">
+          java.util.UUID.fromString(id)
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          3620
+        </td>
+        <td>
+          2673
+          -
+          2685
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.UserRequest.user
+        </td>
+        <td style="background: #F0ADAD">
+          request.user
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          3622
+        </td>
+        <td>
+          2629
+          -
+          2707
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserGroupService.findUsersOwnUserGroupsById
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.findUsersOwnUserGroupsById(request.user, java.util.UUID.fromString(id))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3627
+        </td>
+        <td>
+          2748
+          -
+          2764
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3636
+        </td>
+        <td>
+          2806
+          -
+          2806
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3639
+        </td>
+        <td>
+          2739
+          -
+          2818
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3630
+        </td>
+        <td>
+          2782
+          -
+          2791
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsArray.apply
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3642
+        </td>
+        <td>
+          2736
+          -
+          2819
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3624
+        </td>
+        <td>
+          2760
+          -
+          2764
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3633
+        </td>
+        <td>
+          2766
+          -
+          2791
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3632
+        </td>
+        <td>
+          2782
+          -
+          2791
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3641
+        </td>
+        <td>
+          2738
+          -
+          2738
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3623
+        </td>
+        <td>
+          2748
+          -
+          2756
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3635
+        </td>
+        <td>
+          2806
+          -
+          2817
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;not found&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3626
+        </td>
+        <td>
+          2760
+          -
+          2764
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3638
+        </td>
+        <td>
+          2793
+          -
+          2817
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3629
+        </td>
+        <td>
+          2782
+          -
+          2782
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.JsArray.apply$default$1
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsArray.apply$default$1
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3637
+        </td>
+        <td>
+          2806
+          -
+          2817
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3628
+        </td>
+        <td>
+          2766
+          -
+          2778
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroups&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3640
+        </td>
+        <td>
+          2738
+          -
+          2738
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3631
+        </td>
+        <td>
+          2789
+          -
+          2789
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3634
+        </td>
+        <td>
+          2793
+          -
+          2802
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          72
+        </td>
+        <td>
+          3625
+        </td>
+        <td>
+          2760
+          -
+          2760
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          3658
+        </td>
+        <td>
+          2714
+          -
+          2914
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          ugList.fold[play.api.mvc.Result](UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroups&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsArray](play.api.libs.json.JsArray.apply(play.api.libs.json.JsArray.apply$default$1))(json.this.Writes.JsValueWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;not found&quot;)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)))(((ug: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3654
+        </td>
+        <td>
+          2847
+          -
+          2905
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3645
+        </td>
+        <td>
+          2868
+          -
+          2868
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3648
+        </td>
+        <td>
+          2874
+          -
+          2885
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroup&quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3657
+        </td>
+        <td>
+          2844
+          -
+          2906
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3650
+        </td>
+        <td>
+          2889
+          -
+          2904
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3653
+        </td>
+        <td>
+          2874
+          -
+          2904
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3644
+        </td>
+        <td>
+          2868
+          -
+          2872
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3647
+        </td>
+        <td>
+          2856
+          -
+          2872
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3656
+        </td>
+        <td>
+          2846
+          -
+          2846
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3655
+        </td>
+        <td>
+          2846
+          -
+          2846
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3646
+        </td>
+        <td>
+          2868
+          -
+          2872
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3649
+        </td>
+        <td>
+          2900
+          -
+          2900
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3643
+        </td>
+        <td>
+          2856
+          -
+          2864
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3652
+        </td>
+        <td>
+          2889
+          -
+          2904
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ug)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          74
+        </td>
+        <td>
+          3651
+        </td>
+        <td>
+          2900
+          -
+          2900
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          3720
+        </td>
+        <td>
+          3099
+          -
+          4537
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.defaultAuthAction.apply[play.api.libs.json.JsValue](UserGroupController.this.parse.json)(((request: controllers.security.UserRequest[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.users.UserGroup](controllers.this.`package`.userGroupFormat).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))));
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}), ((userGroup: models.users.UserGroup) =&gt; {
+  val isPresent: Boolean = userGroup.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(request.user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))));
+  if (isPresent.unary_!)
+    {
+      UserGroupController.this.logger.error(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;);
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;, scala.None);
+      UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+    }
+  else
+    UserGroupController.this.userGroupService.createUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+      UserGroupController.this.logger.error(&quot;Error creating the user group.&quot;);
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error creating the user group.&quot;, scala.None);
+      UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+    })(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+}))))
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          3660
+        </td>
+        <td>
+          3117
+          -
+          3127
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          3719
+        </td>
+        <td>
+          3152
+          -
+          4533
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsResult.fold
+        </td>
+        <td style="background: #F0ADAD">
+          request.body.validate[models.users.UserGroup](controllers.this.`package`.userGroupFormat).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))));
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}), ((userGroup: models.users.UserGroup) =&gt; {
+  val isPresent: Boolean = userGroup.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(request.user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))));
+  if (isPresent.unary_!)
+    {
+      UserGroupController.this.logger.error(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;);
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;, scala.None);
+      UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+    }
+  else
+    UserGroupController.this.userGroupService.createUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+      UserGroupController.this.logger.error(&quot;Error creating the user group.&quot;);
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error creating the user group.&quot;, scala.None);
+      UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+    })(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+}))
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          3661
+        </td>
+        <td>
+          3173
+          -
+          3173
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          3663
+        </td>
+        <td>
+          3221
+          -
+          3268
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          87
+        </td>
+        <td>
+          3662
+        </td>
+        <td>
+          3234
+          -
+          3267
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          3668
+        </td>
+        <td>
+          3304
+          -
+          3425
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))))
+        </td>
+      </tr><tr>
+        <td>
+          88
+        </td>
+        <td>
+          3664
+        </td>
+        <td>
+          3316
+          -
+          3353
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Usergroup format could not be read.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          3666
+        </td>
+        <td>
+          3372
+          -
+          3423
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.commons.lang3.StringEscapeUtils.escapeJson
+        </td>
+        <td style="background: #F0ADAD">
+          org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          3665
+        </td>
+        <td>
+          3401
+          -
+          3422
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          errors.mkString(&quot;; &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          3667
+        </td>
+        <td>
+          3367
+          -
+          3424
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;)))
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3672
+        </td>
+        <td>
+          3446
+          -
+          3446
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3674
+        </td>
+        <td>
+          3436
+          -
+          3475
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3671
+        </td>
+        <td>
+          3446
+          -
+          3446
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3673
+        </td>
+        <td>
+          3470
+          -
+          3474
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3670
+        </td>
+        <td>
+          3447
+          -
+          3465
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          3669
+        </td>
+        <td>
+          3458
+          -
+          3458
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          3675
+        </td>
+        <td>
+          3687
+          -
+          3714
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.accountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          request.user.accountSubject
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          3677
+        </td>
+        <td>
+          3656
+          -
+          3736
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td style="background: #F0ADAD">
+          ul.users_accountsubject.equals(request.user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          3676
+        </td>
+        <td>
+          3719
+          -
+          3736
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&gt;=
+        </td>
+        <td style="background: #F0ADAD">
+          ul.userlevel.&gt;=(1)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          3678
+        </td>
+        <td>
+          3619
+          -
+          3737
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.LinearSeqOptimized.exists
+        </td>
+        <td style="background: #F0ADAD">
+          userGroup.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(request.user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          3690
+        </td>
+        <td>
+          3764
+          -
+          4088
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  UserGroupController.this.logger.error(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          3679
+        </td>
+        <td>
+          3752
+          -
+          3762
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Boolean.unary_!
+        </td>
+        <td style="background: #F0ADAD">
+          isPresent.unary_!
+        </td>
+      </tr><tr>
+        <td>
+          96
+        </td>
+        <td>
+          3680
+        </td>
+        <td>
+          3778
+          -
+          3886
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          3681
+        </td>
+        <td>
+          3923
+          -
+          4017
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          3683
+        </td>
+        <td>
+          3911
+          -
+          4024
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;User not listed with adequate rights. We would create a group that you can\'t edit, aborting.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          3682
+        </td>
+        <td>
+          4019
+          -
+          4023
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3684
+        </td>
+        <td>
+          4059
+          -
+          4059
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3686
+        </td>
+        <td>
+          4047
+          -
+          4047
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3689
+        </td>
+        <td>
+          4037
+          -
+          4076
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3688
+        </td>
+        <td>
+          4071
+          -
+          4075
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3685
+        </td>
+        <td>
+          4048
+          -
+          4066
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          3687
+        </td>
+        <td>
+          4047
+          -
+          4047
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          3691
+        </td>
+        <td>
+          4149
+          -
+          4161
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.UserRequest.user
+        </td>
+        <td style="background: #F0ADAD">
+          request.user
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          3692
+        </td>
+        <td>
+          4195
+          -
+          4241
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(&quot;Error creating the user group.&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          3693
+        </td>
+        <td>
+          4280
+          -
+          4312
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Error creating the user group.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          3695
+        </td>
+        <td>
+          4268
+          -
+          4319
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Error creating the user group.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          3694
+        </td>
+        <td>
+          4314
+          -
+          4318
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3699
+        </td>
+        <td>
+          4344
+          -
+          4344
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3701
+        </td>
+        <td>
+          4334
+          -
+          4373
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3698
+        </td>
+        <td>
+          4344
+          -
+          4344
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3697
+        </td>
+        <td>
+          4345
+          -
+          4363
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3700
+        </td>
+        <td>
+          4368
+          -
+          4372
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          3696
+        </td>
+        <td>
+          4356
+          -
+          4356
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          3717
+        </td>
+        <td>
+          4108
+          -
+          4510
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.createUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+  UserGroupController.this.logger.error(&quot;Error creating the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error creating the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+})(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          3718
+        </td>
+        <td>
+          4108
+          -
+          4510
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.createUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+  UserGroupController.this.logger.error(&quot;Error creating the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error creating the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+})(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3708
+        </td>
+        <td>
+          4486
+          -
+          4486
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3702
+        </td>
+        <td>
+          4442
+          -
+          4450
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3710
+        </td>
+        <td>
+          4486
+          -
+          4486
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3713
+        </td>
+        <td>
+          4433
+          -
+          4495
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3704
+        </td>
+        <td>
+          4454
+          -
+          4454
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3716
+        </td>
+        <td>
+          4430
+          -
+          4496
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3707
+        </td>
+        <td>
+          4460
+          -
+          4471
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroup&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3715
+        </td>
+        <td>
+          4432
+          -
+          4432
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3706
+        </td>
+        <td>
+          4442
+          -
+          4458
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3709
+        </td>
+        <td>
+          4475
+          -
+          4494
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3703
+        </td>
+        <td>
+          4454
+          -
+          4458
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3712
+        </td>
+        <td>
+          4460
+          -
+          4494
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3711
+        </td>
+        <td>
+          4475
+          -
+          4494
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3705
+        </td>
+        <td>
+          4454
+          -
+          4458
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          106
+        </td>
+        <td>
+          3714
+        </td>
+        <td>
+          4432
+          -
+          4432
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          3764
+        </td>
+        <td>
+          4735
+          -
+          5893
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.defaultAuthAction.apply[play.api.libs.json.JsValue](UserGroupController.this.parse.json)(((request: controllers.security.UserRequest[play.api.libs.json.JsValue]) =&gt; request.body.validate[models.users.UserGroup](controllers.this.`package`.userGroupFormat).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))));
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}), ((userGroup: models.users.UserGroup) =&gt; UserGroupController.this.userGroupService.updateUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+  UserGroupController.this.logger.error(&quot;Error updating the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error updating the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+})(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))))))
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          3721
+        </td>
+        <td>
+          4753
+          -
+          4763
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.json
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.parse.json
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          3722
+        </td>
+        <td>
+          4809
+          -
+          4809
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          119
+        </td>
+        <td>
+          3763
+        </td>
+        <td>
+          4788
+          -
+          5889
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsResult.fold
+        </td>
+        <td style="background: #F0ADAD">
+          request.body.validate[models.users.UserGroup](controllers.this.`package`.userGroupFormat).fold[play.api.mvc.Result](((errors: Seq[(play.api.libs.json.JsPath, Seq[play.api.data.validation.ValidationError])]) =&gt; {
+  UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString());
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))));
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}), ((userGroup: models.users.UserGroup) =&gt; UserGroupController.this.userGroupService.updateUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+  UserGroupController.this.logger.error(&quot;Error updating the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error updating the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+})(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))))
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          3724
+        </td>
+        <td>
+          4857
+          -
+          4904
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(play.api.libs.json.JsError.toJson(errors).toString())
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          3723
+        </td>
+        <td>
+          4870
+          -
+          4903
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.JsValue.toString
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.JsError.toJson(errors).toString()
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          3725
+        </td>
+        <td>
+          4952
+          -
+          4989
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Usergroup format could not be read.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          3729
+        </td>
+        <td>
+          4940
+          -
+          5061
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Usergroup format could not be read.&quot;, scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))))
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          3726
+        </td>
+        <td>
+          5037
+          -
+          5058
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.TraversableOnce.mkString
+        </td>
+        <td style="background: #F0ADAD">
+          errors.mkString(&quot;; &quot;)
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          3728
+        </td>
+        <td>
+          5003
+          -
+          5060
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[String](org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;)))
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          3727
+        </td>
+        <td>
+          5008
+          -
+          5059
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          org.apache.commons.lang3.StringEscapeUtils.escapeJson
+        </td>
+        <td style="background: #F0ADAD">
+          org.apache.commons.lang3.StringEscapeUtils.escapeJson(errors.mkString(&quot;; &quot;))
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3735
+        </td>
+        <td>
+          5072
+          -
+          5111
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3734
+        </td>
+        <td>
+          5106
+          -
+          5110
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3731
+        </td>
+        <td>
+          5083
+          -
+          5101
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3733
+        </td>
+        <td>
+          5082
+          -
+          5082
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3730
+        </td>
+        <td>
+          5094
+          -
+          5094
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          124
+        </td>
+        <td>
+          3732
+        </td>
+        <td>
+          5082
+          -
+          5082
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          130
+        </td>
+        <td>
+          3736
+        </td>
+        <td>
+          5531
+          -
+          5543
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.UserRequest.user
+        </td>
+        <td style="background: #F0ADAD">
+          request.user
+        </td>
+      </tr><tr>
+        <td>
+          131
+        </td>
+        <td>
+          3737
+        </td>
+        <td>
+          5575
+          -
+          5621
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(&quot;Error updating the user group.&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          3740
+        </td>
+        <td>
+          5646
+          -
+          5697
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Error updating the user group.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          3739
+        </td>
+        <td>
+          5692
+          -
+          5696
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          132
+        </td>
+        <td>
+          3738
+        </td>
+        <td>
+          5658
+          -
+          5690
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Error updating the user group.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3744
+        </td>
+        <td>
+          5720
+          -
+          5720
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3743
+        </td>
+        <td>
+          5720
+          -
+          5720
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3746
+        </td>
+        <td>
+          5710
+          -
+          5749
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3742
+        </td>
+        <td>
+          5721
+          -
+          5739
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3745
+        </td>
+        <td>
+          5744
+          -
+          5748
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          3741
+        </td>
+        <td>
+          5732
+          -
+          5732
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          134
+        </td>
+        <td>
+          3762
+        </td>
+        <td>
+          5490
+          -
+          5878
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.updateUsersOwnUserGroup(request.user, userGroup).fold[play.api.mvc.Result]({
+  UserGroupController.this.logger.error(&quot;Error updating the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error updating the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+})(((ugroup: models.users.UserGroup) =&gt; UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3753
+        </td>
+        <td>
+          5856
+          -
+          5856
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.userGroupFormat
+        </td>
+        <td style="background: #F0ADAD">
+          controllers.this.`package`.userGroupFormat
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3752
+        </td>
+        <td>
+          5830
+          -
+          5841
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroup&quot;
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3761
+        </td>
+        <td>
+          5800
+          -
+          5866
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3755
+        </td>
+        <td>
+          5856
+          -
+          5856
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.JsValueWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.JsValueWrites
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3758
+        </td>
+        <td>
+          5803
+          -
+          5865
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3749
+        </td>
+        <td>
+          5824
+          -
+          5824
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3757
+        </td>
+        <td>
+          5830
+          -
+          5864
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3748
+        </td>
+        <td>
+          5824
+          -
+          5828
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3751
+        </td>
+        <td>
+          5812
+          -
+          5828
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3760
+        </td>
+        <td>
+          5802
+          -
+          5802
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3754
+        </td>
+        <td>
+          5845
+          -
+          5864
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3747
+        </td>
+        <td>
+          5812
+          -
+          5820
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3756
+        </td>
+        <td>
+          5845
+          -
+          5864
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.users.UserGroup](ugroup)(controllers.this.`package`.userGroupFormat))(json.this.Writes.JsValueWrites)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3750
+        </td>
+        <td>
+          5824
+          -
+          5828
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          136
+        </td>
+        <td>
+          3759
+        </td>
+        <td>
+          5802
+          -
+          5802
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          3799
+        </td>
+        <td>
+          6094
+          -
+          6558
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.ActionBuilder.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.defaultAuthAction.apply[Unit](UserGroupController.this.parse.empty)(((implicit request: controllers.security.UserRequest[Unit]) =&gt; {
+  val ugDel: Boolean = UserGroupController.this.userGroupService.deleteUsersOwnUserGroup(request.user, java.util.UUID.fromString(id));
+  if (ugDel)
+    UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+  else
+    {
+      UserGroupController.this.logger.error(&quot;Error deleting the user group.&quot;);
+      val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error deleting the user group.&quot;, scala.None);
+      UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+    }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          146
+        </td>
+        <td>
+          3765
+        </td>
+        <td>
+          6112
+          -
+          6123
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.BodyParsers.parse.empty
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.parse.empty
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          3767
+        </td>
+        <td>
+          6224
+          -
+          6243
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.fromString
+        </td>
+        <td style="background: #F0ADAD">
+          java.util.UUID.fromString(id)
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          3766
+        </td>
+        <td>
+          6210
+          -
+          6222
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          controllers.security.UserRequest.user
+        </td>
+        <td style="background: #F0ADAD">
+          request.user
+        </td>
+      </tr><tr>
+        <td>
+          148
+        </td>
+        <td>
+          3768
+        </td>
+        <td>
+          6169
+          -
+          6244
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserGroupService.deleteUsersOwnUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.userGroupService.deleteUsersOwnUserGroup(request.user, java.util.UUID.fromString(id))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3785
+        </td>
+        <td>
+          6274
+          -
+          6274
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3779
+        </td>
+        <td>
+          6336
+          -
+          6347
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroup&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3770
+        </td>
+        <td>
+          6296
+          -
+          6300
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;OK&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3773
+        </td>
+        <td>
+          6284
+          -
+          6300
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3782
+        </td>
+        <td>
+          6336
+          -
+          6353
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3776
+        </td>
+        <td>
+          6315
+          -
+          6315
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3784
+        </td>
+        <td>
+          6274
+          -
+          6274
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3775
+        </td>
+        <td>
+          6315
+          -
+          6334
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;usergroup deleted&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3778
+        </td>
+        <td>
+          6302
+          -
+          6334
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Predef.ArrowAssoc.-&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3787
+        </td>
+        <td>
+          6272
+          -
+          6355
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3769
+        </td>
+        <td>
+          6284
+          -
+          6292
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;status&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3781
+        </td>
+        <td>
+          6351
+          -
+          6353
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3772
+        </td>
+        <td>
+          6296
+          -
+          6300
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3771
+        </td>
+        <td>
+          6296
+          -
+          6296
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3780
+        </td>
+        <td>
+          6351
+          -
+          6351
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.libs.json.DefaultWrites.StringWrites
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Writes.StringWrites
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3774
+        </td>
+        <td>
+          6302
+          -
+          6311
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;message&quot;
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3783
+        </td>
+        <td>
+          6275
+          -
+          6354
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.libs.json.Json.obj
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites)))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3786
+        </td>
+        <td>
+          6272
+          -
+          6355
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.mvc.Results.Status.apply
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.Ok.apply[play.api.libs.json.JsObject](play.api.libs.json.Json.obj(scala.this.Predef.ArrowAssoc[String](&quot;status&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;OK&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;message&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites)), scala.this.Predef.ArrowAssoc[String](&quot;usergroup&quot;).-&gt;[play.api.libs.json.Json.JsValueWrapper](json.this.Json.toJsFieldJsValueWrapper[String](id)(json.this.Writes.StringWrites))))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8))
+        </td>
+      </tr><tr>
+        <td>
+          150
+        </td>
+        <td>
+          3777
+        </td>
+        <td>
+          6315
+          -
+          6334
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJsFieldJsValueWrapper
+        </td>
+        <td style="background: #F0ADAD">
+          json.this.Json.toJsFieldJsValueWrapper[String](&quot;usergroup deleted&quot;)(json.this.Writes.StringWrites)
+        </td>
+      </tr><tr>
+        <td>
+          151
+        </td>
+        <td>
+          3798
+        </td>
+        <td>
+          6369
+          -
+          6553
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  UserGroupController.this.logger.error(&quot;Error deleting the user group.&quot;);
+  val error: models.ErrorResult = models.ErrorResult.apply(&quot;Error deleting the user group.&quot;, scala.None);
+  UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+}
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          3788
+        </td>
+        <td>
+          6379
+          -
+          6425
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.logger.error(&quot;Error deleting the user group.&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          3791
+        </td>
+        <td>
+          6446
+          -
+          6497
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.ErrorResult.apply
+        </td>
+        <td style="background: #F0ADAD">
+          models.ErrorResult.apply(&quot;Error deleting the user group.&quot;, scala.None)
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          3790
+        </td>
+        <td>
+          6492
+          -
+          6496
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          153
+        </td>
+        <td>
+          3789
+        </td>
+        <td>
+          6458
+          -
+          6490
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Error deleting the user group.&quot;
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3794
+        </td>
+        <td>
+          6516
+          -
+          6516
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.mvc.Codec.utf_8
+        </td>
+        <td style="background: #F0ADAD">
+          mvc.this.Codec.utf_8
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3797
+        </td>
+        <td>
+          6506
+          -
+          6545
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.mvc.Result.as
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.BadRequest.apply[play.api.libs.json.JsValue](play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes))(http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)).as(UserGroupController.this.JSON)
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3793
+        </td>
+        <td>
+          6517
+          -
+          6535
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.libs.json.Json.toJson
+        </td>
+        <td style="background: #F0ADAD">
+          play.api.libs.json.Json.toJson[models.ErrorResult](error)(models.this.ErrorResult.writes)
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3796
+        </td>
+        <td>
+          6540
+          -
+          6544
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.http.ContentTypes.JSON
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupController.this.JSON
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3792
+        </td>
+        <td>
+          6528
+          -
+          6528
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.ErrorResult.writes
+        </td>
+        <td style="background: #F0ADAD">
+          models.this.ErrorResult.writes
+        </td>
+      </tr><tr>
+        <td>
+          154
+        </td>
+        <td>
+          3795
+        </td>
+        <td>
+          6516
+          -
+          6516
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          play.api.http.DefaultWriteables.writeableOf_JsValue
+        </td>
+        <td style="background: #F0ADAD">
+          http.this.Writeable.writeableOf_JsValue(mvc.this.Codec.utf_8)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

@@ -1,0 +1,1133 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          services/UserGroupService.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE)
+</span>6 <span style=''> *
+</span>7 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>8 <span style=''> * you may not use this file except in compliance with the License.
+</span>9 <span style=''> * You may obtain a copy of the License at
+</span>10 <span style=''> *
+</span>11 <span style=''> *   http://www.apache.org/licenses/LICENSE-2.0
+</span>12 <span style=''> *
+</span>13 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>14 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>15 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>16 <span style=''> * See the License for the specific language governing permissions and
+</span>17 <span style=''> * limitations under the License.
+</span>18 <span style=''> */
+</span>19 <span style=''>
+</span>20 <span style=''>package services
+</span>21 <span style=''>
+</span>22 <span style=''>import java.util.UUID
+</span>23 <span style=''>import javax.inject._
+</span>24 <span style=''>
+</span>25 <span style=''>import models.db.DatabaseSessionHolder
+</span>26 <span style=''>import models.users._
+</span>27 <span style=''>import play.api.Configuration
+</span>28 <span style=''>import utils.ClassnameLogger
+</span>29 <span style=''>
+</span>30 <span style=''>@Singleton
+</span>31 <span style=''>class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
+</span>32 <span style=''>                                 configuration: Configuration) extends ClassnameLogger {
+</span>33 <span style=''>
+</span>34 <span style=''>  lazy private val appTimeZone: String = </span><span style='background: #F0ADAD'>configuration.getString(&quot;datetime.timezone&quot;).getOrElse(&quot;Pacific/Auckland&quot;)</span><span style=''>
+</span>35 <span style=''>
+</span>36 <span style=''>  /**
+</span>37 <span style=''>    * check if user can edit this particular group
+</span>38 <span style=''>    *
+</span>39 <span style=''>    * @param user
+</span>40 <span style=''>    * @param userGroup
+</span>41 <span style=''>    * @return
+</span>42 <span style=''>    */
+</span>43 <span style=''>  def amIPowerUserForGroup(user: User, userGroup: UserGroup): Boolean = {
+</span>44 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; {
+</span>45 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsForUser(user)
+</span>46 <span style=''></span><span style='background: #F0ADAD'>        .find(ug =&gt; ug.uuid.equals(userGroup.uuid))
+</span>47 <span style=''></span><span style='background: #F0ADAD'>        .exists(ug =&gt; ug.hasUsersLevel.exists(ul =&gt; ul.users_accountsubject.equals(user.accountSubject) &amp;&amp; ul.userlevel &gt;= 1))
+</span>48 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>49 <span style=''>  }
+</span>50 <span style=''>
+</span>51 <span style=''>  /**
+</span>52 <span style=''>    * finds all groups a user is part of
+</span>53 <span style=''>    *
+</span>54 <span style=''>    * @param user
+</span>55 <span style=''>    * @return
+</span>56 <span style=''>    */
+</span>57 <span style=''>  def getUsersOwnUserGroups(user: User): Seq[UserGroup] = {
+</span>58 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>59 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsForUser(user)
+</span>60 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>61 <span style=''>  }
+</span>62 <span style=''>
+</span>63 <span style=''>  /**
+</span>64 <span style=''>    * finds a group by its if the user is part of it
+</span>65 <span style=''>    *
+</span>66 <span style=''>    * @param user
+</span>67 <span style=''>    * @param uuid
+</span>68 <span style=''>    * @return
+</span>69 <span style=''>    */
+</span>70 <span style=''>  def findUsersOwnUserGroupsById(user: User, uuid: UUID): Option[UserGroup] = {
+</span>71 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>72 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.findUserGroupsForUser(user)
+</span>73 <span style=''></span><span style='background: #F0ADAD'>        .find(ug =&gt; ug.uuid.equals(uuid))
+</span>74 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>75 <span style=''>  }
+</span>76 <span style=''>
+</span>77 <span style=''>  /**
+</span>78 <span style=''>    * will create a new group, assumes that calling user is listed with rights
+</span>79 <span style=''>    *
+</span>80 <span style=''>    * @param user
+</span>81 <span style=''>    * @param userGroup
+</span>82 <span style=''>    * @return
+</span>83 <span style=''>    */
+</span>84 <span style=''>  def createUsersOwnUserGroup(user: User, userGroup: UserGroup): Option[UserGroup] = {
+</span>85 <span style=''>    </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>86 <span style=''></span><span style='background: #F0ADAD'>      UserGroup.createUserGroup(userGroup: UserGroup)
+</span>87 <span style=''></span><span style='background: #F0ADAD'>    })</span><span style=''>
+</span>88 <span style=''>  }
+</span>89 <span style=''>
+</span>90 <span style=''>  /**
+</span>91 <span style=''>    * will update a group if the calling user is poweruser
+</span>92 <span style=''>    *
+</span>93 <span style=''>    * @param user
+</span>94 <span style=''>    * @param userGroup
+</span>95 <span style=''>    * @return
+</span>96 <span style=''>    */
+</span>97 <span style=''>  def updateUsersOwnUserGroup(user: User, userGroup: UserGroup): Option[UserGroup] = {
+</span>98 <span style=''>    val edit = </span><span style='background: #F0ADAD'>amIPowerUserForGroup(user, userGroup)</span><span style=''>
+</span>99 <span style=''>    if (edit) {
+</span>100 <span style=''>      </span><span style='background: #F0ADAD'>dbSession.viaTransaction(implicit connection =&gt; {
+</span>101 <span style=''></span><span style='background: #F0ADAD'>        UserGroup.updateUserGroup(userGroup: UserGroup)
+</span>102 <span style=''></span><span style='background: #F0ADAD'>      })</span><span style=''>
+</span>103 <span style=''>    } else </span><span style='background: #F0ADAD'>{
+</span>104 <span style=''></span><span style='background: #F0ADAD'>      logger.warn(s&quot;user ${user.accountSubject} illegally attempted to edit group ${userGroup.uuid}&quot;)
+</span>105 <span style=''></span><span style='background: #F0ADAD'>      None
+</span>106 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>107 <span style=''>  }
+</span>108 <span style=''>
+</span>109 <span style=''>  /**
+</span>110 <span style=''>    * will delete a group if the calling user is poweruser
+</span>111 <span style=''>    *
+</span>112 <span style=''>    * @param user
+</span>113 <span style=''>    * @param uuid
+</span>114 <span style=''>    * @return
+</span>115 <span style=''>    */
+</span>116 <span style=''>  def deleteUsersOwnUserGroup(user: User, uuid: UUID): Boolean = {
+</span>117 <span style=''>    val userGroupOption = </span><span style='background: #F0ADAD'>dbSession.viaConnection(implicit connection =&gt; UserGroup.findUserGroupsById(uuid))</span><span style=''>
+</span>118 <span style=''>    </span><span style='background: #F0ADAD'>userGroupOption.exists {
+</span>119 <span style=''></span><span style='background: #F0ADAD'>      userGroup =&gt;
+</span>120 <span style=''></span><span style='background: #F0ADAD'>        val edit = amIPowerUserForGroup(user, userGroup)
+</span>121 <span style=''></span><span style='background: #F0ADAD'>        if (edit) {
+</span>122 <span style=''></span><span style='background: #F0ADAD'>          dbSession.viaTransaction(implicit connection =&gt; {
+</span>123 <span style=''></span><span style='background: #F0ADAD'>            UserGroup.deleteUserGroup(userGroup: UserGroup)
+</span>124 <span style=''></span><span style='background: #F0ADAD'>          })
+</span>125 <span style=''></span><span style='background: #F0ADAD'>        } else {
+</span>126 <span style=''></span><span style='background: #F0ADAD'>          logger.warn(s&quot;user ${user.accountSubject} illegally attempted to edit group ${userGroup.uuid}&quot;)
+</span>127 <span style=''></span><span style='background: #F0ADAD'>          false
+</span>128 <span style=''></span><span style='background: #F0ADAD'>        }
+</span>129 <span style=''></span><span style='background: #F0ADAD'>    }</span><span style=''>
+</span>130 <span style=''>  }
+</span>131 <span style=''>
+</span>132 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          34
+        </td>
+        <td>
+          11165
+        </td>
+        <td>
+          1271
+          -
+          1345
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.getOrElse
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.configuration.getString(&quot;datetime.timezone&quot;, UserGroupService.this.configuration.getString$default$2).getOrElse[String](&quot;Pacific/Auckland&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          44
+        </td>
+        <td>
+          11173
+        </td>
+        <td>
+          1550
+          -
+          1828
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaConnection[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.findUserGroupsForUser(user)(connection).find(((ug: models.users.UserGroup) =&gt; ug.uuid.equals(userGroup.uuid))).exists(((ug: models.users.UserGroup) =&gt; ug.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))))))))
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          11166
+        </td>
+        <td>
+          1678
+          -
+          1692
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.uuid
+        </td>
+        <td style="background: #F0ADAD">
+          userGroup.uuid
+        </td>
+      </tr><tr>
+        <td>
+          46
+        </td>
+        <td>
+          11167
+        </td>
+        <td>
+          1663
+          -
+          1693
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.equals
+        </td>
+        <td style="background: #F0ADAD">
+          ug.uuid.equals(userGroup.uuid)
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          11169
+        </td>
+        <td>
+          1802
+          -
+          1819
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&gt;=
+        </td>
+        <td style="background: #F0ADAD">
+          ul.userlevel.&gt;=(1)
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          11172
+        </td>
+        <td>
+          1605
+          -
+          1821
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.exists
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.findUserGroupsForUser(user)(connection).find(((ug: models.users.UserGroup) =&gt; ug.uuid.equals(userGroup.uuid))).exists(((ug: models.users.UserGroup) =&gt; ug.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))))))
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          11168
+        </td>
+        <td>
+          1778
+          -
+          1797
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.accountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          user.accountSubject
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          11171
+        </td>
+        <td>
+          1717
+          -
+          1820
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.LinearSeqOptimized.exists
+        </td>
+        <td style="background: #F0ADAD">
+          ug.hasUsersLevel.exists(((ul: models.users.UserGroupUsersLevel) =&gt; ul.users_accountsubject.equals(user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))))
+        </td>
+      </tr><tr>
+        <td>
+          47
+        </td>
+        <td>
+          11170
+        </td>
+        <td>
+          1747
+          -
+          1819
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Boolean.&amp;&amp;
+        </td>
+        <td style="background: #F0ADAD">
+          ul.users_accountsubject.equals(user.accountSubject).&amp;&amp;(ul.userlevel.&gt;=(1))
+        </td>
+      </tr><tr>
+        <td>
+          58
+        </td>
+        <td>
+          11175
+        </td>
+        <td>
+          1990
+          -
+          2090
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[List[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.findUserGroupsForUser(user)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          59
+        </td>
+        <td>
+          11174
+        </td>
+        <td>
+          2046
+          -
+          2083
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.findUserGroupsForUser
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.findUserGroupsForUser(user)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          71
+        </td>
+        <td>
+          11178
+        </td>
+        <td>
+          2302
+          -
+          2444
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.findUserGroupsForUser(user)(connection).find(((ug: models.users.UserGroup) =&gt; ug.uuid.equals(uuid)))))
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          11177
+        </td>
+        <td>
+          2358
+          -
+          2437
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.LinearSeqOptimized.find
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.findUserGroupsForUser(user)(connection).find(((ug: models.users.UserGroup) =&gt; ug.uuid.equals(uuid)))
+        </td>
+      </tr><tr>
+        <td>
+          73
+        </td>
+        <td>
+          11176
+        </td>
+        <td>
+          2416
+          -
+          2436
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.UUID.equals
+        </td>
+        <td style="background: #F0ADAD">
+          ug.uuid.equals(uuid)
+        </td>
+      </tr><tr>
+        <td>
+          85
+        </td>
+        <td>
+          11180
+        </td>
+        <td>
+          2694
+          -
+          2804
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.createUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          86
+        </td>
+        <td>
+          11179
+        </td>
+        <td>
+          2750
+          -
+          2797
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.createUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.createUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          98
+        </td>
+        <td>
+          11181
+        </td>
+        <td>
+          3045
+          -
+          3082
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserGroupService.amIPowerUserForGroup
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.amIPowerUserForGroup(user, userGroup)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          11184
+        </td>
+        <td>
+          3105
+          -
+          3219
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.updateUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          11183
+        </td>
+        <td>
+          3105
+          -
+          3219
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.updateUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          101
+        </td>
+        <td>
+          11182
+        </td>
+        <td>
+          3163
+          -
+          3210
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.updateUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.updateUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          103
+        </td>
+        <td>
+          11193
+        </td>
+        <td>
+          3231
+          -
+          3351
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  UserGroupService.this.logger.warn(scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid));
+  scala.None
+}
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11187
+        </td>
+        <td>
+          3332
+          -
+          3333
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11190
+        </td>
+        <td>
+          3251
+          -
+          3333
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid)
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11189
+        </td>
+        <td>
+          3317
+          -
+          3331
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.uuid
+        </td>
+        <td style="background: #F0ADAD">
+          userGroup.uuid
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11186
+        </td>
+        <td>
+          3280
+          -
+          3316
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; illegally attempted to edit group &quot;
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11188
+        </td>
+        <td>
+          3260
+          -
+          3279
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.accountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          user.accountSubject
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11191
+        </td>
+        <td>
+          3239
+          -
+          3334
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.logger.warn(scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid))
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          11185
+        </td>
+        <td>
+          3253
+          -
+          3259
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;user &quot;
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          11192
+        </td>
+        <td>
+          3341
+          -
+          3345
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.None
+        </td>
+        <td style="background: #F0ADAD">
+          scala.None
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          11195
+        </td>
+        <td>
+          3578
+          -
+          3660
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaConnection
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaConnection[Option[models.users.UserGroup]](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.findUserGroupsById(uuid)(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          117
+        </td>
+        <td>
+          11194
+        </td>
+        <td>
+          3625
+          -
+          3659
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.findUserGroupsById
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.findUserGroupsById(uuid)(connection)
+        </td>
+      </tr><tr>
+        <td>
+          118
+        </td>
+        <td>
+          11209
+        </td>
+        <td>
+          3665
+          -
+          4073
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.exists
+        </td>
+        <td style="background: #F0ADAD">
+          userGroupOption.exists(((userGroup: models.users.UserGroup) =&gt; {
+  val edit: Boolean = UserGroupService.this.amIPowerUserForGroup(user, userGroup);
+  if (edit)
+    UserGroupService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)))
+  else
+    {
+      UserGroupService.this.logger.warn(scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid));
+      false
+    }
+}))
+        </td>
+      </tr><tr>
+        <td>
+          120
+        </td>
+        <td>
+          11196
+        </td>
+        <td>
+          3728
+          -
+          3765
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.UserGroupService.amIPowerUserForGroup
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.amIPowerUserForGroup(user, userGroup)
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          11199
+        </td>
+        <td>
+          3796
+          -
+          3918
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          11198
+        </td>
+        <td>
+          3796
+          -
+          3918
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          models.db.DatabaseSessionHolder.viaTransaction
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.dbSession.viaTransaction[Boolean](((implicit connection: java.sql.Connection) =&gt; models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)))
+        </td>
+      </tr><tr>
+        <td>
+          123
+        </td>
+        <td>
+          11197
+        </td>
+        <td>
+          3858
+          -
+          3905
+        </td>
+        <td>
+          ApplyToImplicitArgs
+        </td>
+        <td>
+          models.users.UserGroup.deleteUserGroup
+        </td>
+        <td style="background: #F0ADAD">
+          models.users.UserGroup.deleteUserGroup((userGroup: models.users.UserGroup))(connection)
+        </td>
+      </tr><tr>
+        <td>
+          125
+        </td>
+        <td>
+          11208
+        </td>
+        <td>
+          3934
+          -
+          4067
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          {
+  UserGroupService.this.logger.warn(scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid));
+  false
+}
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11202
+        </td>
+        <td>
+          4039
+          -
+          4040
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;&quot;
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11205
+        </td>
+        <td>
+          3958
+          -
+          4040
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.StringContext.s
+        </td>
+        <td style="background: #F0ADAD">
+          scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid)
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11201
+        </td>
+        <td>
+          3987
+          -
+          4023
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot; illegally attempted to edit group &quot;
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11204
+        </td>
+        <td>
+          4024
+          -
+          4038
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.UserGroup.uuid
+        </td>
+        <td style="background: #F0ADAD">
+          userGroup.uuid
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11206
+        </td>
+        <td>
+          3946
+          -
+          4041
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.warn
+        </td>
+        <td style="background: #F0ADAD">
+          UserGroupService.this.logger.warn(scala.StringContext.apply(&quot;user &quot;, &quot; illegally attempted to edit group &quot;, &quot;&quot;).s(user.accountSubject, userGroup.uuid))
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11200
+        </td>
+        <td>
+          3960
+          -
+          3966
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;user &quot;
+        </td>
+      </tr><tr>
+        <td>
+          126
+        </td>
+        <td>
+          11203
+        </td>
+        <td>
+          3967
+          -
+          3986
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          models.users.User.accountSubject
+        </td>
+        <td style="background: #F0ADAD">
+          user.accountSubject
+        </td>
+      </tr><tr>
+        <td>
+          127
+        </td>
+        <td>
+          11207
+        </td>
+        <td>
+          4052
+          -
+          4057
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          false
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

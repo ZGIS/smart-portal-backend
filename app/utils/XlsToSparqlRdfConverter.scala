@@ -19,6 +19,10 @@
 
 package utils
 
+import java.time.{ZoneId, ZonedDateTime}
+import java.time.format.DateTimeFormatter
+
+import controllers.appTimeZone
 import org.apache.poi.ss.usermodel.{Cell, Sheet}
 
 import scala.util.Try
@@ -466,6 +470,10 @@ case class ResearchPGHolder(titleName: String,
 object ResearchPGHolder extends ClassnameLogger {
 
   def toCollectionRdf(skosCollection: List[ResearchPGHolder]): String = {
+
+    val now = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+    val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+
     s"""<skos:Collection rdf:about="http://vocab.smart-project.info/collection/researchpg/terms">
         <rdfs:label>Research programmes</rdfs:label>
         <dc:title>Research programmes</dc:title>
@@ -477,7 +485,7 @@ object ResearchPGHolder extends ClassnameLogger {
         </dc:creator>
         <dc:rights>CC-SA-BY-NC 3.0 NZ</dc:rights>
         <dcterms:issued>2017-11-17T20:55:00.215+13:00</dcterms:issued>
-        <dcterms:modified>2017-11-10T20:55:00.215+13:00</dcterms:modified>
+        <dcterms:modified>${date}</dcterms:modified>
         ${skosCollection.map(sc => s"<skos:member>http://vocab.smart-project.info/researchpg/term/${sc.abbrev}</skos:member>").mkString("\n")}
     </skos:Collection>"""
   }

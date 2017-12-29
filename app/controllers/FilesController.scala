@@ -40,8 +40,12 @@ import scala.util.Try
 /**
   *
   * @param configuration
+  * @param userService
   * @param googleService
   * @param collectionsService
+  * @param optionalAuthenticationAction
+  * @param authenticationAction
+  * @param userAction
   */
 class FilesController @Inject()(implicit configuration: Configuration,
                                 userService: UserService,

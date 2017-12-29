@@ -20,6 +20,7 @@
 package services
 
 import java.io.{File, FileReader}
+import java.nio.ByteBuffer
 import java.time.{LocalDateTime, ZoneOffset}
 import javax.inject.{Inject, Singleton}
 
@@ -155,6 +156,42 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
       case Failure(ex) =>
         logger.error(s"Blob creation in cloud storage failed. ${ex.getLocalizedMessage}")
         Left(ErrorResult("Blob creation in cloud storage failed.", Some(ex.getLocalizedMessage)))
+    }
+
+  }
+
+  /**
+    *
+    * @param vocabString the vocabString
+    * @param pathPrefix sub directory where the file should go /prefix/prefix no trailing slash
+    * @return
+    */
+  def updateVocabFileGoogleBucket(vocabString: String, fileName: String, pathPrefix: String): Either[ErrorResult, LocalBlobInfo] = {
+    // Google Java upload stuff
+    import java.nio.charset.StandardCharsets.UTF_8
+
+    // val storage: Storage = authenticatedStorageOptions.getService()
+    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    // val noCredentials = NoCredentials.getInstance()
+
+    val blobTry: Try[LocalBlobInfo] = Try {
+      val blobId = BlobId.of(googleStorageBucket, pathPrefix + "/" + fileName)
+      val blob = storage.get(blobId)
+      if (blob != null) {
+        val channel = blob.writer()
+        channel.write(ByteBuffer.wrap(vocabString.getBytes(UTF_8)))
+        channel.close()
+        LocalBlobInfo.newFrom(blob)
+      } else {
+        throw new IllegalArgumentException("original blob for file could not be retrieved.")
+      }
+    }
+
+    blobTry match {
+      case Success(blobInfo) => Right(blobInfo)
+      case Failure(ex) =>
+        logger.error(s"Blob update in cloud storage failed. ${ex.getLocalizedMessage}")
+        Left(ErrorResult("Blob update in cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
 
   }

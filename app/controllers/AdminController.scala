@@ -21,21 +21,21 @@ package controllers
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import java.time.format.DateTimeFormatter
+import java.time.{ZoneId, ZonedDateTime}
 import javax.inject._
 
-import com.google.cloud.storage.Blob
 import controllers.security._
 import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import play.api.Configuration
-import play.api.http.MimeTypes
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json._
 import play.api.mvc._
 import services._
-import utils.{ClassnameLogger, PasswordHashing, ResearchPGHolder, XlsToSparqlRdfConverter}
+import utils.{ClassnameLogger, ResearchPGHolder, XlsToSparqlRdfConverter}
 
 @Singleton
 class AdminController @Inject()(implicit configuration: Configuration,
@@ -54,18 +54,26 @@ class AdminController @Inject()(implicit configuration: Configuration,
     */
   private val defaultAdminAction = authenticationAction andThen userAction andThen adminPermissionCheckAction
 
+  private val vocabBucketFolder = "sparql-categories-vocab"
+  private val awahou = "awahou.rdf"
+  private val categories = "categories_test.rdf"
+  private val glossary = "glossary.rdf"
+  private val ngmp = "ngmp.rdf"
+  private val papawai = "papawai_3.rdf"
+  private val researchpg = "research-pg.rdf"
+
   /**
     * Am I Admin? conf value compared with logged-in user based on security token, as Angular guard
     *
     * @return
     */
   def amiAdmin: Action[Unit] = defaultAdminAction(parse.empty) {
-      request =>
-        Ok(Json.obj("status" -> "OK",
-          "token" -> request.authenticatedRequest.userSession.token,
-          "email" -> request.user.email.value))
+    request =>
+      Ok(Json.obj("status" -> "OK",
+        "token" -> request.authenticatedRequest.userSession.token,
+        "email" -> request.user.email.value))
 
-    }
+  }
 
   /**
     * get all users to list for admin
@@ -82,22 +90,22 @@ class AdminController @Inject()(implicit configuration: Configuration,
 
     request =>
       request.body.validate[UserGroup].fold(
-      errors => {
-        logger.error(JsError.toJson(errors).toString())
-        val error: ErrorResult = ErrorResult("Usergroup format could not be read.",
-          Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
-        BadRequest(Json.toJson(error)).as(JSON)
-      },
-      userGroup => {
-        adminService.createUserGroup(userGroup).fold {
-          logger.error("Error creating the user group.")
-          val error = ErrorResult("Error creating the user group.", None)
+        errors => {
+          logger.error(JsError.toJson(errors).toString())
+          val error: ErrorResult = ErrorResult("Usergroup format could not be read.",
+            Some(StringEscapeUtils.escapeJson(errors.mkString("; "))))
           BadRequest(Json.toJson(error)).as(JSON)
-        } {
-          ugroup =>
-            Ok(Json.obj("status" -> "OK", "usergroup" -> Json.toJson(ugroup)))
-        }
-      })
+        },
+        userGroup => {
+          adminService.createUserGroup(userGroup).fold {
+            logger.error("Error creating the user group.")
+            val error = ErrorResult("Error creating the user group.", None)
+            BadRequest(Json.toJson(error)).as(JSON)
+          } {
+            ugroup =>
+              Ok(Json.obj("status" -> "OK", "usergroup" -> Json.toJson(ugroup)))
+          }
+        })
   }
 
   def updateUserGroupAsAdmin: Action[JsValue] = defaultAdminAction(parse.json) {
@@ -168,14 +176,16 @@ class AdminController @Inject()(implicit configuration: Configuration,
         )
 
         val converter = new XlsToSparqlRdfConverter
+        val now = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
 
-        val resultCollectionAsString: String = filename match {
-          case "PortalCategories.xlsx" => // FIXME in case of Categories
+        val updateProcess = filename match {
+          case "PortalCategories.xlsx" => // FIXME in case of categories_test.rdf
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("science domain categories")
             val synonyms_sheets = workbook.getSheet("synonyms")
             val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
-            val comment = """<!-- # Generated on: 2017-11-17 from Excel GW portal list of icons new structure 20170830.xlsx / Worksheet: science domain categories -->"""
+            val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+            val comment = s"""<!-- # Generated $date from Excel GW portal list of icons new structure PortalCategories.xlsx / Worksheet: science domain categories -->"""
             val fullRdfString: String = converter.rdfHeader +
               "\n" +
               comment +
@@ -183,8 +193,8 @@ class AdminController @Inject()(implicit configuration: Configuration,
               converter.rdfClassdef +
               rdfCategories.mkString("\n") +
               converter.rdfFooter
-            fullRdfString
-          case "ResearchPrgrm.xlsx" => // TODO in case of Research Programme
+            updateVocabBucketWith(fullRdfString, "categories_test.rdf", vocabBucketFolder)
+          case "ResearchPrgrm.xlsx" => // TODO in case of research-pg.rdf
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("Research programmes")
             val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
@@ -192,18 +202,48 @@ class AdminController @Inject()(implicit configuration: Configuration,
               ResearchPGHolder.toCollectionRdf(rdfResearchPGs) +
               rdfResearchPGs.map(pg => pg.toRdf).mkString("\n") +
               converter.rdfFooter
-            fullRdfString
+            updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)
+          case "awahou.xlsx" => // TODO in case of awahou.rdf
+            val fullRdfString = "awahou.rdf"
+            updateVocabBucketWith(fullRdfString, "_awahou.rdf", vocabBucketFolder)
+          case "glossary.xlsx" => // TODO in case of glossary.rdf
+            val fullRdfString = "glossary.rdf"
+            updateVocabBucketWith(fullRdfString, "_glossary.rdf", vocabBucketFolder)
+          case "ngmp.xlsx" => // TODO in case of ngmp.rdf
+            val fullRdfString = "ngmp.rdf"
+            updateVocabBucketWith(fullRdfString, "_ngmp.rdf", vocabBucketFolder)
+          case "papawai.xlsx" => // TODO in case of papawai_3.rdf
+            val fullRdfString = "papawai_3.rdf"
+            updateVocabBucketWith(fullRdfString, "_papawai_3.rdf", vocabBucketFolder)
           case _ => logger.error("no file name retrieved unable to proceed")
-            ""
+            Left(ErrorResult("no file name retrieved unable to proceed.", None))
         }
-        logger.debug(resultCollectionAsString)
 
-        NotImplemented(Json.obj("status" -> "NotImplemented", "message" -> s"vocab/sparql collection file uploaded $resultCollectionAsString."))
+        updateProcess match {
+          case Left(errorResult) =>
+            logger.error(errorResult.message + errorResult.details.mkString)
+            InternalServerError(Json.toJson(errorResult)).as(JSON)
+          case Right(blobInfo) =>
+            // return the public download link
+            logger.debug(blobInfo.toJson.toString())
+            NotImplemented(Json.obj("status" -> "NotImplemented", "message" -> s"vocab/sparql collection file uploaded ${blobInfo.name}."))
+        }
+
       } getOrElse {
         logger.error("file upload from client failed")
         val error = ErrorResult("File upload from client failed.", None)
         NotImplemented(Json.toJson(error)).as(JSON)
       }
+  }
+
+  def updateVocabBucketWith(vocabString: String, fileName: String, pathPrefix: String): Either[ErrorResult, LocalBlobInfo] = {
+    googleService.updateVocabFileGoogleBucket(vocabString, fileName, pathPrefix) match {
+      case Left(errorResult) =>
+        Left(errorResult)
+      case Right(blobInfo) =>
+        logger.debug(s"vocab/sparql collection file uploaded $fileName.")
+        Right(blobInfo)
+    }
   }
 
   /**

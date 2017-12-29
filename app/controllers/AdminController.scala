@@ -177,6 +177,7 @@ class AdminController @Inject()(implicit configuration: Configuration,
 
         val converter = new XlsToSparqlRdfConverter
         val now = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+        val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
         val updateProcess = filename match {
           case "PortalCategories.xlsx" => // FIXME in case of categories_test.rdf
@@ -184,7 +185,6 @@ class AdminController @Inject()(implicit configuration: Configuration,
             val worksheet = workbook.getSheet("science domain categories")
             val synonyms_sheets = workbook.getSheet("synonyms")
             val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
-            val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             val comment = s"""<!-- # Generated $date from Excel GW portal list of icons new structure PortalCategories.xlsx / Worksheet: science domain categories -->"""
             val fullRdfString: String = converter.rdfHeader +
               "\n" +
@@ -199,7 +199,7 @@ class AdminController @Inject()(implicit configuration: Configuration,
             val worksheet = workbook.getSheet("Research programmes")
             val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
             val fullRdfString: String = converter.rdfSkosDcHeader +
-              ResearchPGHolder.toCollectionRdf(rdfResearchPGs) +
+              ResearchPGHolder.toCollectionRdf(rdfResearchPGs, date) +
               rdfResearchPGs.map(pg => pg.toRdf).mkString("\n") +
               converter.rdfFooter
             updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)

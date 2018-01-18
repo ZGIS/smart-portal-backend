@@ -18,7 +18,9 @@
  */
 
 import java.io.{File, FileInputStream}
+import java.security.MessageDigest
 
+import org.apache.commons.codec.binary.Hex
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import utils.{ResearchPGHolder, XlsToSparqlRdfConverter}
 
@@ -73,6 +75,13 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     println(rdfResearchPGs.last.toRdf)
     researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
 
+  }
+
+  "Sparql caller SHA512" should {
+    val in: String = "dU90QzdRPE9qJ09KPG0zRkB2Z0B5aTBKO09fXzE/dFJIZktaUDpVRnJaMlJpQzhnST1YTFtqJ3psaG9JaGs8YQ=="
+    val digestHash = MessageDigest.getInstance("SHA-512").digest(in.getBytes("UTF-8"))
+    val hex = digestHash.map("%02X" format _).mkString
+    hex.equals("444FFAFF5D87CEB868757F4095FBA40AEC1A14F5C92D27650E2F4CC56687FC247B3C95A91B9F8BBE8082A66E353856CF7BD750509176162406E483FC0354D508") mustBe true
   }
 
 }

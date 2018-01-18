@@ -21,6 +21,7 @@ package controllers
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 import javax.inject._
@@ -33,12 +34,19 @@ import org.apache.poi.ss.usermodel.WorkbookFactory
 import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json._
+import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc._
 import services._
 import utils.{ClassnameLogger, ResearchPGHolder, XlsToSparqlRdfConverter}
 
+import scala.Option
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Success
+
 @Singleton
-class AdminController @Inject()(implicit configuration: Configuration,
+class AdminController @Inject()(wsClient: WSClient,
+                                implicit val context: ExecutionContext,
+                                implicit val configuration: Configuration,
                                 userService: UserService,
                                 emailService: EmailService,
                                 adminService: AdminService,
@@ -61,6 +69,10 @@ class AdminController @Inject()(implicit configuration: Configuration,
   private val ngmp = "ngmp.rdf"
   private val papawai = "papawai_3.rdf"
   private val researchpg = "research-pg.rdf"
+
+  private val ADMIN_JENA_UPDATE_URL = "https://admin.smart-project.info/"
+
+  private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
 
   /**
     * Am I Admin? conf value compared with logged-in user based on security token, as Angular guard
@@ -157,7 +169,7 @@ class AdminController @Inject()(implicit configuration: Configuration,
     *
     * @return
     */
-  def sparqleUpdateCollection: Action[MultipartFormData[TemporaryFile]] = defaultAdminAction(parse.multipartFormData) {
+  def sparqleUpdateCollection: Action[MultipartFormData[TemporaryFile]] = defaultAdminAction.async(parse.multipartFormData) {
     request =>
       request.body.file("file").map { theFile =>
 
@@ -205,16 +217,20 @@ class AdminController @Inject()(implicit configuration: Configuration,
             updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)
           case "awahou.xlsx" => // TODO in case of awahou.rdf
             val fullRdfString = "awahou.rdf"
-            updateVocabBucketWith(fullRdfString, "_awahou.rdf", vocabBucketFolder)
+            // updateVocabBucketWith(fullRdfString, "_awahou.rdf", vocabBucketFolder)
+            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
           case "glossary.xlsx" => // TODO in case of glossary.rdf
             val fullRdfString = "glossary.rdf"
-            updateVocabBucketWith(fullRdfString, "_glossary.rdf", vocabBucketFolder)
+            // updateVocabBucketWith(fullRdfString, "_glossary.rdf", vocabBucketFolder)
+            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
           case "ngmp.xlsx" => // TODO in case of ngmp.rdf
             val fullRdfString = "ngmp.rdf"
-            updateVocabBucketWith(fullRdfString, "_ngmp.rdf", vocabBucketFolder)
+            // updateVocabBucketWith(fullRdfString, "_ngmp.rdf", vocabBucketFolder)
+            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
           case "papawai.xlsx" => // TODO in case of papawai_3.rdf
             val fullRdfString = "papawai_3.rdf"
-            updateVocabBucketWith(fullRdfString, "_papawai_3.rdf", vocabBucketFolder)
+            // updateVocabBucketWith(fullRdfString, "_papawai_3.rdf", vocabBucketFolder)
+            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
           case _ => logger.error("no file name retrieved unable to proceed")
             Left(ErrorResult("no file name retrieved unable to proceed.", None))
         }
@@ -222,17 +238,25 @@ class AdminController @Inject()(implicit configuration: Configuration,
         updateProcess match {
           case Left(errorResult) =>
             logger.error(errorResult.message + errorResult.details.mkString)
-            InternalServerError(Json.toJson(errorResult)).as(JSON)
+            Future(InternalServerError(Json.toJson(errorResult)).as(JSON))
           case Right(blobInfo) =>
-            // return the public download link
             logger.debug(blobInfo.toJson.toString())
-            NotImplemented(Json.obj("status" -> "NotImplemented", "message" -> s"vocab/sparql collection file uploaded ${blobInfo.name}."))
+            // and close https://github.com/ZGIS/smart-portal-backend/issues/23
+            val jenaReload = callJenaKubeReload
+            jenaReload.map {
+              case None => Ok(Json.obj("status" -> "OK", "updated" -> blobInfo.toJson))
+              case Some(error) => logger.error(error.message)
+                BadRequest(Json.toJson(error)).as(JSON)
+              case _ => logger.error("Bad Error jena reload")
+                val error = ErrorResult("Update of running vocab service failed.", None)
+                BadRequest(Json.toJson(error)).as(JSON)
+            }
         }
 
       } getOrElse {
         logger.error("file upload from client failed")
         val error = ErrorResult("File upload from client failed.", None)
-        NotImplemented(Json.toJson(error)).as(JSON)
+        Future (BadRequest(Json.toJson(error)).as(JSON))
       }
   }
 
@@ -243,6 +267,24 @@ class AdminController @Inject()(implicit configuration: Configuration,
       case Right(blobInfo) =>
         logger.debug(s"vocab/sparql collection file uploaded $fileName.")
         Right(blobInfo)
+    }
+  }
+
+  def callJenaKubeReload: Future[Option[ErrorResult]] = {
+    val digestHash = MessageDigest.getInstance("SHA-512").digest(appSecret.getBytes("UTF-8"))
+    val hex = digestHash.map("%02X" format _).mkString
+    wsClient.url(ADMIN_JENA_UPDATE_URL).withHeaders("Authorization" -> s"Bearer $hex").get().map { response =>
+      if (response.status == 200) {
+        logger.info(
+          s"Successfully called $ADMIN_JENA_UPDATE_URL (${response.status} - ${response.statusText})")
+        logger.info(s"response: ${response.body}")
+        None
+      } else {
+        logger.warn(
+          s"Call to '$ADMIN_JENA_UPDATE_URL' returned error: ${response.status} - ${response.statusText}")
+        logger.warn(s"response: ${response.body}")
+        Some(ErrorResult("Update of running vocab service failed.", Some(s"Call to '$ADMIN_JENA_UPDATE_URL' returned error: ${response.status} - ${response.statusText}")))
+      }
     }
   }
 

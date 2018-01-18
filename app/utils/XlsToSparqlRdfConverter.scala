@@ -60,13 +60,13 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     val theRow = sheet.getRow(row)
     if (theRow != null) {
 
-      val lastCell = if (theRow.getLastCellNum < theRow.getPhysicalNumberOfCells) {
-        theRow.getLastCellNum
+      val lastAccessibleCell: Int = if (theRow.getLastCellNum-1 <= theRow.getPhysicalNumberOfCells) {
+        theRow.getLastCellNum-1
       } else {
         theRow.getPhysicalNumberOfCells
       }
-      logger.trace(s"getCellValueAsStringOption.lastCell: ${lastCell}")
-      if (lastCell > cell) {
+      logger.trace(s"getCellValueAsStringOption.lastCell: ${lastAccessibleCell+1} : lastAccessibleCell ${lastAccessibleCell}")
+      if (lastAccessibleCell >= cell) {
         logger.trace(s"getCellValueAsStringOption => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
           s"getCellType: ${sheet.getRow(row).getCell(cell).getCellType}")
         sheet.getRow(row).getCell(cell).getCellType match {
@@ -89,7 +89,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
             None
         }
       } else {
-        logger.debug(s"beyond cell range of row => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+        logger.warn(s"beyond cell range of row => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
           s"getLastCellNum: ${sheet.getRow(row).getLastCellNum}")
         None
       }
@@ -112,7 +112,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     keywords_list.foreach { keyword =>
       logger.trace(s"findSynonymsForKeywords.foreach keyword: $keyword")
       val lastRow = if (synonymSheet.getLastRowNum < synonymSheet.getPhysicalNumberOfRows) synonymSheet.getLastRowNum else synonymSheet.getPhysicalNumberOfRows
-      logger.warn(s"synonymsheet.lastRow: ${lastRow}")
+      logger.debug(s"synonymsheet.lastRow: ${lastRow}")
       for (i <- 1 to lastRow) {
         if (synonymSheet.getRow(i).getLastCellNum > 1) {
           logger.trace(s"findSynonymsForKeywords.foreach synonymSheet.getLastRowNum: ${synonymSheet.getLastRowNum}")
@@ -184,7 +184,11 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
             val bg_icon = getCellValueAsStringOption(i, 7, domainSheet).getOrElse("")
             logger.trace(s"before cell $i 8, after bg_icon $bg_icon")
             val query_string = getCellValueAsStringOption(i, 8, domainSheet).getOrElse("")
-            logger.trace(s"before cell $i categoryClass, after query_string $query_string")
+            if (i <= 10 && query_string.isEmpty) {
+              logger.warn(s"before cell $i categoryClass, after query_string $query_string")
+            } else {
+              logger.trace(s"before cell $i categoryClass, after query_string $query_string")
+            }
             val categoryClass = if (lastParentValue.equalsIgnoreCase("main")) {
               "MainCategory"
             } else {

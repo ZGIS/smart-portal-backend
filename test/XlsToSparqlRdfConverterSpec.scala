@@ -27,10 +27,8 @@ import scala.xml.NodeSeq
 class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
   private lazy val categoriesResource1 = this.getClass().getResource("sparql/PortalCategories.xlsx")
-  private lazy val categoriesResource2 = this.getClass().getResource("sparql/categories_test.rdf")
 
   private lazy val researchPgResource1 = this.getClass().getResource("sparql/ResearchPrgrm.xlsx")
-  private lazy val researchPgResource2 = this.getClass().getResource("sparql/research-pg.rdf")
 
   "Categories XLSX to RDFS Writer" should {
 
@@ -43,8 +41,6 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val worksheet = workbook.getSheet("science domain categories")
     val synonyms_sheets = workbook.getSheet("synonyms")
 
-    val categoriesRdfXmlReference = scala.xml.XML.load(categoriesResource2)
-
     val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
     val comment = """<!-- # Generated on: 2017-11-17 from Excel GW portal list of icons new structure 20170830.xlsx / Worksheet: science domain categories -->"""
     val fullRdfString: String = converter.rdfHeader +
@@ -56,8 +52,8 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
       converter.rdfFooter
 
     val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
-    println(rdfCategories.last)
     categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+    println(rdfCategories(3))
   }
 
   "Research PG XLSX to RDF/SKOS Writer" should {
@@ -68,8 +64,6 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val worksheet = workbook.getSheet("Research programmes")
 
     val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
-
-    val researchPgRdfXmlReference = scala.xml.XML.load(researchPgResource2)
 
     val fullRdfString: String = converter.rdfSkosDcHeader +
       ResearchPGHolder.toCollectionRdf(rdfResearchPGs) +

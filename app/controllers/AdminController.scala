@@ -70,7 +70,7 @@ class AdminController @Inject()(wsClient: WSClient,
   private val papawai = "papawai_3.rdf"
   private val researchpg = "research-pg.rdf"
 
-  private val ADMIN_JENA_UPDATE_URL = "https://admin.smart-project.info/"
+  private val ADMIN_JENA_UPDATE_URL = "https://admin.smart-project.info/kubectl/jena/reload"
 
   private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
 

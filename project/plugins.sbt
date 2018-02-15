@@ -30,7 +30,7 @@ addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.0")
 // site and docs publish,  com.typesafe.sbt:sbt-site:0.8.1 -> 1.0.0 ?
 addSbtPlugin("com.typesafe.sbt" % "sbt-site" % "1.0.0")
 
-addSbtPlugin("com.typesafe.sbt" % "sbt-ghpages" % "0.5.4")
+addSbtPlugin("com.typesafe.sbt" % "sbt-ghpages" % "0.6.0")
 
 // dependencies and security
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.8.2")

@@ -140,6 +140,7 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
 
   /**
     * delete a user group, user must be member with poweruser rights, checked in usergroupService
+    *
     * @param id
     * @return
     */
@@ -154,6 +155,29 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
         BadRequest(Json.toJson(error)).as(JSON)
       }
 
+  }
+
+  /**
+    *
+    * @param accountSubject
+    * @param email
+    * @return
+    */
+  def resolveUserInfo(accountSubject: Option[String], email: Option[String]): Action[Unit] = defaultAuthAction(parse.empty) {
+    implicit request =>
+      val userOpt: Option[User] = accountSubject.flatMap(
+        acc => userService.findUserByAccountSubject(acc)
+          .orElse(email.flatMap(
+            em => userService.findUserByEmailAsString(em))))
+
+      userOpt.map {
+        user =>
+          Ok(Json.obj("status" -> "OK", "user" -> user.asProfileJs))
+      }.getOrElse {
+        logger.error("Error retrieving a user.")
+        val error = ErrorResult("Error retrieving a user.", Some("Not found"))
+        BadRequest(Json.toJson(error)).as(JSON)
+      }
   }
 
 }

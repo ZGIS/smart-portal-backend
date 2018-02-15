@@ -29,9 +29,9 @@ name := """smart-portal-backend"""
 version := "1.0-SNAPSHOT"
 
 // new sbt-site 1.0.0 config SiteScaladocPlugin incompatible with activator sbt-site bundle 0.8.1
-lazy val root = (project in file(".")).enablePlugins(PlayScala, BuildInfoPlugin, SiteScaladocPlugin, JavaAppPackaging, DockerPlugin)
+lazy val root = (project in file(".")).enablePlugins(PlayScala, BuildInfoPlugin, SiteScaladocPlugin, JavaAppPackaging, DockerPlugin, GhpagesPlugin)
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.11.12"
 
 val googleVersion = "1.22.0"
 val googleCloudVersion = "0.8.0"
@@ -166,8 +166,6 @@ siteSubdirName in SiteScaladoc := "api/latest"
 
 previewLaunchBrowser := false
 
-ghpages.settings
-
 git.remoteRepo := "git@github.com:ZGIS/smart-portal-backend.git"
 
 // -----------------
@@ -203,3 +201,4 @@ javaOptions in Universal ++= Seq(
   "-Dhttp.port=9000"
   //"-Dapplication.base_url=http://test.smart-project.info/"
 )
+

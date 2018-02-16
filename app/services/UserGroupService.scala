@@ -133,8 +133,16 @@ class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
   def getOwcContextsRightsMatrixForUser(user: User): Seq[OwcContextsRightsMatrix] = {
     val userGroupsList = getUsersOwnUserGroups(user)
 
-    val originalOwnContextsBriefTuple = dbSession.viaConnection(implicit connection => {
-      OwcContextDAO.findOwcContextsByUserBrief(user)
+    val originalOwnContextsNativeRights = dbSession.viaConnection(implicit connection => {
+      OwcContextDAO.findOwcContextsByUserBrief(user).distinct.map(uco =>
+        OwcContextsRightsMatrix(
+          owcContextId = uco.owcContextId,
+          queryingUserAccountSubject = user.accountSubject,
+          origOwnerAccountSubject = uco.origOwnerAccountSubject,
+          viaGroups = Seq(),
+          contextIntrinsicVisibility = uco.contextOwnersVisibility,
+          queryingUserAccessLevel = 1)
+      )
     })
 
     val nativeRightsPerContextInGroups = dbSession.viaConnection(implicit connection => {
@@ -163,7 +171,7 @@ class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
       }
     })
 
-    nativeRightsPerContextInGroups
+    originalOwnContextsNativeRights ++ nativeRightsPerContextInGroups
   }
 
 }

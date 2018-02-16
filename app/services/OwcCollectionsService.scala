@@ -39,7 +39,8 @@ import scala.util.{Success, Try}
 
 @Singleton
 class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
-                                      config: Configuration) extends ClassnameLogger {
+                                      config: Configuration,
+                                      userGroupService: UserGroupService) extends ClassnameLogger {
 
   val configuration: play.api.Configuration = config
   lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
@@ -84,7 +85,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     * @param owcContextIdOption
     * @return
     */
-  def getOwcContextsForUserAndId(userOption: Option[User], owcContextIdOption: Option[String]): Seq[OwcContext] = {
+  def queryOwcContextsForUserAndIdForViewing(userOption: Option[User], owcContextIdOption: Option[String]): Seq[OwcContext] = {
 
     userOption.fold {
       // no user provided
@@ -107,14 +108,57 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
           val publicDocs = OwcContextDAO.getAllPublicOwcContexts
           val userDocs = OwcContextDAO.findOwcContextsByUser(user)
 
-          publicDocs ++ userDocs
+          val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
+            ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
+              .flatMap(v => OwcContextDAO.findOwcContextsById(v.owc_context_id))
+          }
+
+          (publicDocs ++ userDocs ++ groupDocs).distinct
         } {
           // TODO find doc by id for provided user if visible/available (later maybe check constraint)
           owcContextId =>
-            OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+            val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
+              ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
+                .flatMap(v => OwcContextDAO.findOwcContextsById(v.owc_context_id))
+            }
+            if (groupDocs.exists(o => o.id.toString.contentEquals(owcContextId))) {
+              OwcContextDAO.findOwcContextsById(owcContextId).toSeq
+            } else {
+              OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+            }
         }
       )
     }
+  }
+
+  def getOwcContextsForUserAndId(user: User, owcContextIdOption: Option[String]): Seq[OwcContext] = {
+    // trying to find for the provided user from option
+    dbSession.viaConnection(implicit connection =>
+      // we have a distinct ok user here
+      owcContextIdOption.fold {
+        // docs for user, no id provided => all user visible and relevant docs, basically own and group shared
+        val userDocs = OwcContextDAO.findOwcContextsByUser(user)
+
+        val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
+          ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
+            .flatMap(v => OwcContextDAO.findOwcContextsById(v.owc_context_id))
+        }
+
+        (userDocs ++ groupDocs).distinct
+      } {
+        // TODO find doc by id for provided user if shared or owned (later maybe check constraint)
+        owcContextId =>
+          val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
+            ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
+              .flatMap(v => OwcContextDAO.findOwcContextsById(v.owc_context_id))
+          }
+          if (groupDocs.exists(o => o.id.toString.contentEquals(owcContextId))) {
+            OwcContextDAO.findOwcContextsById(owcContextId).toSeq
+          } else {
+            OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+          }
+      }
+    )
   }
 
   /**

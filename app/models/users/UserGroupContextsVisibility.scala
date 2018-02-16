@@ -32,6 +32,9 @@ case class UserGroupContextsVisibility(usergroups_uuid: UUID,
 
 }
 
+/**
+  * visibility 0: user-owned/private, 1: organisation/group-shared, 2: public
+  */
 object UserGroupContextsVisibility extends ClassnameLogger {
 
   private val groupsContextParser = {

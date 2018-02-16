@@ -35,6 +35,9 @@ import utils.{ClassnameLogger, GeoDateParserUtils, OwcGeoJsonFixes}
   * An OWC document is an extended FeatureCollection, where the features (aka resources) hold a variety of metadata
   * about the things they provide the context for (i.e. other data sets, services, metadata records)
   * OWC documents do not duplicate a CSW MD_Metadata record, but a collection of referenced resources;
+  *
+  * visibility 0: user-owned/private, 1: organisation, 2: public
+  *
   */
 
 object OwcContextDAO extends ClassnameLogger {

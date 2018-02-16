@@ -60,6 +60,20 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
   }
 
   /**
+    * this is a specific misuse of the UserGroup container to get one user's collections
+    * access rights list, one group item per OwcContext with one userlevel,
+    * where only the user is important (the original owner of the current mentioned context),
+    * and the context visibility has the context and the actual context's visibilty,
+    * the groups name, and the uuid's should be generic and even hint on the verballhornte use
+    * @return
+    */
+  def getUsersCollectionsAccessRightsList: Action[Unit] = defaultAuthAction(parse.empty) {
+    implicit request =>
+      val ugList = userGroupService.getUsersOwnUserGroups(request.user)
+      Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(ugList.map(ug => Json.toJson(ug)))))
+  }
+
+  /**
     * get a specific group in the hope you are member
     *
     * @param id
@@ -91,7 +105,7 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
         },
         userGroup => {
           // check if creating user is in the member list and has power user right
-          val isPresent = userGroup.hasUsersLevel.exists(ul => ul.users_accountsubject.equals(request.user.accountSubject) && ul.userlevel >= 1)
+          val isPresent = userGroup.hasUsersLevel.exists(ul => ul.users_accountsubject.equals(request.user.accountSubject) && ul.userlevel >= 2)
           if (!isPresent) {
             logger.error("User not listed with adequate rights. We would create a group that you can't edit, aborting.")
             val error = ErrorResult("User not listed with adequate rights. We would create a group that you can't edit, aborting.", None)

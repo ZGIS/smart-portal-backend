@@ -49,16 +49,23 @@ class CollectionsController @Inject()(userService: UserService,
   private val defaultAuthAction = authenticationAction andThen userAction
 
   /**
-    * Gets all public collections + collections of a user (if logged in) + collection for ID if provided
+    * Gets all collections of relevance for a user (if logged in) and/or collection for ID if provided
     *
     * @param owcContextIdOption
     * @return
     */
-  def getCollections(owcContextIdOption: Option[String]): Action[Unit] = optionalAuthenticationAction(parse.empty) {
+  def queryCollectionsForViewing(owcContextIdOption: Option[String]): Action[Unit] = optionalAuthenticationAction(parse.empty) {
     request =>
       val userOption = request.optionalSession.flatMap(session => userService.findUserByEmailAsString(session.email))
 
-      val owcJsDocs = collectionsService.getOwcContextsForUserAndId(userOption, owcContextIdOption)
+      val owcJsDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption)
+        .map(doc => doc.toJson)
+      Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
+  }
+
+  def getCollections(owcContextIdOption: Option[String]): Action[Unit] = defaultAuthAction(parse.empty) {
+    request =>
+      val owcJsDocs = collectionsService.getOwcContextsForUserAndId(request.user, owcContextIdOption)
         .map(doc => doc.toJson)
       Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
   }
@@ -224,7 +231,7 @@ class CollectionsController @Inject()(userService: UserService,
         owcResource => {
           logger.trace(Json.prettyPrint(owcResource.toJson))
           val collectionDoc = collectionsService.getOwcContextsForUserAndId(
-            userOption = Some(request.user), owcContextIdOption = Some(owcContextId)).headOption
+            user = request.user, owcContextIdOption = Some(owcContextId)).headOption
           val updatedCollection = collectionDoc.map {
             o =>
               val updated = o.copy(resource = o.resource ++ Seq(owcResource))
@@ -261,7 +268,7 @@ class CollectionsController @Inject()(userService: UserService,
         owcResource => {
           logger.trace(Json.prettyPrint(owcResource.toJson))
           val collectionDoc = collectionsService.getOwcContextsForUserAndId(
-            userOption = Some(request.user), owcContextIdOption = Some(owcContextId)).headOption
+            user = request.user, owcContextIdOption = Some(owcContextId)).headOption
           val updatedCollection = collectionDoc.map {
             o =>
               val idLink = new URL(s"https://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
@@ -299,7 +306,7 @@ class CollectionsController @Inject()(userService: UserService,
         owcResource => {
           logger.trace(Json.prettyPrint(owcResource.toJson))
           val collectionDoc = collectionsService.getOwcContextsForUserAndId(
-            userOption = Some(request.user), owcContextIdOption = Some(owcContextId)).headOption
+            user = request.user, owcContextIdOption = Some(owcContextId)).headOption
           val updatedCollection = collectionDoc.map {
             o =>
               val newResources = o.resource.filterNot(r => r.id.equals(owcResource.id))
@@ -336,7 +343,7 @@ class CollectionsController @Inject()(userService: UserService,
   def deleteResourceFromCollection(owcContextId: String, owcResourceId: String): Action[Unit] = defaultAuthAction(parse.empty) {
     request =>
       val collectionDoc = collectionsService.getOwcContextsForUserAndId(
-        userOption = Some(request.user), owcContextIdOption = Some(owcContextId)).headOption
+        user = request.user, owcContextIdOption = Some(owcContextId)).headOption
       val updatedCollection = collectionDoc.map {
         o =>
           val newResources = o.resource.filterNot(r => r.id.toString.equals(owcResourceId))
@@ -369,7 +376,7 @@ class CollectionsController @Inject()(userService: UserService,
   def deleteCollection(owcContextId: String): Action[Unit] = defaultAuthAction(parse.empty) {
     request =>
       val collectionDoc = collectionsService.getOwcContextsForUserAndId(
-        userOption = Some(request.user), owcContextIdOption = Some(owcContextId)).headOption
+        user = request.user, owcContextIdOption = Some(owcContextId)).headOption
       val deleted = collectionDoc.exists(o => collectionsService.deleteCollection(o, request.user))
       if (deleted) {
         //TODO SR general "response" JSON?
@@ -393,7 +400,7 @@ class CollectionsController @Inject()(userService: UserService,
     owcXmlElements.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     owcXmlElements.append("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n")
 
-    collectionsService.getOwcContextsForUserAndId(None, None).foreach {
+    collectionsService.queryOwcContextsForUserAndIdForViewing(None, None).foreach {
       doc =>
         val docPart =
           s"""<url>

@@ -40,7 +40,7 @@ import utils.ClassnameLogger
   * @param laststatustoken
   * @param laststatuschange
   */
-case class UserMetaRecord(uuid: UUID,
+final case class UserMetaRecord(uuid: UUID,
                           users_accountsubject: String,
                           originaluuid: String,
                           cswreference: String,

@@ -28,7 +28,7 @@ import scala.xml.NodeSeq
 /**
   * Minimal wrapper around SOS capabilities
   */
-case class SosCapabilities(
+final case class SosCapabilities(
                           title: String,
                           sosUrl: String,
                           featuresOfInterest: Seq[String],

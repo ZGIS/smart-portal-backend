@@ -37,7 +37,7 @@ trait MdMetadataExtentTrait extends ValidValuesReadsAdditions {
 /**
   * Created by steffen on 21.12.16.
   */
-case class MdMetadataExtent(val description: String,
+final case class MdMetadataExtent(val description: String,
                             val referenceSystem: String,
                             val mapExtentCoordinates: List[Double],
                             val temporalExtent: String) extends Jsonable with Xmlable {

@@ -28,7 +28,7 @@ import scala.xml.NodeSeq
 /**
   * Minimal wrapper around SOS capabilities Service Identification Section
   */
-case class SosServiceMetadata(
+final case class SosServiceMetadata(
                             abstrakt: Option[String],
                             fees: Option[String],
                             accessConstraints: Option[String],

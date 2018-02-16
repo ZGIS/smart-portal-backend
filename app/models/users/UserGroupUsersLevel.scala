@@ -33,7 +33,7 @@ import utils.ClassnameLogger
   * @param users_accountsubject
   * @param userlevel 0 = read-only group member, 1 = participating context editing user, 2 = power-user/group-admin ? is that enough (3 overlord admin?)
   */
-case class UserGroupUsersLevel(usergroups_uuid: UUID,
+final case class UserGroupUsersLevel(usergroups_uuid: UUID,
                                users_accountsubject: String,
                                userlevel: Int) extends ClassnameLogger {
 

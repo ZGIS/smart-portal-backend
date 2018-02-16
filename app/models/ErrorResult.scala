@@ -26,9 +26,9 @@ import play.api.libs.functional.syntax.{unlift, _}
   * This class should be returned as JSON in case of Controller returning anything that is not OK() as HTTP-Response
   * like InternalServerError() etc.
   */
-case class ErrorResult(message: String, details: Option[String]) { }
+final case class ErrorResult(message: String, details: Option[String]) { }
 
-/** companion for {{ErrorResult}} case class
+/** companion for {{ErrorResult}} final case class
   * Implements a JSON reader and writer
   * */
 object ErrorResult {

@@ -50,7 +50,7 @@ PRIMARY KEY (id)
   * @param link
   * @param referer
   */
-case class UserLinkLogging(id: Option[Long],
+final case class UserLinkLogging(id: Option[Long],
                            timestamp: ZonedDateTime,
                            ipaddress: Option[String],
                            useragent: Option[String],

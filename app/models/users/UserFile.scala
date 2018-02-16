@@ -41,7 +41,7 @@ import utils.ClassnameLogger
   * @param laststatustoken
   * @param laststatuschange
   */
-case class UserFile(uuid: UUID,
+final case class UserFile(uuid: UUID,
                     users_accountsubject: String,
                     originalfilename: String,
                     linkreference: String,

@@ -392,7 +392,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
   * @param bgIcon
   * @param categoryClass
   */
-case class CategoryHolder(hierarchyNumber: String = "",
+final case class CategoryHolder(hierarchyNumber: String = "",
                           id: Int,
                           parent: String = "main",
                           itemName: String = "",
@@ -442,7 +442,7 @@ object CategoryHolder extends ClassnameLogger {
   * @param leadOrganisationName
   * @param linkTo
   */
-case class ResearchPGHolder(titleName: String,
+final case class ResearchPGHolder(titleName: String,
                             abbrev: String,
                             description: String,
                             fundingSource: String,

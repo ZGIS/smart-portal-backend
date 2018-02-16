@@ -43,7 +43,7 @@ import scala.util.{Failure, Success, Try}
   * @param firstname
   * @param lastname
   */
-case class ProfileJs(email: EmailAddress,
+final case class ProfileJs(email: EmailAddress,
                      accountSubject: String,
                      firstname: String,
                      lastname: String,
@@ -59,7 +59,7 @@ case class ProfileJs(email: EmailAddress,
   * @param lastname
   * @param password
   */
-case class RegisterJs(email: EmailAddress,
+final case class RegisterJs(email: EmailAddress,
                       accountSubject: String,
                       firstname: String,
                       lastname: String,

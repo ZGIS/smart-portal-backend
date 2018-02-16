@@ -24,10 +24,11 @@ import java.sql.Connection
 import java.time.OffsetDateTime
 import java.util.UUID
 
-import anorm.SqlParser.{get, str}
+import anorm.SqlParser.{get, int, str}
 import anorm.{RowParser, SQL, ~}
 import info.smart.models.owc100._
-import models.users.User
+import models.users.{User, UserHasOwcRightsNative}
+import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, GeoDateParserUtils, OwcGeoJsonFixes}
 
 /**
@@ -197,6 +198,36 @@ object OwcContextDAO extends ClassnameLogger {
       'account_subject -> user.accountSubject
     ).as(owcContextParser *)
   }
+
+  ///// -------------------------------------- RIGHTS STUFF
+  private val userHasOwcRightsNativeParserBrief = {
+    str("id") ~
+      str("title") ~
+      str("users_accountsubject") ~
+      int("visibility") map {
+      case id ~ title ~ account_subject ~ visibility =>
+        UserHasOwcRightsNative(id, title, account_subject, visibility)
+    }
+  }
+
+  def findOwcContextsByUserBrief(user: User)(implicit connection: Connection): Seq[UserHasOwcRightsNative] = {
+    SQL(
+      s"""select $tableOwcContexts.id, $tableOwcContexts.title, $tableUserHasOwcContextRights.users_accountsubject, $tableUserHasOwcContextRights.visibility
+         |FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
+         |where $tableUserHasOwcContextRights.users_accountsubject = {account_subject}""".stripMargin).on(
+      'account_subject -> user.accountSubject
+    ).as(userHasOwcRightsNativeParserBrief *)
+  }
+
+  def findOwcContextsByContextBrief(owc_context_id: String)(implicit connection: Connection): Seq[UserHasOwcRightsNative] = {
+    SQL(
+      s"""select $tableOwcContexts.id, $tableOwcContexts.title, $tableUserHasOwcContextRights.users_accountsubject, $tableUserHasOwcContextRights.visibility
+         |FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
+         |where $tableOwcContexts.id = {owc_context_id}""".stripMargin).on(
+      'owc_context_id -> owc_context_id
+    ).as(userHasOwcRightsNativeParserBrief *)
+  }
+  ///// -------------------------------------- RIGHTS STUFF
 
   /**
     * find all OwcContexts by visibility

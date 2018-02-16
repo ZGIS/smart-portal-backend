@@ -33,7 +33,7 @@ import utils.ClassnameLogger
   * @param obsProp
   * @param procedure
   */
-case class TimeValuePair(
+final case class TimeValuePair(
                           datetime: String,
                           foiId: String,
                           measUnit: String,

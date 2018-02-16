@@ -51,7 +51,7 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
   }
 }
 
-case class CswInsertRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "INSERT") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswInsertRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "INSERT") extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = mdMetadata.fileIdentifier
 
   override def transform: NodeSeq = {
@@ -80,7 +80,7 @@ private class AddMDMetadataToUpdate(xml: Node) extends RewriteRule {
   }
 }
 
-case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "UPDATE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "UPDATE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = mdMetadata.fileIdentifier
 
   override def transform: NodeSeq = {
@@ -102,7 +102,7 @@ case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, tra
   * @param requestTemplateXml
   * @param fileIdentifierUuid
   */
-case class CswDeleteRequest(requestTemplateXml: Node, fileIdentifierUuid: UUID, transaction: String = "DELETE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswDeleteRequest(requestTemplateXml: Node, fileIdentifierUuid: UUID, transaction: String = "DELETE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = fileIdentifierUuid.toString
 
   override def transform: NodeSeq = {

@@ -26,7 +26,7 @@ import anorm.SqlParser.get
 import anorm.{SQL, ~}
 import utils.ClassnameLogger
 
-case class UserGroupContextsVisibility(usergroups_uuid: UUID,
+final case class UserGroupContextsVisibility(usergroups_uuid: UUID,
                                        owc_context_id: String,
                                        visibility: Int) extends ClassnameLogger {
 

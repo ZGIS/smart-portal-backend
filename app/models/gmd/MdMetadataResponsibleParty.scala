@@ -37,7 +37,7 @@ trait MdMetadataResponsiblePartyTrait extends ValidValuesReadsAdditions {
 /**
   * Created by steffen on 21.12.16.
   */
-case class MdMetadataResponsibleParty(individualName: String,
+final case class MdMetadataResponsibleParty(individualName: String,
                                       telephone: String,
                                       email: String,
                                       pointOfContact: String,

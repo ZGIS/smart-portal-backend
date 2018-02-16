@@ -131,6 +131,14 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
+  /**
+    * get OwcContexts For User And optional Id, beware, now also already provides the group access ones
+    * must always cross check in GUI if editable or not, will not be allowed by backend anyway, but not immediately visible
+    *
+    * @param user
+    * @param owcContextIdOption
+    * @return
+    */
   def getOwcContextsForUserAndId(user: User, owcContextIdOption: Option[String]): Seq[OwcContext] = {
     // trying to find for the provided user from option
     dbSession.viaConnection(implicit connection =>

@@ -23,6 +23,7 @@ import java.util.UUID
 import javax.inject._
 
 import models.db.DatabaseSessionHolder
+import models.owc.OwcContextDAO
 import models.users._
 import play.api.Configuration
 import utils.ClassnameLogger
@@ -127,6 +128,42 @@ class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
           false
         }
     }
+  }
+
+  def getOwcContextsRightsMatrixForUser(user: User): Seq[OwcContextsRightsMatrix] = {
+    val userGroupsList = getUsersOwnUserGroups(user)
+
+    val originalOwnContextsBriefTuple = dbSession.viaConnection(implicit connection => {
+      OwcContextDAO.findOwcContextsByUserBrief(user)
+    })
+
+    val nativeRightsPerContextInGroups = dbSession.viaConnection(implicit connection => {
+      userGroupsList.flatMap {
+        g =>
+          val viaGroup = g.name
+          val ownLevel = g.hasUsersLevel.find(_.users_accountsubject.contentEquals(user.accountSubject)).map(_.userlevel).getOrElse(-1)
+
+          val contextsRights: Seq[OwcContextsRightsMatrix] = g.hasOwcContextsVisibility.flatMap {
+            o =>
+              val groupContextsBriefTuples: Seq[UserHasOwcRightsNative] = OwcContextDAO.findOwcContextsByContextBrief(o.owc_context_id)
+
+              val rightsBundle: Seq[OwcContextsRightsMatrix] = groupContextsBriefTuples.map {
+                tup =>
+                  OwcContextsRightsMatrix(
+                    owcContextId = tup.owcContextId,
+                    queryingUserAccountSubject = user.accountSubject,
+                    origOwnerAccountSubject = tup.origOwnerAccountSubject,
+                    viaGroups = Seq(viaGroup),
+                    contextIntrinsicVisibility = tup.contextOwnersVisibility,
+                    queryingUserAccessLevel = ownLevel)
+              }
+              rightsBundle
+          }
+          contextsRights
+      }
+    })
+
+    nativeRightsPerContextInGroups
   }
 
 }

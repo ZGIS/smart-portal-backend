@@ -41,7 +41,7 @@ trait MdMetadataCitationTrait extends ValidValuesReadsAdditions {
   * @param ciDate
   * @param ciDateType
   */
-case class MdMetadataCitation(ciDate: LocalDate,
+final case class MdMetadataCitation(ciDate: LocalDate,
                               ciDateType: String) extends Jsonable with Xmlable {
   def toXml(): Node = ???
 

@@ -27,7 +27,7 @@ import utils.ClassnameLogger
 /**
   * Timeseries to be used with SOS/Timeseries Viewer on Frontend.
   */
-case class Timeseries(
+final case class Timeseries(
                        sosUrl: String,
                        offering: String,
                        procedure: String,
@@ -56,7 +56,7 @@ case class Timeseries(
   * @param chartType
   * @param hoverinfo
   */
-case class TimeseriesData(
+final case class TimeseriesData(
                            x: Seq[String],
                            y: Seq[String],
                            mode: String = "lines",

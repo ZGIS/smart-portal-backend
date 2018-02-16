@@ -37,7 +37,7 @@ trait MdMetadataDistributionTrait extends ValidValuesReadsAdditions {
 /**
   * Created by steffen on 21.12.16.
   */
-case class MdMetadataDistribution(useLimitation: String,
+final case class MdMetadataDistribution(useLimitation: String,
                                   formatName: String,
                                   formatVersion: String,
                                   onlineResourceLinkage: String

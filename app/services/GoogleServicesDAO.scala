@@ -39,7 +39,7 @@ import utils.ClassnameLogger
 
 import scala.util.{Failure, Success, Try}
 
-case class LocalBlobInfo(name: String,
+final case class LocalBlobInfo(name: String,
                          mediaLink: String,
                          bucket: String,
                          contentType: String,

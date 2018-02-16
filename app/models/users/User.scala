@@ -27,7 +27,7 @@ import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.ClassnameLogger
 
 /**
-  * the user case class, however the UserDAO implements all database
+  * the user final case class, however the UserDAO implements all database
   * functions as it needed Dependency Injection and could not just be
   * the companion object here
   *
@@ -39,7 +39,7 @@ import utils.ClassnameLogger
   * @param laststatustoken
   * @param laststatuschange
   */
-case class User(email: EmailAddress,
+final case class User(email: EmailAddress,
                 accountSubject: String,
                 firstname: String,
                 lastname: String,
@@ -98,13 +98,13 @@ object User extends ClassnameLogger {
   *  Used for obtaining the email and password from the HTTP login request
   *  from github.com/mariussoutier/play-angular-require-seed
   */
-case class LoginCredentials(email: EmailAddress, password: String)
+final case class LoginCredentials(email: EmailAddress, password: String)
 
-case class PasswordUpdateCredentials(email: EmailAddress, oldPassword: String, newPassword: String)
+final case class PasswordUpdateCredentials(email: EmailAddress, oldPassword: String, newPassword: String)
 
 /**
   *  Used for obtaining the gauth flow code and login/register action from the HTTP google login request
   *
   *  accesstype should only be of LOGIN or REGISTER
   */
-case class GAuthCredentials(authcode: String, accesstype: String)
+final case class GAuthCredentials(authcode: String, accesstype: String)

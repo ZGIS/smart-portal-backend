@@ -67,10 +67,12 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
     * the groups name, and the uuid's should be generic and even hint on the verballhornte use
     * @return
     */
-  def getUsersCollectionsAccessRightsList: Action[Unit] = defaultAuthAction(parse.empty) {
+  def getOwcContextsRightsMatrixForUser: Action[Unit] = defaultAuthAction(parse.empty) {
     implicit request =>
-      val ugList = userGroupService.getUsersOwnUserGroups(request.user)
-      Ok(Json.obj("status" -> "OK", "usergroups" -> JsArray(ugList.map(ug => Json.toJson(ug)))))
+      // beware already also contains owcs from the groups
+      val ugList = userGroupService.getOwcContextsRightsMatrixForUser(request.user)
+
+      Ok(Json.obj("status" -> "OK", "rights" -> JsArray(ugList.map(ug => Json.toJson(ug)))))
   }
 
   /**

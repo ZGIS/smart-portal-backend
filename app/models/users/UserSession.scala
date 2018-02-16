@@ -46,7 +46,7 @@ PRIMARY KEY (token)
   * @param laststatustoken session active/expire/deactivate
   * @param laststatuschange
   */
-case class UserSession(token: String,
+final case class UserSession(token: String,
                        useragent: String,
                        email: String,
                        laststatustoken: String,

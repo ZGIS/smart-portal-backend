@@ -89,6 +89,8 @@ package object controllers {
   implicit val userGroupUsersLevelFormat: Format[UserGroupUsersLevel] = Json.format[UserGroupUsersLevel]
   implicit val userGroupFormat: Format[UserGroup] = Json.format[UserGroup]
 
+  implicit val owcContextsRightsMatrixFormat: Format[OwcContextsRightsMatrix] = Json.format[OwcContextsRightsMatrix]
+
   def appTimeZone()(implicit configuration: play.api.Configuration): String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
 
   def uploadDataPath()(implicit configuration: play.api.Configuration): String = configuration.getString("smart.upload.datapath").getOrElse("/tmp")

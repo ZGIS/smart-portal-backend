@@ -29,7 +29,7 @@ import info.smart.models.owc100.OwcContext
 import models.owc.OwcContextDAO
 import utils.ClassnameLogger
 
-case class UserGroup(uuid: UUID,
+final case class UserGroup(uuid: UUID,
                      name: String,
                      shortinfo: String,
                      laststatustoken: String,
@@ -39,6 +39,9 @@ case class UserGroup(uuid: UUID,
 
 }
 
+final case class UserHasOwcRightsNative(owcContextId: String, contextName: String, origOwnerAccountSubject: String, contextOwnersVisibility: Int)
+
+final case class OwcContextsRightsMatrix(owcContextId: String, queryingUserAccountSubject: String, origOwnerAccountSubject: String, viaGroups: Seq[String], contextIntrinsicVisibility: Int, queryingUserAccessLevel: Int)
 
 object UserGroup extends ClassnameLogger {
 

@@ -81,7 +81,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
       mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, None) returns Seq[OwcContext]()
-      mockUserService.getUserSessionByToken("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "Default UA!1.0") returns None
+      mockUserService.getUserSessionByToken("ksxfhekhfkrdnngduchtnkdshtrndxknhu", "ksxfhekhfkrdnngduchtnkdshtrndxknhu", "Default UA!1.0") returns None
 
       Then("create the Controller with mock components")
 
@@ -103,7 +103,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val fakeRequest = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
 
       val result = controller.getCollections(None).apply(FakeRequest())
       val otherResult = controller.getCollections(None).apply(fakeRequest)
@@ -126,20 +126,55 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
     "request to getCollections(fakeContextId)" in {
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, Some("fakeContextId")) returns Seq[OwcContext]()
+      // mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
       mockCollectionsService.getOwcContextsForUserAndId(demodata.testUser1("xxx"), Some("fakeContextId")) returns Seq(demodata.owcContext1)
+
       mockUserService.getUserSessionByToken(anyString, anyString, anyString) returns Some(
-        UserSession("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.",
+        UserSession("ksxfhekhfkrdnngduchtnkdshtrndxknhu",
           "Default UA/1.0",
           demodata.testUser1("xxx").email.value,
           "ACTIVE",
           ZonedDateTime.now(ZoneId.of("UTC"))))
 
-      mockUserService.getUserSessionByToken("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "Default UA/1.0") returns None
+      mockUserService.getUserSessionByToken("ksxfhekhfkrdnngduchtnkdshtrndxknhu", "ksxfhekhfkrdnngduchtnkdshtrndxknhu", "Default UA/1.0") returns Some(
+        UserSession("ksxfhekhfkrdnngduchtnkdshtrndxknhu",
+          "Default UA/1.0",
+          demodata.testUser1("xxx").email.value,
+          "ACTIVE",
+          ZonedDateTime.now(ZoneId.of("UTC"))))
+
+      mockUserService.findUserByEmailAsString(demodata.testUser1("xxx").email.value) returns Some(demodata.testUser1("xxx"))
 
       val testRequest1 = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
+        .withCookies(Cookie("XSRF-TOKEN", "ksxfhekhfkrdnngduchtnkdshtrndxknhu"))
+
+      val response = route(app, testRequest1).get
+
+      Then("status must be OK")
+      println(status(response))
+      status(response) must be(OK)
+
+      Then("contentType must be json")
+      contentType(response) mustBe Some("application/json")
+
+      println(Json.stringify(contentAsJson(response)))
+
+      val js = contentAsJson(response)
+      (js \ "count").toOption mustBe defined
+      (js \ "count").as[Int] mustBe 1
+    }
+
+    "request to queryCollectionsForViewing(with keywords)" in {
+
+      // behaviour for mocked underlying collections service when controller calls injected service functions
+      mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, None) returns Seq[OwcContext](demodata.owcContext1)
+      mockUserService.getUserSessionByToken(anyString, anyString, anyString) returns None
+      // mockUserService.getUserSessionByToken("ksxfhekhfkrdnngduchtnkdshtrndxknhu", "ksxfhekhfkrdnngduchtnkdshtrndxknhu", "Default UA/1.0") returns None
+
+      val testRequest1 = FakeRequest(routes.CollectionsController.queryCollectionsForViewing(None, Seq("uncertainty")))
+        .withHeaders("Content-Type" -> "application/json")
 
       val response = route(app, testRequest1).get
 
@@ -152,8 +187,10 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       println(Json.stringify(contentAsJson(response)))
 
+      Then("count must be 1 found")
       val js = contentAsJson(response)
       (js \ "count").toOption mustBe defined
+      (js \ "count").as[Int] mustBe 1
     }
 
     // GET  /api/v1/collections/default controllers.CollectionsController.getPersonalDefaultCollection
@@ -165,7 +202,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.getPersonalDefaultCollection())
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
 
       val response = route(app, testRequest1).get
 
@@ -186,7 +223,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.getPersonalFilesFromDefaultCollection())
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
 
       val response = route(app, testRequest1).get
 
@@ -207,7 +244,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.insertCollection())
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
         .withJsonBody(Json.parse("""{"var" -> "param"}"""))
 
       val response = route(app, testRequest1).get
@@ -230,7 +267,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.updateCollection())
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
         .withJsonBody(Json.parse("""{"var" -> "param"}"""))
 
       val response = route(app, testRequest1).get
@@ -252,7 +289,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.deleteCollection("fakeContextId"))
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
 
       val response = route(app, testRequest1).get
 
@@ -295,7 +332,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.replaceResourceInCollection("fakeContextId"))
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
         .withJsonBody(Json.parse("""{"var" -> "param"}"""))
 
       val response = route(app, testRequest1).get
@@ -317,7 +354,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
 
       val testRequest1 = FakeRequest(routes.CollectionsController.deleteResourceFromCollection("fakeContextId", "fakeResourceId"))
         .withHeaders("Content-Type" -> "application/json")
-        .withHeaders("X-XSRF-TOKEN" -> "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.")
+        .withHeaders("X-XSRF-TOKEN" -> "ksxfhekhfkrdnngduchtnkdshtrndxknhu")
 
       val response = route(app, testRequest1).get
 

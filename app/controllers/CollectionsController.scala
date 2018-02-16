@@ -52,14 +52,17 @@ class CollectionsController @Inject()(userService: UserService,
     * Gets all collections of relevance for a user (if logged in) and/or collection for ID if provided
     *
     * @param owcContextIdOption
+    * @param keywords optional sequence of keywords (aka OwcCategory terms, not lable or scheme, only the terms are checked)
     * @return
     */
-  def queryCollectionsForViewing(owcContextIdOption: Option[String]): Action[Unit] = optionalAuthenticationAction(parse.empty) {
+  def queryCollectionsForViewing(owcContextIdOption: Option[String], keywords: Seq[String]): Action[Unit] = optionalAuthenticationAction(parse.empty) {
     request =>
       val userOption = request.optionalSession.flatMap(session => userService.findUserByEmailAsString(session.email))
 
-      val owcJsDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption)
-        .map(doc => doc.toJson)
+      val owcDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption)
+        .filter(owc => keywords.exists(p => findKeywordInContextDeep(owc, p)) || keywords.isEmpty)
+
+      val owcJsDocs = owcDocs.map(doc => doc.toJson)
       Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
   }
 
@@ -424,5 +427,14 @@ class CollectionsController @Inject()(userService: UserService,
     }
     owcXmlElements.append("</urlset>\n")
     Ok(owcXmlElements.mkString).as("application/xml")
+  }
+
+  private def findKeywordInContext(owcContext: OwcContext, keyword: String): Boolean = {
+    owcContext.keyword.exists(p => p.term.contentEquals(keyword))
+  }
+
+  private def findKeywordInContextDeep(owcContext: OwcContext, keyword: String): Boolean = {
+    owcContext.keyword.exists(p => p.term.contentEquals(keyword)) ||
+      owcContext.resource.exists( res => res.keyword.exists(p => p.term.contentEquals(keyword)))
   }
 }

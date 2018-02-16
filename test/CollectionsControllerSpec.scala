@@ -80,7 +80,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       Then("create mock components, particular mocked CollectionsServive")
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.getOwcContextsForUserAndId(None, None) returns Seq[OwcContext]()
+      mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, None) returns Seq[OwcContext]()
       mockUserService.getUserSessionByToken("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.", "Default UA!1.0") returns None
 
       Then("create the Controller with mock components")
@@ -98,7 +98,7 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
       Then("call request on the Controller")
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
+      mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, Some("fakeContextId")) returns Seq[OwcContext]()
 
 
       val fakeRequest = FakeRequest(routes.CollectionsController.getCollections(Some("fakeContextId")))
@@ -126,8 +126,8 @@ class CollectionsControllerSpec extends WithDefaultTest with OneAppPerTest with 
     "request to getCollections(fakeContextId)" in {
 
       // behaviour for mocked underlying collections service when controller calls injected service functions
-      mockCollectionsService.getOwcContextsForUserAndId(None, Some("fakeContextId")) returns Seq[OwcContext]()
-      mockCollectionsService.getOwcContextsForUserAndId(Some(demodata.testUser1("xxx")), Some("fakeContextId")) returns Seq(demodata.owcContext1)
+      mockCollectionsService.queryOwcContextsForUserAndIdForViewing(None, Some("fakeContextId")) returns Seq[OwcContext]()
+      mockCollectionsService.getOwcContextsForUserAndId(demodata.testUser1("xxx"), Some("fakeContextId")) returns Seq(demodata.owcContext1)
       mockUserService.getUserSessionByToken(anyString, anyString, anyString) returns Some(
         UserSession("sv56fb7n8m90pü,mnbtvrchvbn.,bmvn.",
           "Default UA/1.0",

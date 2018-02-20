@@ -65,6 +65,7 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
     * where only the user is important (the original owner of the current mentioned context),
     * and the context visibility has the context and the actual context's visibilty,
     * the groups name, and the uuid's should be generic and even hint on the verballhornte use
+    *
     * @return
     */
   def getOwcContextsRightsMatrixForUser: Action[Unit] = defaultAuthAction(parse.empty) {
@@ -181,12 +182,10 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
     */
   def resolveUserInfo(accountSubject: Option[String], email: Option[String]): Action[Unit] = defaultAuthAction(parse.empty) {
     implicit request =>
-      val userOpt: Option[User] = accountSubject.flatMap(
-        acc => userService.findUserByAccountSubject(acc)
-          .orElse(email.flatMap(
-            em => userService.findUserByEmailAsString(em))))
+      val userOpt: Option[User] = accountSubject.flatMap(acc => userService.findUserByAccountSubject(acc))
+      val emailUserOpt: Option[User] = email.flatMap(em => userService.findUserByEmailAsString(em))
 
-      userOpt.map {
+      userOpt.orElse(emailUserOpt).map {
         user =>
           Ok(Json.obj("status" -> "OK", "user" -> user.asProfileJs))
       }.getOrElse {

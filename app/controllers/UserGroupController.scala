@@ -195,4 +195,27 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
       }
   }
 
+  def updateOwcContextVisibility(owcContextId: String, visibility: Int): Action[Unit] = defaultAuthAction(parse.empty) {
+    request =>
+      // does collection exist, user exists because must be authenticated
+      val ugList = userGroupService.getOwcContextsRightsMatrixForUser(request.user)
+
+      val areYouPowerUserForThisContext = ugList.filter(_.owcContextId.contentEquals(owcContextId)).exists(_.queryingUserAccessLevel >= 2)
+
+      if (areYouPowerUserForThisContext) {
+        val visOk = collectionsService.updateOwcContextVisibility(owcContextId, request.user.accountSubject, visibility)
+        if (visOk) {
+          Ok(Json.obj("status" -> "OK", "owcContext" -> owcContextId, "user" -> request.user.accountSubject, "visibility" -> visibility))
+        } else {
+          logger.error("Error changing the visibility of the context, database error.")
+          val error = ErrorResult("Error changing the visibility of the context, database error.", None)
+          BadRequest(Json.toJson(error)).as(JSON)
+        }
+      } else {
+        logger.error("Error changing the visibility of the context, not allowed.")
+        val error = ErrorResult("Error changing the visibility of the context, not allowed.", None)
+        BadRequest(Json.toJson(error)).as(JSON)
+      }
+  }
+
 }

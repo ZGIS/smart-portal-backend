@@ -511,53 +511,46 @@ object OwcContextDAO extends ClassnameLogger {
   /**
     * update an OwcContext rightsRelationType and visibility in tableUserHasOwcContextRights
     *
-    * @param owcContext
-    * @param user
+    * @param owcContextId
+    * @param userAccountSub
     * @param visibility
-    * @param rightsRelationType
     * @return
     */
-  def updateOwcContextRightsAndVisibility(owcContext: OwcContext,
-                                          user: User,
-                                          visibility: Int,
-                                          rightsRelationType: String)(implicit connection: Connection): Option[OwcContext] = {
+  def updateOwcContextVisibilityNoChecks(owcContextId: String,
+                                 userAccountSub: String,
+                                 visibility: Int)(implicit connection: Connection): Boolean = {
 
     /*
     TODO:
-    - a) user owns the OwcContext
+    - a) user owns the OwcContext? check above in calling
     - b) if he doesn't own the context, the context should have either visibility to him via same organisation
-    - c) user cannot change the rightsRelationType or visibility of own DEFAULT collection
     ... anything else?
      */
-    val preUpdateRightsCheck = false
+    val preUpdateRightsCheck = true
+    val userUserDefaultCheck = owcContextId.contains("context/user")
 
-    if (preUpdateRightsCheck) {
+    if (preUpdateRightsCheck && !userUserDefaultCheck) {
       val rowCount = SQL(
         s"""UPDATE $tableUserHasOwcContextRights SET
-           |rights_relation_type = {rights_relation_type},
            |visibility = {visibility}
-           |WHERE users_accountsubject = {account_subject} AND owcContextId = {owcContextId}
+           |WHERE owc_context_id = {owcContextId}
            |""".stripMargin).on(
-        'rights_relation_type -> rightsRelationType,
         'visibility -> visibility,
-        'account_subject -> user.accountSubject,
-        'owcContextId -> owcContext.id.toString
+        'owcContextId -> owcContextId
       ).executeUpdate()
 
       rowCount match {
-        case 1 => Some(owcContext)
+        case 1 => true
         case _ => {
-          logger.error("OwcContext Rights And Visibility couldn't be updated")
-          // we need to think where to place rollback most appropriately
+          logger.error("OwcContext Visibility couldn't be updated")
           connection.rollback()
-          None
+          false
         }
       }
     } else {
-      logger.error("Precondition failed, won't update OwcContext Rights And Visibility")
-      // we need to think where to place rollback most appropriately
+      logger.error("Precondition failed, won't update OwcContext Visibility")
       connection.rollback()
-      None
+      false
     }
   }
 

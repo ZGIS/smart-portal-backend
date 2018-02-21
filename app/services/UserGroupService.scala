@@ -141,7 +141,7 @@ class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
           origOwnerAccountSubject = uco.origOwnerAccountSubject,
           viaGroups = Seq(),
           contextIntrinsicVisibility = uco.contextOwnersVisibility,
-          queryingUserAccessLevel = 1)
+          queryingUserAccessLevel = 2)
       )
     })
 

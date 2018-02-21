@@ -544,6 +544,13 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
+  def updateOwcContextVisibility(owcContextId: String,
+                                 userAccountSub: String,
+                                 visibility: Int): Boolean = {
+    dbSession.viaTransaction(implicit connection =>
+
+      OwcContextDAO.updateOwcContextVisibilityNoChecks(owcContextId, userAccountSub, visibility))
+  }
 
   /**
     * returns an Option[EmailAddress] object if parsing is successful, for those mdMetadata email joint arrays

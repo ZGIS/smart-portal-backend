@@ -90,6 +90,7 @@ class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
       val headerStyle = CellStyle(fillPattern = CellFill.Solid, fillForegroundColor = Color.AquaMarine, font = Font(bold = true))
 
       val headerRow = Row(style = headerStyle).withCellValues("date", "time", "act. TZ offset", "value", "unit", "feature id", "observedProperty id", "procedure id")
+      val footerRow = Row().withCellValues(description)
 
       val dataRows = tvp.map { t =>
         Row().withCells(
@@ -105,7 +106,7 @@ class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
 
       logger.debug(s"${tvp.length} points in tvp")
 
-      val exportWorkbook = Sheet(name = "data").addRow(headerRow).addRows(dataRows)
+      val exportWorkbook = Sheet(name = "data").addRow(headerRow).addRows(dataRows).addRow(footerRow)
         .withColumns(
           Column(index = 0, style = CellStyle(font = Font(bold = true)), autoSized = true)
         )

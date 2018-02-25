@@ -27,8 +27,7 @@ import java.util.UUID
 import anorm.SqlParser.{get, int, str}
 import anorm.{RowParser, SQL, ~}
 import info.smart.models.owc100._
-import models.users.{User, UserHasOwcRightsNative}
-import uk.gov.hmrc.emailaddress.EmailAddress
+import models.users.{OwcContextsRightsMatrix, User, UserHasOwcRightsNative}
 import utils.{ClassnameLogger, GeoDateParserUtils, OwcGeoJsonFixes}
 
 /**
@@ -162,7 +161,7 @@ object OwcContextDAO extends ClassnameLogger {
     * @param user
     * @return
     */
-  def findOwcContextByIdAndUser(owcContextId: String, user: User)(implicit connection: Connection): Option[OwcContext] = {
+  def findOwcContextByIdAndNativeOwner(owcContextId: String, user: User)(implicit connection: Connection): Option[OwcContext] = {
     SQL(
       s"""select $tableOwcContexts.*
          |FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
@@ -180,8 +179,8 @@ object OwcContextDAO extends ClassnameLogger {
     * @param connection
     * @return
     */
-  def findOwcContextByIdAndUser(owcContextId: URL, user: User)(implicit connection: Connection): Option[OwcContext] = {
-    findOwcContextByIdAndUser(owcContextId.toString, user)
+  def findOwcContextByIdAndNativeOwner(owcContextId: URL, user: User)(implicit connection: Connection): Option[OwcContext] = {
+    findOwcContextByIdAndNativeOwner(owcContextId.toString, user)
   }
 
   /**
@@ -190,7 +189,7 @@ object OwcContextDAO extends ClassnameLogger {
     * @param user
     * @return
     */
-  def findOwcContextsByUser(user: User)(implicit connection: Connection): Seq[OwcContext] = {
+  def findOwcContextsByNativeOwner(user: User)(implicit connection: Connection): Seq[OwcContext] = {
     SQL(
       s"""select $tableOwcContexts.*
          |FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
@@ -210,7 +209,7 @@ object OwcContextDAO extends ClassnameLogger {
     }
   }
 
-  def findOwcContextsByUserBrief(user: User)(implicit connection: Connection): Seq[UserHasOwcRightsNative] = {
+  def findOwcContextsByNativeOwnerBrief(user: User)(implicit connection: Connection): Seq[UserHasOwcRightsNative] = {
     SQL(
       s"""select $tableOwcContexts.id, $tableOwcContexts.title, $tableUserHasOwcContextRights.users_accountsubject, $tableUserHasOwcContextRights.visibility
          |FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
@@ -287,7 +286,7 @@ object OwcContextDAO extends ClassnameLogger {
     * @param rightsRelationType DEFAULT: user personal default, CUSTOM: general purpose
     * @return
     */
-  def findOwcContextsByUserAndType(user: User, rightsRelationType: String)(implicit connection: Connection): Seq[OwcContext] = {
+  def findOwcContextsByNativeOwnerAndType(user: User, rightsRelationType: String)(implicit connection: Connection): Seq[OwcContext] = {
     SQL(
       s"""select $tableOwcContexts.*
          | FROM $tableOwcContexts JOIN $tableUserHasOwcContextRights ON $tableOwcContexts.id=$tableUserHasOwcContextRights.owc_context_id
@@ -299,7 +298,7 @@ object OwcContextDAO extends ClassnameLogger {
   }
 
   def findUserDefaultOwcContext(user: User)(implicit connection: Connection): Option[OwcContext] = {
-    findOwcContextsByUserAndType(user, "DEFAULT").headOption
+    findOwcContextsByNativeOwnerAndType(user, "DEFAULT").headOption
   }
 
   /**
@@ -516,17 +515,18 @@ object OwcContextDAO extends ClassnameLogger {
     * @param visibility
     * @return
     */
-  def updateOwcContextVisibilityNoChecks(owcContextId: String,
+  def updateOwcContextVisibility(owcContextId: String,
                                  userAccountSub: String,
-                                 visibility: Int)(implicit connection: Connection): Boolean = {
+                                 visibility: Int,
+                                 owcContextsRightsMatrix: Seq[OwcContextsRightsMatrix])
+                                (implicit connection: Connection): Boolean = {
 
-    /*
-    TODO:
-    - a) user owns the OwcContext? check above in calling
-    - b) if he doesn't own the context, the context should have either visibility to him via same organisation
-    ... anything else?
+    /* TODO: can editors change visibilty?
+    - a) user owns the OwcContext, or if he doesn't own the context, the user should have POWERUSER rights to him via same organisation
      */
-    val preUpdateRightsCheck = true
+    val preUpdateRightsCheck = owcContextsRightsMatrix.filter(_.owcContextId.contentEquals(owcContextId))
+        .exists(_.queryingUserAccessLevel >= 2)
+
     val userUserDefaultCheck = owcContextId.contains("context/user")
 
     if (preUpdateRightsCheck && !userUserDefaultCheck) {
@@ -695,17 +695,19 @@ owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".str
     * @param user
     * @return
     */
-  def updateOwcContext(owcContextUnfixed: OwcContext, user: User)(implicit connection: Connection): Option[OwcContext] = {
+  def updateOwcContext(owcContextUnfixed: OwcContext,
+                       user: User,
+                       owcContextsRightsMatrix: Vector[OwcContextsRightsMatrix])
+                      (implicit connection: Connection): Option[OwcContext] = {
 
     val owcContext = OwcGeoJsonFixes.fixRelPropertyForOwcLinks(owcContextUnfixed)
 
     /*
-    TODO:
-    - a) user owns the OwcContext
-    - b) if he doesn't own the context, the context should have either visibility to him via same organisation
-    ... anything else?
+    user owns the OwcContext, or if he doesn't own the context, the context should have EDITOR user rights to him via same organisation
      */
-    val preUpdateRightsCheck = findOwcContextByIdAndUser(owcContext.id, user).isDefined
+    // val preUpdateRightsCheck = findOwcContextByIdAndNativeOwner(owcContext.id, user).isDefined
+    val preUpdateRightsCheck = owcContextsRightsMatrix.filter(_.owcContextId.contentEquals(owcContext.id.toString))
+        .exists(_.queryingUserAccessLevel >= 1) // eq is Editor
 
     val preUpdateCheckOwcAuthorsForOwcContext = OwcResourceDAO.preUpdateCheckOwcAuthors(owcContext)
     val preUpdateCheckOwcLinksForOwcContext = OwcResourceDAO.preUpdateCheckOwcLinks(owcContext)
@@ -778,10 +780,10 @@ owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".str
 
     /*
     TODO: depends on Extended rights and roles model tbd with GNS
-    - a) user owns the OwcContext
-    - b) ... if he doesn't own the context, should he be able to delete on behalf of same organisation when shared visibility?
+    - a) user owns the OwcContext, or if he doesn't own the context,
+    should he be able to delete on behalf of same organisation when shared visibility as POWER USER?
      */
-    val preDeleteRightsCheck = findOwcContextByIdAndUser(owcContext.id, user).isDefined
+    val preDeleteRightsCheck = findOwcContextByIdAndNativeOwner(owcContext.id, user).isDefined
 
     val preDeleteCheckOwcAuthors = if (owcContext.author.nonEmpty) {
       owcContext.author.map(

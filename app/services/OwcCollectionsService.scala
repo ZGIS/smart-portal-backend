@@ -106,7 +106,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
           // docs for user, no id provided => all user visible docs
           // TODO technically would be more than "only" publicly visible at some point
           val publicDocs = OwcContextDAO.getAllPublicOwcContexts
-          val userDocs = OwcContextDAO.findOwcContextsByUser(user)
+          val userDocs = OwcContextDAO.findOwcContextsByNativeOwner(user)
 
           val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
             ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
@@ -124,7 +124,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
             if (groupDocs.exists(o => o.id.toString.contentEquals(owcContextId))) {
               OwcContextDAO.findOwcContextsById(owcContextId).toSeq
             } else {
-              OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+              OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContextId, user).toSeq
             }
         }
       )
@@ -145,7 +145,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
       // we have a distinct ok user here
       owcContextIdOption.fold {
         // docs for user, no id provided => all user visible and relevant docs, basically own and group shared
-        val userDocs = OwcContextDAO.findOwcContextsByUser(user)
+        val userDocs = OwcContextDAO.findOwcContextsByNativeOwner(user)
 
         val groupDocs: Seq[OwcContext] = userGroupService.getUsersOwnUserGroups(user).flatMap { ug =>
           ug.hasOwcContextsVisibility.filter(v => v.visibility > 0)
@@ -163,7 +163,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
           if (groupDocs.exists(o => o.id.toString.contentEquals(owcContextId))) {
             OwcContextDAO.findOwcContextsById(owcContextId).toSeq
           } else {
-            OwcContextDAO.findOwcContextByIdAndUser(owcContextId, user).toSeq
+            OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContextId, user).toSeq
           }
       }
     )
@@ -376,7 +376,15 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
             logger.trace(Json.prettyPrint(newDoc.toJson))
 
             dbSession.viaTransaction { implicit connection =>
-              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+              OwcContextDAO.updateOwcContext(newDoc, user,
+                Vector(OwcContextsRightsMatrix(
+                  owcDoc.id.toString,
+                  user.accountSubject,
+                  user.accountSubject,
+                  Seq(),
+                  0,
+                  2)
+                )).isDefined
             }
         }
     }
@@ -411,7 +419,14 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
             logger.trace(Json.prettyPrint(newDoc.toJson))
 
             dbSession.viaTransaction { implicit connection =>
-              OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+              OwcContextDAO.updateOwcContext(newDoc, user, Vector(OwcContextsRightsMatrix(
+                owcDoc.id.toString,
+                user.accountSubject,
+                user.accountSubject,
+                Seq(),
+                0,
+                2)
+              )).isDefined
             }
         }
     }
@@ -495,7 +510,14 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
         val newDoc = owcDoc.copy(resource = entries)
 
         dbSession.viaTransaction { implicit connection =>
-          OwcContextDAO.updateOwcContext(newDoc, user).isDefined
+          OwcContextDAO.updateOwcContext(newDoc, user, Vector(OwcContextsRightsMatrix(
+            owcDoc.id.toString,
+            user.accountSubject,
+            user.accountSubject,
+            Seq(),
+            0,
+            2)
+          )).isDefined
         }
     }
 
@@ -519,8 +541,10 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def updateCollection(owcContext: OwcContext, user: User): Option[OwcContext] = {
+    val owcContextsRightsMatrix = userGroupService.getOwcContextsRightsMatrixForUser(user)
+
     dbSession.viaTransaction(implicit connection =>
-      OwcContextDAO.updateOwcContext(owcContext, user))
+      OwcContextDAO.updateOwcContext(owcContext, user, owcContextsRightsMatrix.toVector))
   }
 
   /**
@@ -530,10 +554,18 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def deleteCollection(owcContext: OwcContext, user: User): Boolean = {
+    val owcContextsRightsMatrix = userGroupService.getOwcContextsRightsMatrixForUser(user)
+
+    // FIXME, either use further down as rights check or remove
+    val areYouPowerUserForThisContext =
+      owcContextsRightsMatrix.filter(_.owcContextId.contentEquals(owcContext.id.toString))
+        .exists(_.queryingUserAccessLevel >= 2)
+
     dbSession.viaConnection {
       implicit connection =>
 
-        val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndUser(owcContext.id.toString, user)
+        // TODO, think if every power user of a group can delete collections shared into the group
+        val hasOwcDoc = OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContext.id.toString, user)
         hasOwcDoc.fold {
           false
         } {
@@ -545,11 +577,13 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
   }
 
   def updateOwcContextVisibility(owcContextId: String,
-                                 userAccountSub: String,
+                                 user: User,
                                  visibility: Int): Boolean = {
+    val owcContextsRightsMatrix = userGroupService.getOwcContextsRightsMatrixForUser(user)
+
     dbSession.viaTransaction(implicit connection =>
 
-      OwcContextDAO.updateOwcContextVisibilityNoChecks(owcContextId, userAccountSub, visibility))
+      OwcContextDAO.updateOwcContextVisibility(owcContextId, user.accountSubject, visibility, owcContextsRightsMatrix))
   }
 
   /**

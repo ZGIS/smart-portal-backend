@@ -134,7 +134,7 @@ class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
     val userGroupsList = getUsersOwnUserGroups(user)
 
     val originalOwnContextsNativeRights = dbSession.viaConnection(implicit connection => {
-      OwcContextDAO.findOwcContextsByUserBrief(user).distinct.map(uco =>
+      OwcContextDAO.findOwcContextsByNativeOwnerBrief(user).distinct.map(uco =>
         OwcContextsRightsMatrix(
           owcContextId = uco.owcContextId,
           queryingUserAccountSubject = user.accountSubject,

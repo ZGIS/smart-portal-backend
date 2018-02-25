@@ -203,7 +203,7 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
       val areYouPowerUserForThisContext = ugList.filter(_.owcContextId.contentEquals(owcContextId)).exists(_.queryingUserAccessLevel >= 2)
 
       if (areYouPowerUserForThisContext) {
-        val visOk = collectionsService.updateOwcContextVisibility(owcContextId, request.user.accountSubject, visibility)
+        val visOk = collectionsService.updateOwcContextVisibility(owcContextId, request.user, visibility)
         if (visOk) {
           Ok(Json.obj("status" -> "OK", "owcContext" -> owcContextId, "user" -> request.user.accountSubject, "visibility" -> visibility))
         } else {

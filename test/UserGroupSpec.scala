@@ -55,7 +55,7 @@ class UserGroupSpec extends WithDefaultTestFullAppAndDatabase {
 
         // testUser1 owns a custom collection, he will enable visible to group level by raising to 1 (0 private, 1 group, 2 public)
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContext1.id, testUser1) must contain(owcContext1)
         }
 
         // new group is created, basically empty, the user that creates the group will be made first member and power-user

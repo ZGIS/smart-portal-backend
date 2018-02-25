@@ -24,7 +24,7 @@ import anorm.{SQL, SqlParser}
 import info.smart.models.owc100._
 import models.db.DatabaseSessionHolder
 import models.owc._
-import models.users.UserDAO
+import models.users.{OwcContextsRightsMatrix, UserDAO}
 import org.locationtech.spatial4j.context.SpatialContext
 import play.api.libs.json._
 import utils.PasswordHashing
@@ -75,7 +75,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         }
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContext1.id, testUser1) must contain(owcContext1)
           OwcContextDAO.getAllOwcContexts.size mustEqual 1
           OwcResourceDAO.getAllOwcResources.size mustEqual 2
 
@@ -138,7 +138,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         }
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContext1.id, testUser1) must contain(owcContext1)
           OwcContextDAO.getAllOwcContexts.size mustEqual 1
           OwcResourceDAO.getAllOwcResources.size mustEqual 2
         }
@@ -167,6 +167,13 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
         val passwordHashing = new PasswordHashing(app.configuration)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
+        val rightsMatrix = Vector(OwcContextsRightsMatrix(
+          owcContext1.id.toString,
+          testUser1.accountSubject,
+          testUser1.accountSubject,
+          Seq(),
+          0,
+          2))
 
         sessionHolder.viaConnection { implicit connection =>
           OwcContextDAO.getAllOwcContexts.size mustEqual 0
@@ -180,19 +187,19 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
         sessionHolder.viaTransaction { implicit connection =>
           val owcUpdate = owcContext1.copy()
-          OwcContextDAO.updateOwcContext(owcUpdate, testUser1) must contain(owcUpdate)
+          OwcContextDAO.updateOwcContext(owcUpdate, testUser1, rightsMatrix) must contain(owcUpdate)
           OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 0
         }
 
         sessionHolder.viaTransaction { implicit connection =>
           val owcUpdate2 = owcContext1.copy(creatorApplication = Some(OwcCreatorApplication(title = Some("SAC Portal"), uri = None, version = None)))
-          OwcContextDAO.updateOwcContext(owcUpdate2, testUser1) must contain(owcUpdate2)
+          OwcContextDAO.updateOwcContext(owcUpdate2, testUser1, rightsMatrix) must contain(owcUpdate2)
           OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 1
         }
 
         sessionHolder.viaTransaction { implicit connection =>
           val owcUpdate3 = owcContext1.copy(creatorDisplay = Some(OwcCreatorDisplay(pixelWidth = Some(600), pixelHeight = Some(400), mmPerPixel = None)))
-          OwcContextDAO.updateOwcContext(owcUpdate3, testUser1) must contain(owcUpdate3)
+          OwcContextDAO.updateOwcContext(owcUpdate3, testUser1, rightsMatrix) must contain(owcUpdate3)
         }
 
         sessionHolder.viaConnection { implicit connection =>
@@ -228,7 +235,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         sessionHolder.viaTransaction { implicit connection =>
           UserDAO.createUser(testUser1) must contain(testUser1)
           OwcContextDAO.createOwcContext(owcContext1, testUser1, 2, "CUSTOM") must contain(owcContext1)
-          OwcContextDAO.findOwcContextByIdAndUser(owcContext1.id, testUser1) must contain(owcContext1)
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcContext1.id, testUser1) must contain(owcContext1)
         }
 
         sessionHolder.viaTransaction { implicit connection =>
@@ -328,7 +335,7 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
         sessionHolder.viaConnection { implicit connection =>
           owcDoc3.specReference.head.rel mustEqual "alternate"
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser3).get.specReference.head.rel mustEqual "profile"
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc3.id, testUser3).get.specReference.head.rel mustEqual "profile"
         }
       }
     }
@@ -370,17 +377,17 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         }
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc1.id, testUser1) mustBe defined
-          val owcFromDb1 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc1.id, testUser1).get
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc1.id, testUser1) mustBe defined
+          val owcFromDb1 = OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc1.id, testUser1).get
           owcFromDb1.resource.size mustEqual 2
 
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1) mustBe defined
-          val owcFromDb2 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc2.id, testUser1).get
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc2.id, testUser1) mustBe defined
+          val owcFromDb2 = OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc2.id, testUser1).get
           // https://github.com/ZGIS/smart-owc-geojson/issues/8
           // owcFromDb2.resource.size mustEqual 1
 
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1) mustBe defined
-          val owcFromDb3 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc3.id, testUser1).get
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc3.id, testUser1) mustBe defined
+          val owcFromDb3 = OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc3.id, testUser1).get
           owcFromDb3.resource.size mustEqual 21
 
           OwcContextDAO.getAllOwcContexts.size mustEqual 3
@@ -402,8 +409,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         }
 
         sessionHolder.viaConnection { implicit connection =>
-          OwcContextDAO.findOwcContextByIdAndUser(owcDoc4.id, testUser1) mustBe defined
-          val owcFromDb4 = OwcContextDAO.findOwcContextByIdAndUser(owcDoc4.id, testUser1).get
+          OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc4.id, testUser1) mustBe defined
+          val owcFromDb4 = OwcContextDAO.findOwcContextByIdAndNativeOwner(owcDoc4.id, testUser1).get
           owcFromDb4.resource.size mustEqual 19
           OwcCreatorApplicationDAO.getAllOwcCreatorApplications.size mustBe 1
         }
@@ -544,8 +551,16 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
           [error] m.owc.OwcContextDAO - (updateContext/resources) one of deleted: true , updated: true , inserted: false not complete, recommend abort
           [error] m.owc.OwcContextDAO - Precondition failed, won't update OwcContext
            */
+          val rightsMatrix = Vector(OwcContextsRightsMatrix(
+            newDoc.id.toString,
+            testUser1.accountSubject,
+            testUser1.accountSubject,
+            Seq(),
+            0,
+            2))
+
           sessionHolder.viaTransaction {implicit connection =>
-            OwcContextDAO.updateOwcContext(newDoc, testUser1).isDefined mustBe true
+            OwcContextDAO.updateOwcContext(newDoc, testUser1, rightsMatrix).isDefined mustBe true
           }
 
           sessionHolder.viaConnection { implicit connection =>

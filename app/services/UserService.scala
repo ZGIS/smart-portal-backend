@@ -25,7 +25,6 @@ import javax.inject._
 
 import models.ErrorResult
 import models.db.DatabaseSessionHolder
-import models.owc.OwcContextDAO
 import models.users._
 import play.api.Configuration
 import uk.gov.hmrc.emailaddress.EmailAddress
@@ -164,7 +163,7 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
         ug.copy(hasUsersLevel = withRemoved)
       }.forall(ug => UserGroup.updateUserGroup(ug).isDefined)
 
-      // val contexts = OwcContextDAO.findOwcContextsByUser(user)
+      // val contexts = OwcContextDAO.findOwcContextsByNativeOwner(user)
       // for each owcContext in contexts remove reference from usergroups_has_owc_context_rights
       // delete each owcContext in contexts
 
@@ -283,9 +282,10 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @param xsrfToken
     */
   def removeUserSessionCache(userEmail: String, xsrfToken: String): Unit = {
-    dbSession.viaConnection(implicit connection => {
+    val removeResult = dbSession.viaConnection(implicit connection => {
       UserSession.deleteUserSessionByToken(xsrfToken)
     })
+    logger.debug(s"delete session ok? $removeResult")
   }
 
   /**

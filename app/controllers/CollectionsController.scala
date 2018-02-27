@@ -59,11 +59,12 @@ class CollectionsController @Inject()(userService: UserService,
     request =>
       val userOption = request.optionalSession.flatMap(session => userService.findUserByEmailAsString(session.email))
 
-      val owcDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption).distinct
-        .filter(owc => keywords.exists(p => findKeywordInContextDeep(owc, p)) || keywords.isEmpty)
+      val owcDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption)
+        .distinct
+        .filter(owc => keywords.isEmpty || keywords.exists(p => findKeywordInContextDeep(owc, p)) )
 
       val owcJsDocs = owcDocs.map(doc => doc.toJson)
-      Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs)))
+      Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs), "keywords" -> keywords))
   }
 
   def getCollections(owcContextIdOption: Option[String]): Action[Unit] = defaultAuthAction(parse.empty) {

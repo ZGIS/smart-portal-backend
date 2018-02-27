@@ -29,7 +29,7 @@ import info.smart.models.owc100._
 import models.ErrorResult
 import models.owc.OwcContextDAO
 import org.apache.commons.lang3.StringEscapeUtils
-import play.api.libs.json.{JsArray, JsError, JsValue, Json}
+import play.api.libs.json._
 import play.api.mvc.{Action, AnyContent, Controller}
 import services.{EmailService, OwcCollectionsService, UserService}
 import utils.ClassnameLogger
@@ -61,9 +61,18 @@ class CollectionsController @Inject()(userService: UserService,
 
       val owcDocs = collectionsService.queryOwcContextsForUserAndIdForViewing(userOption, owcContextIdOption)
         .distinct
-        .filter(owc => keywords.isEmpty || keywords.exists(p => findKeywordInContextDeep(owc, p)) )
+        .filter(owc => keywords.isEmpty || keywords.exists(p => findKeywordInContextDeep(owc, p)))
 
-      val owcJsDocs = owcDocs.map(doc => doc.toJson)
+      val owcJsDocs = owcDocs.map {
+        doc =>
+          if (keywords.isEmpty) {
+            doc.toJson
+          } else {
+            val score = calculateKeywordScore(doc, keywords)
+            val owcJsWithScore = addScoreJsonTransform(doc.toJson, score)
+            owcJsWithScore
+          }
+      }
       Ok(Json.obj("count" -> owcJsDocs.size, "collections" -> JsArray(owcJsDocs), "keywords" -> keywords))
   }
 
@@ -165,7 +174,7 @@ class CollectionsController @Inject()(userService: UserService,
           logger.trace(Json.prettyPrint(owcContext.toJson))
           // TODO mangle Context and Resource IDs
           val idLink = new URL(s"https://portal.smart-project.info/context/document/${UUID.randomUUID().toString}")
-          val updatedResources = owcContext.resource.map{
+          val updatedResources = owcContext.resource.map {
             owcResource =>
               val idLink = new URL(s"https://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
               owcResource.newOf(idLink)
@@ -436,6 +445,30 @@ class CollectionsController @Inject()(userService: UserService,
 
   private def findKeywordInContextDeep(owcContext: OwcContext, keyword: String): Boolean = {
     owcContext.keyword.exists(p => p.term.contentEquals(keyword)) ||
-      owcContext.resource.exists( res => res.keyword.exists(p => p.term.contentEquals(keyword)))
+      owcContext.resource.exists(res => res.keyword.exists(p => p.term.contentEquals(keyword)))
+  }
+
+  private def addScoreJsonTransform(json: JsValue, searchScore: Double): JsValue = {
+    val jsonTransformer1 = JsPath.read[JsObject].map(o => o ++ Json.obj("searchScore" -> JsNumber(searchScore)))
+    json.transform(jsonTransformer1).get
+  }
+
+  private def calculateKeywordScore(owcContext: OwcContext, keywords: Seq[String]): Double = {
+    val numQueryKeywords = keywords.length
+    val numContextKeywords = owcContext.keyword.length
+    val numResourcesKeywords = owcContext.resource.map(_.keyword.length).sum
+    val directContextHits = keywords.map(kw => owcContext.keyword.count(p => p.term.contentEquals(kw))).sum
+    val directResourceHits = keywords.map(
+      kw => owcContext.resource.map(res => res.keyword.count(p => p.term.contentEquals(kw))).sum).sum
+
+    val closeContextHits = keywords.map(kw => owcContext.keyword.count(p => p.term.contains(kw))).sum
+    val closeResourceHits = keywords.map(
+      kw => owcContext.resource.map(res => res.keyword.count(p => p.term.contains(kw))).sum).sum
+
+    ( (directContextHits / numContextKeywords) +
+      (closeContextHits * 0.3 / numContextKeywords) +
+      (directResourceHits / numResourcesKeywords) +
+      ((closeResourceHits / numResourcesKeywords) * 0.3)) / numQueryKeywords
+
   }
 }

@@ -21,23 +21,21 @@ package controllers
 
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
-import javax.inject.{Inject, Provider}
 
-import controllers.csw.{CswDeleteRequest, CswInsertRequest, CswTransactionWithIndexUpdate}
+import controllers.csw.{CswDeleteRequest, CswInsertRequest, CswTransactionWithIndexUpdate, CswTransctionType}
 import controllers.security.{AuthenticationAction, UserAction}
+import javax.inject.{Inject, Provider}
 import models.ErrorResult
 import models.gmd.MdMetadata
-import models.users.{User, UserMetaRecord}
 import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
 import play.api.mvc.{Action, AnyContent, Controller, Result}
 import play.api.{Application, Configuration}
 import services.{MetadataService, OwcCollectionsService, UserService}
-import utils.{ClassnameLogger, PasswordHashing}
+import utils.ClassnameLogger
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.xml.transform.{RewriteRule, RuleTransformer}
-import scala.xml.{Elem, Node, NodeSeq}
+import scala.xml.Elem
 
 
 /**
@@ -80,6 +78,7 @@ class CswController @Inject()(implicit configuration: Configuration,
   //TODO SR maybe we should configure these URLs somewhere else? Or even better generate some access lib from the ingester?
   val INGESTER_URL: String = configuration.getString("smart.csw-ingester.url").getOrElse("http://localhost:9001")
   val INGESTER_UPDATE_INDEX_URL: String = s"$INGESTER_URL/cswi-api/v1/buildIndex/smart"
+  val INGESTER_DELETE_FROM_INDEX_URL: String = s"$INGESTER_URL/cswi-api/v1/deleteFromIndex"
 
   /**
     * returns valid values for different topics used in metadata editor of webgui
@@ -141,20 +140,24 @@ class CswController @Inject()(implicit configuration: Configuration,
 
       updateIngesterIndexResponse <- {
         // if (transactionResponse.status == 200) {
-        val response = wsClient.url(INGESTER_UPDATE_INDEX_URL).get()
-        response.onSuccess {
+        val responseTuple = if (transaction.transactionType.equals(CswTransctionType.DELETE)) {
+          (wsClient.url(INGESTER_DELETE_FROM_INDEX_URL).withQueryString("fileIdentifier" -> transaction.fileIdentifier)get(), INGESTER_DELETE_FROM_INDEX_URL)
+        } else {
+          (wsClient.url(INGESTER_UPDATE_INDEX_URL).get(), INGESTER_UPDATE_INDEX_URL)
+        }
+        responseTuple._1.onSuccess {
           case response if response.status == 200 => {
             logger.info(
-              s"Successfully called $INGESTER_UPDATE_INDEX_URL (${response.status} - ${response.statusText})")
+              s"Successfully called '${responseTuple._2}' (${response.status} - ${response.statusText})")
             logger.info(s"response: ${response.body}")
           }
           case response => {
             logger.warn(
-              s"Call to '$INGESTER_UPDATE_INDEX_URL' returned error: ${response.status} - ${response.statusText}")
+              s"Call to '${responseTuple._2}' returned error: ${response.status} - ${response.statusText}")
             logger.warn(s"response: ${response.body}")
           }
         }
-        response
+        responseTuple._1
 
       }
     } yield (transactionResponse, updateIngesterIndexResponse)

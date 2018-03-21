@@ -22,6 +22,7 @@ package controllers.csw
 
 import java.util.UUID
 
+import controllers.csw.CswTransctionType._
 import models.gmd.MdMetadata
 import utils.ClassnameLogger
 
@@ -29,7 +30,7 @@ import scala.xml.{Elem, Node, NodeSeq}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 sealed trait CswTransactionWithIndexUpdate {
-  def transaction: String
+  def transactionType: CswTransctionType
   def fileIdentifier: String
   def requestTemplateXml: Node
   // mdMetadata / UUID
@@ -37,6 +38,25 @@ sealed trait CswTransactionWithIndexUpdate {
   def responsePositive(e: Elem): Boolean
 }
 
+sealed trait CswTransctionType {
+  def value: String
+}
+
+object CswTransctionType {
+
+  case object INSERT extends CswTransctionType {
+    val value: String = "INSERT"
+  }
+
+  case object UPDATE extends CswTransctionType {
+    val value: String = "UPDATE"
+  }
+
+  case object DELETE extends CswTransctionType {
+    val value: String = "DELETE"
+  }
+
+}
 /**
   * inserts the MDMetadata into the TransactionInsert XML
   *
@@ -51,7 +71,7 @@ private class AddMDMetadataToInsert(xml: Node) extends RewriteRule {
   }
 }
 
-final case class CswInsertRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "INSERT") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswInsertRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transactionType: CswTransctionType = INSERT) extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = mdMetadata.fileIdentifier
 
   override def transform: NodeSeq = {
@@ -80,7 +100,7 @@ private class AddMDMetadataToUpdate(xml: Node) extends RewriteRule {
   }
 }
 
-final case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transaction: String = "UPDATE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadata, transactionType: CswTransctionType = UPDATE) extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = mdMetadata.fileIdentifier
 
   override def transform: NodeSeq = {
@@ -102,7 +122,7 @@ final case class CswUdateRequest(requestTemplateXml: Node, mdMetadata: MdMetadat
   * @param requestTemplateXml
   * @param fileIdentifierUuid
   */
-final case class CswDeleteRequest(requestTemplateXml: Node, fileIdentifierUuid: UUID, transaction: String = "DELETE") extends CswTransactionWithIndexUpdate with ClassnameLogger {
+final case class CswDeleteRequest(requestTemplateXml: Node, fileIdentifierUuid: UUID, transactionType: CswTransctionType = DELETE) extends CswTransactionWithIndexUpdate with ClassnameLogger {
   override def fileIdentifier: String = fileIdentifierUuid.toString
 
   override def transform: NodeSeq = {

@@ -20,9 +20,9 @@
 import java.io.{File, FileInputStream}
 import java.security.MessageDigest
 
+import models.rdf._
 import org.apache.commons.codec.binary.Hex
 import org.apache.poi.ss.usermodel.WorkbookFactory
-import utils.{ResearchPGHolder, XlsToSparqlRdfConverter}
 
 import scala.xml.NodeSeq
 
@@ -43,19 +43,14 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val worksheet = workbook.getSheet("science domain categories")
     val synonyms_sheets = workbook.getSheet("synonyms")
 
-    val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
-    val comment = """<!-- # Generated on: 2017-11-17 from Excel GW portal list of icons new structure 20170830.xlsx / Worksheet: science domain categories -->"""
-    val fullRdfString: String = converter.rdfHeader +
-      "\n" +
-      comment +
-      "\n" +
-      converter.rdfClassdef +
-      rdfCategories.mkString("\n") +
-      converter.rdfFooter
+    val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
+    val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
 
     val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
     categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-    println(rdfCategories(3))
+    println(rdfCategories(3).toRdf)
+    // println(fullRdfString)
+
   }
 
   "Research PG XLSX to RDF/SKOS Writer" should {
@@ -67,14 +62,11 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
     val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
 
-    val fullRdfString: String = converter.rdfSkosDcHeader +
-      ResearchPGHolder.toCollectionRdf(rdfResearchPGs) +
-      rdfResearchPGs.map(pg => pg.toRdf).mkString("\n") +
-      converter.rdfFooter
+    val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs)
     val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
     println(rdfResearchPGs.last.toRdf)
     researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-
+    // println(fullRdfString)
   }
 
 }

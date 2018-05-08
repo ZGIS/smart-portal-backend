@@ -24,24 +24,23 @@ import java.nio.file.{Files, Paths}
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
-import javax.inject._
 
 import controllers.security._
+import javax.inject._
 import models.ErrorResult
+import models.rdf._
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json._
-import play.api.libs.ws.{WSClient, WSResponse}
+import play.api.libs.ws.WSClient
 import play.api.mvc._
 import services._
-import utils.{ClassnameLogger, ResearchPGHolder, XlsToSparqlRdfConverter}
+import utils.ClassnameLogger
 
-import scala.Option
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
 
 @Singleton
 class AdminController @Inject()(wsClient: WSClient,
@@ -62,15 +61,7 @@ class AdminController @Inject()(wsClient: WSClient,
     */
   private val defaultAdminAction = authenticationAction andThen userAction andThen adminPermissionCheckAction
 
-  private val vocabBucketFolder = "sparql-categories-vocab"
-  private val awahou = "awahou.rdf"
-  private val categories = "categories_test.rdf"
-  private val glossary = "glossary.rdf"
-  private val ngmp = "ngmp.rdf"
-  private val papawai = "papawai_3.rdf"
-  private val researchpg = "research-pg.rdf"
 
-  private val ADMIN_JENA_UPDATE_URL = "https://admin.smart-project.info/kubectl/jena/reload"
 
   private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
 
@@ -196,24 +187,14 @@ class AdminController @Inject()(wsClient: WSClient,
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("science domain categories")
             val synonyms_sheets = workbook.getSheet("synonyms")
-            val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets).map(cat => cat.toRdf)
-            val comment = s"""<!-- # Generated $date from Excel GW portal list of icons new structure PortalCategories.xlsx / Worksheet: science domain categories -->"""
-            val fullRdfString: String = converter.rdfHeader +
-              "\n" +
-              comment +
-              "\n" +
-              converter.rdfClassdef +
-              rdfCategories.mkString("\n") +
-              converter.rdfFooter
+            val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
+            val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
             updateVocabBucketWith(fullRdfString, "categories_test.rdf", vocabBucketFolder)
           case "ResearchPrgrm.xlsx" => // TODO in case of research-pg.rdf
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("Research programmes")
             val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
-            val fullRdfString: String = converter.rdfSkosDcHeader +
-              ResearchPGHolder.toCollectionRdf(rdfResearchPGs, date) +
-              rdfResearchPGs.map(pg => pg.toRdf).mkString("\n") +
-              converter.rdfFooter
+            val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs, date)
             updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)
           case "awahou.xlsx" => // TODO in case of awahou.rdf
             val fullRdfString = "awahou.rdf"

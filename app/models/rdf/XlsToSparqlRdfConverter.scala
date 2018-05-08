@@ -2,7 +2,8 @@
  * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
  * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
- * Ministry of Business, Innovation and Employment (MBIE)
+ * Ministry of Business, Innovation and Employment (MBIE) and Department of Geography,
+ * University of Tartu, Estonia (UT) under the ETAG Mobilitas Pluss grant No. MOBJD233.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +18,10 @@
  * limitations under the License.
  */
 
-package utils
-
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+package models.rdf
 
 import org.apache.poi.ss.usermodel.{Cell, Sheet}
+import utils.ClassnameLogger
 
 import scala.util.Try
 import scala.util.matching.Regex
@@ -268,226 +267,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     resultBuf
   }
 
-  val rdfHeader =
-    """<?xml version="1.0" encoding="UTF-8"?>
-<rdf:RDF xmlns:categories="http://vocab.smart-project.info/categories#"
-         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-         xmlns:dc="http://purl.org/dc/elements/1.1/"
-         xmlns:xs="http://www.w3.org/2001/XMLSchema">
-         """
-
-  val rdfSkosDcHeader =
-    """<?xml version="1.0" encoding="UTF-8"?>
-      |<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/"
-      |         xmlns:dcterms="http://purl.org/dc/terms/" xmlns:foaf="http://xmlns.com/foaf/0.1/"
-      |         xmlns:gml="http://www.opengis.net/gml"
-      |         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:skos="http://www.w3.org/2004/02/skos/core#"
-      |         xmlns:xs="http://www.w3.org/2001/XMLSchema">
-      |""".stripMargin
-
-  val rdfClassdef =
-    """    <rdf:Description rdf:ID="SacCategory">
-        <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
-        <rdfs:label xml:lang="en">category</rdfs:label>
-        <rdfs:comment xml:lang="en">the basic category template</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-    </rdf:Description>
-
-    <rdfs:Class rdf:ID="MainCategory">
-        <rdfs:subClassOf rdf:resource="#SacCategory"/>
-        <rdfs:label xml:lang="en">main category</rdfs:label>
-        <rdfs:comment xml:lang="en">a main category</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-    </rdfs:Class>
-
-    <rdfs:Class rdf:ID="ChildCategory">
-        <rdfs:subClassOf rdf:resource="#MainCategory"/>
-        <rdfs:label xml:lang="en">child category</rdfs:label>
-        <rdfs:comment xml:lang="en">a child category</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-    </rdfs:Class>
-
-    <rdf:Property rdf:about="id" rdfs:label="id" rdfs:comment="id">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="hierarchy_number" rdfs:label="hierarchy_number" rdfs:comment="hierarchy_number">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="parent" rdfs:label="parent" rdfs:comment="parent">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="item_name" rdfs:label="item_name" rdfs:comment="item_name">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="description" rdfs:label="description" rdfs:comment="description">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="query_string" rdfs:label="query_string" rdfs:comment="query_string">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="query_string" rdfs:label="query_string" rdfs:comment="keyword_content">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="icon" rdfs:label="icon" rdfs:comment="icon">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <rdf:Property rdf:about="bg_icon" rdfs:label="bg_icon" rdfs:comment="bg_icon">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-
-    <!-- need to be a listable property, so that a class has several  -->
-    <rdf:Property rdf:about="keyword_content" rdfs:label="keyword_content" rdfs:comment="keyword_content">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
-        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
-    </rdf:Property>
-    """
-
-  val rdfFooter =
-    """
-</rdf:RDF>
-"""
 
 
-}
 
-/**
-  * Domain Science Categories container
-  *
-  * @param hierarchyNumber
-  * @param id
-  * @param parent
-  * @param itemName
-  * @param description
-  * @param keywordContent
-  * @param queryString
-  * @param icon
-  * @param bgIcon
-  * @param categoryClass
-  */
-final case class CategoryHolder(hierarchyNumber: String = "",
-                          id: Int,
-                          parent: String = "main",
-                          itemName: String = "",
-                          description: String = "",
-                          keywordContent: List[String] = List(),
-                          queryString: String = "",
-                          icon: String = "",
-                          bgIcon: String = "",
-                          categoryClass: String = "MainCategory") extends ClassnameLogger {
-  def toRdf: String = {
-    val keywordString = if (keywordContent.nonEmpty) {
-      keywordContent.mkString(", ")
-    } else {
-      ""
-    }
-
-    s"""<rdf:Description rdf:about="http://vocab.smart-project.info/categories.rdfs#$id"
-       |    categories:id="$id"
-       |    categories:hierarchy_number="$hierarchyNumber"
-       |    categories:parent="$parent"
-       |    categories:item_name="$itemName"
-       |    categories:description="$description"
-       |    categories:keyword_content="$keywordString"
-       |    categories:query_string="$queryString"
-       |    categories:icon="$icon"
-       |    categories:bg_icon="$bgIcon">
-       |  <rdf:type rdf:resource="http://vocab.smart-project.info/categories.rdfs#$categoryClass"/>
-       |</rdf:Description>""".stripMargin
-  }
-}
-
-/**
-  * companion object, currently empty
-  */
-object CategoryHolder extends ClassnameLogger {
-
-}
-
-/**
-  * container class for Research programme info
-  *
-  * @param titleName
-  * @param abbrev
-  * @param description
-  * @param fundingSource
-  * @param contactPersonName
-  * @param leadOrganisationName
-  * @param linkTo
-  */
-final case class ResearchPGHolder(titleName: String,
-                            abbrev: String,
-                            description: String,
-                            fundingSource: String,
-                            contactPersonName: String,
-                            leadOrganisationName: String,
-                            linkTo: String) extends ClassnameLogger {
-
-  def toRdf: String = {
-    s"""<skos:Concept rdf:about="http://vocab.smart-project.info/researchpg/term/$abbrev">
-        <skos:label>$abbrev</skos:label>
-        <dc:identifier>$abbrev</dc:identifier>
-        <dc:title>$titleName</dc:title>
-        <dc:type>$fundingSource</dc:type>
-        <dc:relation>$linkTo</dc:relation>
-        <dc:description>$description</dc:description>
-        <dc:creator>$leadOrganisationName</dc:creator>
-        <dc:contributor>$contactPersonName</dc:contributor>
-        <skos:inCollection rdf:resource="http://vocab.smart-project.info/collection/researchpg/terms"/>
-    </skos:Concept>
-      """
-  }
-
-}
-
-/**
-  * companion object
-  */
-object ResearchPGHolder extends ClassnameLogger {
-
-  def toCollectionRdf(skosCollection: List[ResearchPGHolder],
-                      date: String = ZonedDateTime.now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)): String = {
-
-    s"""<skos:Collection rdf:about="http://vocab.smart-project.info/collection/researchpg/terms">
-        <rdfs:label>Research programmes</rdfs:label>
-        <dc:title>Research programmes</dc:title>
-        <dc:description>Research programmes</dc:description>
-        <dc:creator>
-            <foaf:Organization>
-                <foaf:name>GNS Science</foaf:name>
-            </foaf:Organization>
-        </dc:creator>
-        <dc:rights>CC-SA-BY-NC 3.0 NZ</dc:rights>
-        <dcterms:issued>2017-11-17T20:55:00.215+13:00</dcterms:issued>
-        <dcterms:modified>${date}</dcterms:modified>
-        ${skosCollection.map(sc => s"<skos:member>http://vocab.smart-project.info/researchpg/term/${sc.abbrev}</skos:member>").mkString("\n")}
-    </skos:Collection>"""
-  }
 }

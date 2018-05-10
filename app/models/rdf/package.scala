@@ -43,10 +43,13 @@ package object rdf {
 
   val rdfSkosDcHeader: String =
     """<?xml version="1.0" encoding="UTF-8"?>
-      |<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/"
-      |         xmlns:dcterms="http://purl.org/dc/terms/" xmlns:foaf="http://xmlns.com/foaf/0.1/"
+      |<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+      |         xmlns:dc="http://purl.org/dc/elements/1.1/"
+      |         xmlns:dcterms="http://purl.org/dc/terms/"
+      |         xmlns:foaf="http://xmlns.com/foaf/0.1/"
       |         xmlns:gml="http://www.opengis.net/gml"
-      |         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+      |         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+      |         xmlns:skos="http://www.w3.org/2004/02/skos/core#"
       |         xmlns:xs="http://www.w3.org/2001/XMLSchema">
       |""".stripMargin
 

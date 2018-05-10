@@ -183,35 +183,55 @@ class AdminController @Inject()(wsClient: WSClient,
         val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
         val updateProcess = filename match {
-          case "PortalCategories.xlsx" => // FIXME in case of categories_test.rdf
+          case "PortalCategories.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("science domain categories")
             val synonyms_sheets = workbook.getSheet("synonyms")
             val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
             val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
             updateVocabBucketWith(fullRdfString, "categories_test.rdf", vocabBucketFolder)
-          case "ResearchPrgrm.xlsx" => // TODO in case of research-pg.rdf
+          case "ResearchPrgrm.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("Research programmes")
             val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
             val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs, date)
             updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)
-          case "awahou.xlsx" => // TODO in case of awahou.rdf
-            val fullRdfString = "awahou.rdf"
-            // updateVocabBucketWith(fullRdfString, "_awahou.rdf", vocabBucketFolder)
-            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
-          case "glossary.xlsx" => // TODO in case of glossary.rdf
-            val fullRdfString = "glossary.rdf"
-            // updateVocabBucketWith(fullRdfString, "_glossary.rdf", vocabBucketFolder)
-            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
-          case "ngmp.xlsx" => // TODO in case of ngmp.rdf
-            val fullRdfString = "ngmp.rdf"
-            // updateVocabBucketWith(fullRdfString, "_ngmp.rdf", vocabBucketFolder)
-            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
-          case "papawai.xlsx" => // TODO in case of papawai_3.rdf
-            val fullRdfString = "papawai_3.rdf"
-            // updateVocabBucketWith(fullRdfString, "_papawai_3.rdf", vocabBucketFolder)
-            Left(ErrorResult(s"$fullRdfString not yet implemented, unable to proceed.", None))
+          case "AwahouGlossary.xlsx" =>
+            val workbook = WorkbookFactory.create(tmpFile)
+            val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+            val termsWorksheet = workbook.getSheet("Terms")
+            val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+              .buildGenericSkosCollectionHolderFromSheets(
+                collectionInfoWorksheet, termsWorksheet)
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            updateVocabBucketWith(fullRdfString, "awahou.rdf", vocabBucketFolder)
+          case "FreshwaterGlossary.xlsx" =>
+            val workbook = WorkbookFactory.create(tmpFile)
+            val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+            val termsWorksheet = workbook.getSheet("Terms")
+            val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+              .buildGenericSkosCollectionHolderFromSheets(
+                collectionInfoWorksheet, termsWorksheet)
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            updateVocabBucketWith(fullRdfString, "glossary.rdf", vocabBucketFolder)
+          case "NgmpParams.xlsx" =>
+            val workbook = WorkbookFactory.create(tmpFile)
+            val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+            val termsWorksheet = workbook.getSheet("Terms")
+            val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+              .buildGenericSkosCollectionHolderFromSheets(
+                collectionInfoWorksheet, termsWorksheet)
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            updateVocabBucketWith(fullRdfString, "ngmp.rdf", vocabBucketFolder)
+          case "MaoriPapawaiLexicon.xlsx" =>
+            val workbook = WorkbookFactory.create(tmpFile)
+            val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+            val termsWorksheet = workbook.getSheet("Terms")
+            val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+              .buildGenericSkosCollectionHolderFromSheets(
+                collectionInfoWorksheet, termsWorksheet)
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            updateVocabBucketWith(fullRdfString, "papawai_3.rdf", vocabBucketFolder)
           case _ => logger.error("no file name retrieved unable to proceed")
             Left(ErrorResult("no file name retrieved unable to proceed.", None))
         }

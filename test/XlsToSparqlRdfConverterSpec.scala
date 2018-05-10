@@ -18,10 +18,8 @@
  */
 
 import java.io.{File, FileInputStream}
-import java.security.MessageDigest
 
 import models.rdf._
-import org.apache.commons.codec.binary.Hex
 import org.apache.poi.ss.usermodel.WorkbookFactory
 
 import scala.xml.NodeSeq
@@ -32,41 +30,165 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
   private lazy val researchPgResource1 = this.getClass().getResource("sparql/ResearchPrgrm.xlsx")
 
-  "Categories XLSX to RDFS Writer" should {
+  private lazy val skosNgmpResource1 = this.getClass().getResource("sparql/NgmpParams.xlsx")
+  private lazy val skosGlossaryResource1 = this.getClass().getResource("sparql/FreshwaterGlossary.xlsx")
+  private lazy val skosAwahouResource1 = this.getClass().getResource("sparql/AwahouGlossary.xlsx")
+  private lazy val skosPapawaiResource1 = this.getClass().getResource("sparql/MaoriPapawaiLexicon.xlsx")
 
-    val converter = new XlsToSparqlRdfConverter
 
-    // val inp = new FileInputStream("workbook.xlsx");
-    val inp = new FileInputStream(categoriesResource1.getPath)
+  "Categories XLSX to RDFS Writers" should {
 
-    val workbook = WorkbookFactory.create(inp)
-    val worksheet = workbook.getSheet("science domain categories")
-    val synonyms_sheets = workbook.getSheet("synonyms")
+    "succeed on building" in {
 
-    val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
-    val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
+      val converter = new XlsToSparqlRdfConverter
 
-    val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
-    categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-    println(rdfCategories(3).toRdf)
-    // println(fullRdfString)
+      // val inp = new FileInputStream("workbook.xlsx");
+      val inp = new FileInputStream(categoriesResource1.getPath)
 
+      val workbook = WorkbookFactory.create(inp)
+      val worksheet = workbook.getSheet("science domain categories")
+      val synonyms_sheets = workbook.getSheet("synonyms")
+
+      val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
+      val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
+
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("categories.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+      logger.warn(rdfCategories(3).toRdf)
+    }
   }
 
   "Research PG XLSX to RDF/SKOS Writer" should {
 
-    val converter = new XlsToSparqlRdfConverter
+    "succeed on building" in {
 
-    val workbook = WorkbookFactory.create(new File(researchPgResource1.getPath))
-    val worksheet = workbook.getSheet("Research programmes")
+      val converter = new XlsToSparqlRdfConverter
 
-    val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
+      val workbook = WorkbookFactory.create(new File(researchPgResource1.getPath))
+      val worksheet = workbook.getSheet("Research programmes")
 
-    val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs)
-    val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
-    println(rdfResearchPGs.last.toRdf)
-    researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-    // println(fullRdfString)
+      val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
+
+      val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs)
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("researchpg.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      logger.warn(rdfResearchPGs.last.toRdf)
+      researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+
+    }
+  }
+
+  "Generic SKOS DC XLSX to RDF/SKOS Writer for NGMP" should {
+
+    "succeed on building" in {
+
+      logger.warn("Generic SKOS DC XLSX to RDF/SKOS Writer for NGMP")
+      val converter = new XlsToSparqlRdfConverter
+
+      val workbook = WorkbookFactory.create(new File(skosNgmpResource1.getPath))
+      val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+      val termsWorksheet = workbook.getSheet("Terms")
+
+      val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+        .buildGenericSkosCollectionHolderFromSheets(
+          collectionInfoWorksheet, termsWorksheet)
+
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("ngmp.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+    }
+  }
+
+  "Generic SKOS DC XLSX to RDF/SKOS Writer for Glossary" should {
+
+    "succeed on building" in {
+
+      val converter = new XlsToSparqlRdfConverter
+
+      val workbook = WorkbookFactory.create(new File(skosGlossaryResource1.getPath))
+      val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+      val termsWorksheet = workbook.getSheet("Terms")
+
+      val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+        .buildGenericSkosCollectionHolderFromSheets(
+          collectionInfoWorksheet, termsWorksheet)
+
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("glossary.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+    }
+  }
+
+  "Generic SKOS DC XLSX to RDF/SKOS Writer for Awahou" should {
+
+    "succeed on building" in {
+      val converter = new XlsToSparqlRdfConverter
+
+      val workbook = WorkbookFactory.create(new File(skosAwahouResource1.getPath))
+      val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+      val termsWorksheet = workbook.getSheet("Terms")
+
+      val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+        .buildGenericSkosCollectionHolderFromSheets(
+          collectionInfoWorksheet, termsWorksheet)
+
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("awahou.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+    }
+  }
+
+  "Generic SKOS DC XLSX to RDF/SKOS Writer for Papawai" should {
+
+    "succeed on building" in {
+
+      val converter = new XlsToSparqlRdfConverter
+
+      val workbook = WorkbookFactory.create(new File(skosPapawaiResource1.getPath))
+      val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
+      val termsWorksheet = workbook.getSheet("Terms")
+
+      val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
+        .buildGenericSkosCollectionHolderFromSheets(
+          collectionInfoWorksheet, termsWorksheet)
+
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+//      import java.nio.file.{Paths, Files}
+//      import java.nio.charset.StandardCharsets
+//
+//      Files.write(Paths.get("papawai.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
+
+      val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
+      researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
+    }
   }
 
 }

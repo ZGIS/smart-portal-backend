@@ -20,6 +20,9 @@
 
 package models.rdf
 
+import java.time.ZonedDateTime
+
+import org.apache.poi.ss.usermodel.Row.MissingCellPolicy
 import org.apache.poi.ss.usermodel.{Cell, Sheet}
 import utils.ClassnameLogger
 
@@ -59,13 +62,22 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     val theRow = sheet.getRow(row)
     if (theRow != null) {
 
-      val lastAccessibleCell: Int = if (theRow.getLastCellNum-1 <= theRow.getPhysicalNumberOfCells) {
-        theRow.getLastCellNum-1
+      val lastAccessibleCell: Int = if (theRow.getLastCellNum - 1 <= theRow.getPhysicalNumberOfCells) {
+        theRow.getLastCellNum - 1
       } else {
         theRow.getPhysicalNumberOfCells
       }
-      logger.trace(s"getCellValueAsStringOption.lastCell: ${lastAccessibleCell+1} : lastAccessibleCell ${lastAccessibleCell}")
-      if (lastAccessibleCell >= cell) {
+      logger.trace(s"getCellValueAsStringOption.lastCell: ${lastAccessibleCell + 1} : lastAccessibleCell ${lastAccessibleCell}")
+      //      if (lastAccessibleCell >= cell) {
+      try {
+        theRow.getCell(cell, MissingCellPolicy.RETURN_NULL_AND_BLANK)
+      } catch {
+        case ex: NullPointerException =>
+          logger.warn(s"NullPointerException row $row / $cell: ${ex.getMessage}")
+        case ex: IllegalArgumentException =>
+          logger.warn(s"IllegalArgumentException row $row / $cell: ${ex.getMessage}")
+      }
+      if (theRow.getCell(cell, MissingCellPolicy.RETURN_NULL_AND_BLANK) != null) {
         logger.trace(s"getCellValueAsStringOption => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
           s"getCellType: ${sheet.getRow(row).getCell(cell).getCellType}")
         sheet.getRow(row).getCell(cell).getCellType match {
@@ -75,25 +87,38 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
             logger.trace(s"CELL_TYPE_NUMERIC: $value")
             value
           case Cell.CELL_TYPE_STRING => val value = Try {
-            val stringValue = sheet.getRow(row).getCell(cell).getRichStringCellValue.getString
-            if (stringValue == null) "" else stringValue
+            val stringValue = sheet.getRow(row).getCell(cell).getStringCellValue
+            if (stringValue == null) "" else new String(stringValue.getBytes("Windows-1251"), "UTF-8")
           }.toOption
             logger.trace(s"CELL_TYPE_STRING: $value")
             value
-          case Cell.CELL_TYPE_BLANK => logger.debug(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+          case Cell.CELL_TYPE_BLANK => logger.warn(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
             "getCellType: CELL_TYPE_BLANK")
+            None
+          case Cell.CELL_TYPE_FORMULA => logger.warn(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+            "getCellType: CELL_TYPE_FORMULA")
+            None
+          case Cell.CELL_TYPE_ERROR => logger.warn(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+            "getCellType: CELL_TYPE_ERROR")
+            None
+          case Cell.CELL_TYPE_BOOLEAN => logger.warn(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+            "getCellType: CELL_TYPE_BOOLEAN")
             None
           case _ => logger.error(s"getCellValueAsStringOption cell type => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
             "unexpected error get cell type")
             None
         }
       } else {
-        logger.warn(s"beyond cell range of row => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
-          s"getLastCellNum: ${sheet.getRow(row).getLastCellNum}")
+        logger.debug(s"void getCell(row: $row, cell: $cell) is null")
         None
       }
+      //      } else {
+      //        logger.warn(s"beyond cell range of row => row: $row, cell: $cell, sheet: ${sheet.getSheetName}," +
+      //          s"getLastCellNum: ${sheet.getRow(row).getLastCellNum}")
+      //        None
+      //      }
     } else {
-      logger.debug("reaching into the void")
+      logger.debug("reaching into the void, theRow is null")
       None
     }
   }
@@ -148,7 +173,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     val parentDefault = "main"
     lastParent += parentDefault
     val lastRow = if (domainSheet.getLastRowNum < domainSheet.getPhysicalNumberOfRows) domainSheet.getLastRowNum else domainSheet.getPhysicalNumberOfRows
-    logger.warn(s"domainSheet.lastRow: ${lastRow}")
+    logger.info(s"domainSheet.lastRow: ${lastRow}")
     for (i <- 0 to lastRow) {
       val cellValue = getCellValueAsStringOption(i, 0, domainSheet)
       logger.trace(s"domainSheet.getRow($i).getCell(0).getCell: $cellValue")
@@ -230,7 +255,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     */
   def buildResearchPgFromSheet(researchpgSheet: org.apache.poi.ss.usermodel.Sheet): List[ResearchPGHolder] = {
     val lastRow = if (researchpgSheet.getLastRowNum < researchpgSheet.getPhysicalNumberOfRows) researchpgSheet.getLastRowNum else researchpgSheet.getPhysicalNumberOfRows
-    logger.warn(s"last row research pg: $lastRow")
+    logger.info(s"last row research pg: $lastRow")
     val buf = scala.collection.mutable.ListBuffer.empty[ResearchPGHolder]
     for (i <- 1 to lastRow) {
       val cellValue = getCellValueAsStringOption(i, 0, researchpgSheet)
@@ -257,7 +282,9 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
           buf += pg
 
         } catch {
-          case ex: Exception => logger.error(s"new ResearchPGHolder error on row $i: ${ex.getMessage} ${ex.getStackTrace.mkString("\n")}")
+          case ex: Exception =>
+            logger.warn(s"new ResearchPGHolder error on row $i: ${ex.getMessage}")
+            logger.debug(s"new ResearchPGHolder error on row $i: ${ex.getMessage} ${ex.getStackTrace.mkString("\n")}")
         }
       }
     }
@@ -267,7 +294,112 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
     resultBuf
   }
 
+  /**
+    * reads in an XLSX Sheet with generic terms definition and produces a list of RDF/SKOS Vocab
+    * * encapsulated in [[SimplifiedSkosRdfHolder]] to be dropped as RDF/XML eventually
+    *
+    * @param termsListSheet
+    * @return
+    */
+  def parseSkosDcTermFromSheet(termsListSheet: org.apache.poi.ss.usermodel.Sheet): List[SimplifiedSkosRdfHolder] = {
+    val lastRow = if (termsListSheet.getLastRowNum < termsListSheet.getPhysicalNumberOfRows) termsListSheet.getLastRowNum else termsListSheet.getPhysicalNumberOfRows
+    val theRow = termsListSheet.getRow(0)
 
+    val lastAccessibleCell: Int = if (theRow.getLastCellNum - 1 <= theRow.getPhysicalNumberOfCells) {
+      theRow.getLastCellNum - 1
+    } else {
+      theRow.getPhysicalNumberOfCells
+    }
 
+    logger.info(s"last row skos rdf sheet: $lastRow")
+    logger.info(s"last cell skos rdf sheet: $lastAccessibleCell")
+    val buf = scala.collection.mutable.ListBuffer.empty[SimplifiedSkosRdfHolder]
 
+    for (i <- 1 to lastRow) {
+      val term_id_opt = getCellValueAsStringOption(i, 0, termsListSheet)
+      if (term_id_opt.isEmpty) {
+        logger.warn(s"term_id_opt row $i / cell 0: opt empty ?!?!")
+      }
+      term_id_opt.foreach {
+        term_id =>
+          val corrected_id = if (term_id.endsWith(".0")) term_id.replace(".0", "") else term_id
+          // val tup_buf = scala.collection.mutable.ListBuffer.empty[(String, String)]
+
+          val tup_list: List[(String, String)] = (1 to lastAccessibleCell).flatMap { j =>
+            val headerTermElement_opt = getCellValueAsStringOption(0, j, termsListSheet)
+            if (headerTermElement_opt.isEmpty) {
+              logger.warn(s"headerTermElement_opt row $i / cell  $j: opt empty ?!?!")
+              None
+            }
+            headerTermElement_opt.flatMap { hdr =>
+              logger.debug(s"hdr row 0 / cell $j : $hdr")
+              val termValue_opt = getCellValueAsStringOption(i, j, termsListSheet)
+              if (termValue_opt.isEmpty) {
+                logger.debug(s"tval row $i / cell $j: opt empty")
+                None
+              }
+              termValue_opt.map { tval =>
+                logger.debug(s"tval row $i / cell $j: $tval")
+                Tuple2(hdr, tval)
+              }
+            }
+          }.toList
+          val ssrh = SimplifiedSkosRdfHolder(id = corrected_id, values = tup_list)
+          logger.debug(tup_list.mkString("::"))
+          logger.debug(ssrh.toRdf("gen", "term", "terms"))
+          buf += ssrh
+      }
+    }
+    logger.info(s"termsListSheet.getLastRowNum: ${termsListSheet.getLastRowNum}")
+    logger.info(s"theRow.getLastCellNum: ${theRow.getLastCellNum}")
+    val resultBuf = buf.toList
+    logger.info(s"parseSkosDcTermFromSheet => results buf(${resultBuf.length}): ${resultBuf.map(kw => kw.id).mkString("::")}")
+    resultBuf
+  }
+
+  /**
+    * reads in an XLSX Sheet with generic terms definition and produces a list of RDF/SKOS Vocab
+    * encapsulated in [[SimplifiedSkosRdfCollectionHolder]] to be dropped as RDF/XML eventually
+    *
+    * @param collectionInfoSheet
+    * @param termsListSheet
+    * @return
+    */
+  def buildGenericSkosCollectionHolderFromSheets(collectionInfoSheet: org.apache.poi.ss.usermodel.Sheet,
+                                                 termsListSheet: org.apache.poi.ss.usermodel.Sheet): SimplifiedSkosRdfCollectionHolder = {
+
+    val ssrchTry = scala.util.Try {
+
+      val collectionIdentifier = getCellValueAsStringOption(1, 1, collectionInfoSheet).getOrElse("")
+      val hierarchy = getCellValueAsStringOption(2, 1, collectionInfoSheet).getOrElse("")
+      val hierarchyPlural = getCellValueAsStringOption(3, 1, collectionInfoSheet).getOrElse("")
+      val collectionLabel = getCellValueAsStringOption(5, 1, collectionInfoSheet).getOrElse("")
+      val collectionTitle = getCellValueAsStringOption(5, 1, collectionInfoSheet).getOrElse("")
+      val collectionDescription = getCellValueAsStringOption(6, 1, collectionInfoSheet).getOrElse("")
+      val modifiedDateText = getCellValueAsStringOption(7, 1, collectionInfoSheet).getOrElse("")
+      val issuedDateText = getCellValueAsStringOption(8, 1, collectionInfoSheet).getOrElse("")
+
+      val skosCollection = parseSkosDcTermFromSheet(termsListSheet)
+
+      SimplifiedSkosRdfCollectionHolder(
+        collectionIdentifier,
+        hierarchy,
+        hierarchyPlural,
+        collectionLabel,
+        collectionTitle,
+        collectionDescription,
+        issuedDate = ZonedDateTime.parse(modifiedDateText),
+        modifiedDate = ZonedDateTime.parse(issuedDateText),
+        skosCollection
+      )
+    }
+
+    if (ssrchTry.isFailure) {
+      val ex = ssrchTry.failed
+      logger.error(s"new SimplifiedSkosRdfCollectionHolder error: ${ex.get.getMessage} ${ex.get.getStackTrace.mkString("\n")}")
+      throw ex.get
+    }
+
+    ssrchTry.get
+  }
 }

@@ -72,8 +72,6 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
       try {
         theRow.getCell(cell, MissingCellPolicy.RETURN_NULL_AND_BLANK)
       } catch {
-        case ex: NullPointerException =>
-          logger.warn(s"NullPointerException row $row / $cell: ${ex.getMessage}")
         case ex: IllegalArgumentException =>
           logger.warn(s"IllegalArgumentException row $row / $cell: ${ex.getMessage}")
       }

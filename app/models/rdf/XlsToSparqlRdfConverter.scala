@@ -368,7 +368,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
   def buildGenericSkosCollectionHolderFromSheets(collectionInfoSheet: org.apache.poi.ss.usermodel.Sheet,
                                                  termsListSheet: org.apache.poi.ss.usermodel.Sheet): SimplifiedSkosRdfCollectionHolder = {
 
-    val ssrchTry = scala.util.Try {
+    try {
 
       val collectionIdentifier = getCellValueAsStringOption(1, 1, collectionInfoSheet).getOrElse("")
       val hierarchy = getCellValueAsStringOption(2, 1, collectionInfoSheet).getOrElse("")
@@ -392,14 +392,9 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
         modifiedDate = ZonedDateTime.parse(issuedDateText),
         skosCollection
       )
+    } catch {
+      case ex: Exception => logger.error(s"new SimplifiedSkosRdfCollectionHolder error: ${ex.getMessage} ${ex.getStackTrace.mkString("\n")}")
+        throw ex
     }
-
-    if (ssrchTry.isFailure) {
-      val ex = ssrchTry.failed
-      logger.error(s"new SimplifiedSkosRdfCollectionHolder error: ${ex.get.getMessage} ${ex.get.getStackTrace.mkString("\n")}")
-      throw ex.get
-    }
-
-    ssrchTry.get
   }
 }

@@ -20,10 +20,9 @@
 package services
 
 import java.io.IOException
-import javax.inject.{Inject, Singleton}
 
 import com.sendgrid._
-import play.api.Configuration
+import javax.inject.{Inject, Singleton}
 import utils.ClassnameLogger
 
 /**
@@ -32,12 +31,12 @@ import utils.ClassnameLogger
   * @param configuration
   */
 @Singleton
-class EmailService @Inject()(configuration: Configuration) extends ClassnameLogger {
+class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger {
 
-  lazy private val apikey: String = configuration.getString("email.sendgrid.apikey").getOrElse("empty-api-key")
-  lazy private val emailFrom: String = configuration.getString("email.sendgrid.from").getOrElse("allixender@googlemail.com")
-  lazy private val portalApiHost: String = "https://dev.smart-project.info"
-  lazy private val portalWebguiHost: String = "https://dev.smart-project.info"
+  lazy private val apikey: String = portalConfig.sendgridApikey
+  lazy private val emailFrom: String = portalConfig.emailFrom
+  lazy private val portalApiHost: String = portalConfig.portalApiHost
+  lazy private val portalWebguiHost: String = portalConfig.portalWebguiHost
 
   lazy val sg = new SendGrid(apikey)
 

@@ -41,6 +41,10 @@ EXPOSE 9000
 # ${?GOOGLE_BUCKET_NAME}
 # ${?GOOGLE_PROJECT_ID}
 
+# ${?BASE_URL}
+# ${?VOCAB_URL}
+# ${?ADMIN_URL}
+
 CMD [ "/smart-portal-backend-1.0-SNAPSHOT/bin/smart-portal-backend", \
     "-Dconfig.resource=application.conf", \
     "-Dhttp.address=0.0.0.0", \

@@ -19,18 +19,16 @@
 
 package controllers
 
-import javax.inject._
 import controllers.security.{AuthTokenCookieKey, UserAgentHeader, UserAgentHeaderDefault}
+import javax.inject._
 import models.ErrorResult
 import models.users._
-import play.api.Configuration
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.libs.json.Writes._
 import play.api.libs.json._
 import play.api.libs.ws._
 import play.api.mvc._
-import services.UserService
-import utils.{ClassnameLogger, PasswordHashing}
+import services.{PortalConfig, UserService}
 
 import scala.concurrent.duration._
 
@@ -42,13 +40,9 @@ import scala.concurrent.duration._
   * @param ws
   */
 @Singleton
-class HomeController @Inject()(implicit configuration: Configuration,
+class HomeController @Inject()(portalConfig: PortalConfig,
                                userService: UserService,
-                               ws: WSClient) extends Controller with ClassnameLogger {
-
-  lazy private val reCaptchaSecret: String = configuration.getString("google.recaptcha.secret").getOrElse("secret api key")
-
-  val recaptcaVerifyUrl = "https://www.google.com/recaptcha/api/siteverify"
+                               ws: WSClient) extends ConfiguredController(portalConfig) {
 
   /**
     * CORS needs preflight OPTION
@@ -150,10 +144,10 @@ class HomeController @Inject()(implicit configuration: Configuration,
     */
   def recaptchaValidate(recaptcaChallenge: String): Action[AnyContent] = Action.async { implicit request =>
     // TODO check from where URL referer comes from
-    ws.url(recaptcaVerifyUrl)
+    ws.url(portalConfig.recaptcaVerifyUrl)
       .withHeaders("Accept" -> "application/json")
       .withRequestTimeout(10000.millis)
-      .withQueryString("secret" -> reCaptchaSecret,
+      .withQueryString("secret" -> portalConfig.reCaptchaSecret,
         "response" -> recaptcaChallenge).get().map {
       response =>
         val success = (response.json \ "success").as[Boolean]

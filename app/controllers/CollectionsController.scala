@@ -22,26 +22,26 @@ package controllers
 import java.net.URL
 import java.time.format.DateTimeFormatter
 import java.util.UUID
-import javax.inject._
 
 import controllers.security.{AuthenticationAction, OptionalAuthenticationAction, UserAction}
 import info.smart.models.owc100._
+import javax.inject._
 import models.ErrorResult
 import models.owc.OwcContextDAO
 import org.apache.commons.lang3.StringEscapeUtils
 import play.api.libs.json._
-import play.api.mvc.{Action, AnyContent, Controller}
-import services.{EmailService, OwcCollectionsService, UserService}
-import utils.ClassnameLogger
+import play.api.mvc.{Action, AnyContent}
+import services.{EmailService, OwcCollectionsService, PortalConfig, UserService}
 
 @Singleton
-class CollectionsController @Inject()(userService: UserService,
+class CollectionsController @Inject()(portalConfig: PortalConfig,
+                                      userService: UserService,
                                       emailService: EmailService,
                                       collectionsService: OwcCollectionsService,
                                       authenticationAction: AuthenticationAction,
                                       optionalAuthenticationAction: OptionalAuthenticationAction,
                                       userAction: UserAction)
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   /**
     * default actions composition
@@ -173,10 +173,10 @@ class CollectionsController @Inject()(userService: UserService,
         owcContext => {
           logger.trace(Json.prettyPrint(owcContext.toJson))
           // TODO mangle Context and Resource IDs
-          val idLink = new URL(s"https://portal.smart-project.info/context/document/${UUID.randomUUID().toString}")
+          val idLink = new URL(s"${portalConfig.portalExternalBaseLink}/context/document/${UUID.randomUUID().toString}")
           val updatedResources = owcContext.resource.map {
             owcResource =>
-              val idLink = new URL(s"https://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
+              val idLink = new URL(s"${portalConfig.portalExternalBaseLink}/context/resource/${UUID.randomUUID().toString}")
               owcResource.newOf(idLink)
           }
           val refreshedCopyOfContext = OwcContextDAO.refreshedCopy(owcContext, idLink, Some(updatedResources))
@@ -284,7 +284,7 @@ class CollectionsController @Inject()(userService: UserService,
             user = request.user, owcContextIdOption = Some(owcContextId)).headOption
           val updatedCollection = collectionDoc.map {
             o =>
-              val idLink = new URL(s"https://portal.smart-project.info/context/resource/${UUID.randomUUID().toString}")
+              val idLink = new URL(s"${portalConfig.portalExternalBaseLink}/context/resource/${UUID.randomUUID().toString}")
               val refreshedCopyOfResource = owcResource.newOf(idLink)
               val updated = o.copy(resource = o.resource ++ Seq(refreshedCopyOfResource))
               collectionsService.updateCollection(updated, request.user)
@@ -417,7 +417,7 @@ class CollectionsController @Inject()(userService: UserService,
       doc =>
         val docPart =
           s"""<url>
-             |  <loc>https://dev.smart-project.info/#${doc.id.getPath}</loc>
+             |  <loc>${portalConfig.portalExternalBaseLink}/#${doc.id.getPath}</loc>
              |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_DATE)}</lastmod>
              |  <priority>1.0</priority>
              |</url>
@@ -427,7 +427,7 @@ class CollectionsController @Inject()(userService: UserService,
           res =>
             val resPart =
               s"""<url>
-                 |  <loc>https://dev.smart-project.info/#${res.id.getPath}</loc>
+                 |  <loc>${portalConfig.portalExternalBaseLink}/#${res.id.getPath}</loc>
                  |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_DATE)}</lastmod>
                  |  <priority>1.0</priority>
                  |</url>

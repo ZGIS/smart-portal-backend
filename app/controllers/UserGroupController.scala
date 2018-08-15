@@ -20,20 +20,18 @@
 package controllers
 
 import java.util.UUID
-import javax.inject._
 
 import controllers.security._
+import javax.inject._
 import models.ErrorResult
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
-import play.api.Configuration
 import play.api.libs.json.{JsArray, JsError, JsValue, Json}
 import play.api.mvc._
 import services._
-import utils.ClassnameLogger
 
 @Singleton
-class UserGroupController @Inject()(implicit configuration: Configuration,
+class UserGroupController @Inject()(portalConfig: PortalConfig,
                                     userService: UserService,
                                     userGroupService: UserGroupService,
                                     emailService: EmailService,
@@ -41,7 +39,7 @@ class UserGroupController @Inject()(implicit configuration: Configuration,
                                     googleService: GoogleServicesDAO,
                                     authenticationAction: AuthenticationAction,
                                     userAction: UserAction)
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   /**
     * default actions composition, much more readable and "composable than original HasToken style implementation

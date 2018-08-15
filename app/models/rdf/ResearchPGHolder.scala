@@ -44,8 +44,8 @@ final case class ResearchPGHolder(titleName: String,
                                   leadOrganisationName: String,
                                   linkTo: String) extends ClassnameLogger {
 
-  def toRdf: String = {
-    s"""<skos:Concept rdf:about="http://vocab.smart-project.info/researchpg/term/$abbrev">
+  def toRdf(vocabUrl: String): String = {
+    s"""<skos:Concept rdf:about="${vocabUrl}/researchpg/term/$abbrev">
         <skos:label>$abbrev</skos:label>
         <dc:identifier>$abbrev</dc:identifier>
         <dc:title>$titleName</dc:title>
@@ -54,7 +54,7 @@ final case class ResearchPGHolder(titleName: String,
         <dc:description>$description</dc:description>
         <dc:creator>$leadOrganisationName</dc:creator>
         <dc:contributor>$contactPersonName</dc:contributor>
-        <skos:inCollection rdf:resource="http://vocab.smart-project.info/collection/researchpg/terms"/>
+        <skos:inCollection rdf:resource="${vocabUrl}/collection/researchpg/terms"/>
     </skos:Concept>
       """
   }
@@ -77,18 +77,20 @@ object ResearchPGHolder extends ClassnameLogger {
     * @return
     */
   def toCompleteCollectionRdf(skosCollection: List[ResearchPGHolder],
-                      date: String = ZonedDateTime.now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)): String = {
+                              vocabUrl: String,
+                              date: String = ZonedDateTime.now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)): String = {
 
     rdfSkosDcHeader +
-      ResearchPGHolder.toRdfCollectionHeader(skosCollection, date) +
-      skosCollection.map(pg => pg.toRdf).mkString("\n") +
+      ResearchPGHolder.toRdfCollectionHeader(skosCollection, date, vocabUrl) +
+      skosCollection.map(pg => pg.toRdf(vocabUrl)).mkString("\n") +
       rdfFooter
   }
 
   def toRdfCollectionHeader(skosCollection: List[ResearchPGHolder],
+                            vocabUrl: String,
                             date: String = ZonedDateTime.now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)): String = {
 
-    s"""<skos:Collection rdf:about="http://vocab.smart-project.info/collection/researchpg/terms">
+    s"""<skos:Collection rdf:about="${vocabUrl}/collection/researchpg/terms">
         <rdfs:label>Research programmes</rdfs:label>
         <dc:title>Research programmes</dc:title>
         <dc:description>Research programmes</dc:description>
@@ -100,7 +102,7 @@ object ResearchPGHolder extends ClassnameLogger {
         <dc:rights>CC-SA-BY-NC 3.0 NZ</dc:rights>
         <dcterms:issued>2017-11-17T20:55:00.215+13:00</dcterms:issued>
         <dcterms:modified>${date}</dcterms:modified>
-        ${skosCollection.map(sc => s"<skos:member>http://vocab.smart-project.info/researchpg/term/${sc.abbrev}</skos:member>").mkString("\n")}
+        ${skosCollection.map(sc => s"<skos:member>${vocabUrl}/researchpg/term/${sc.abbrev}</skos:member>").mkString("\n")}
     </skos:Collection>"""
   }
 }

@@ -19,11 +19,10 @@
 
 import java.io.File
 import java.net.URLEncoder
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
 import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId}
 
-import controllers.{appTimeZone, uploadDataPath}
 import models.sosdata.{SosCapabilities, SpreadsheetExport, Wml2Export}
 import play.api.mvc.Results
 

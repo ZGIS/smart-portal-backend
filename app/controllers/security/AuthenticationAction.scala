@@ -20,16 +20,14 @@
 package controllers.security
 
 import javax.inject.{Inject, Singleton}
-
 import models.ErrorResult
-import models.users.{User, UserSession}
 import play.api.http.MimeTypes
 import play.api.libs.json._
 import play.api.mvc.{ActionRefiner, _}
 import services.{AdminService, UserService}
 import utils.ClassnameLogger
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
 /**
   * Use [[ActionBuilder]] when you want to add before/after logic in your actions.

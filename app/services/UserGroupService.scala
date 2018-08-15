@@ -20,19 +20,18 @@
 package services
 
 import java.util.UUID
-import javax.inject._
 
+import javax.inject._
 import models.db.DatabaseSessionHolder
 import models.owc.OwcContextDAO
 import models.users._
-import play.api.Configuration
 import utils.ClassnameLogger
 
 @Singleton
 class UserGroupService @Inject()(dbSession: DatabaseSessionHolder,
-                                 configuration: Configuration) extends ClassnameLogger {
+                                 portalConfig: PortalConfig) extends ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val appTimeZone: String = portalConfig.appTimeZone
 
   /**
     * check if user can edit this particular group

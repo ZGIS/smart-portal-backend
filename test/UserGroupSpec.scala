@@ -23,6 +23,7 @@ import java.util.UUID
 import models.db.DatabaseSessionHolder
 import models.owc.OwcContextDAO
 import models.users._
+import services.PortalConfig
 import utils.PasswordHashing
 
 /**
@@ -40,7 +41,8 @@ class UserGroupSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
 
         val sessionHolder = new DatabaseSessionHolder(database)
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
 
         val testTime = ZonedDateTime.now.withZoneSameInstant(ZoneId.systemDefault())
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))

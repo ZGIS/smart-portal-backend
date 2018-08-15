@@ -20,8 +20,8 @@
 package services
 
 import java.util
-import javax.inject.Inject
 
+import javax.inject.Inject
 import models.metadata.ValidValues
 import play.api.Configuration
 import play.api.data.validation.ValidationError
@@ -47,10 +47,10 @@ trait ValidValuesReadsAdditions extends ClassnameLogger {
   * your application configuration.
   * @param configuration
   */
-class MetadataService @Inject()(configuration: Configuration) extends ClassnameLogger {
+class MetadataService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger {
 
   lazy val metadataValidValues: Option[util.List[Configuration]] =
-    configuration.getConfigList("smart.metadata.validValues")
+    portalConfig.metadataValidValues
 
   /**
     * returns an Option of ValidValues for a given topic. If topic os not found,

@@ -27,6 +27,7 @@ import models.owc._
 import models.users.{OwcContextsRightsMatrix, UserDAO}
 import org.locationtech.spatial4j.context.SpatialContext
 import play.api.libs.json._
+import services.PortalConfig
 import utils.PasswordHashing
 
 /**
@@ -62,7 +63,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
         val sessionHolder = new DatabaseSessionHolder(database)
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
 
         sessionHolder.viaConnection { implicit connection =>
@@ -121,7 +123,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
         val sessionHolder = new DatabaseSessionHolder(database)
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
 
         sessionHolder.viaConnection { implicit connection =>
@@ -165,7 +168,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
         val sessionHolder = new DatabaseSessionHolder(database)
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
         val rightsMatrix = Vector(OwcContextsRightsMatrix(
           owcContext1.id.toString,
@@ -225,7 +229,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
         val sessionHolder = new DatabaseSessionHolder(database)
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val testUser1 = demodata.testUser1(passwordHashing.createHash("testpass123"))
 
         sessionHolder.viaConnection { implicit connection =>
@@ -279,7 +284,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
         val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val cryptPass = passwordHashing.createHash("testpass123")
 
         val testUser1 = demodata.testUser1(cryptPass)
@@ -323,7 +329,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
         Json.parse(jsonTestCollection3).validate[OwcContext].isSuccess mustBe true
         val owcDoc3 = Json.parse(jsonTestCollection3).validate[OwcContext].get
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val cryptPass = passwordHashing.createHash("testpass123")
 
         val testUser3 = demodata.testUser3(cryptPass)
@@ -355,7 +362,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       Json.parse(jsonIngesterCollection4).validate[OwcContext].isSuccess mustBe true
       val owcDoc4 = Json.parse(jsonIngesterCollection4).validate[OwcContext].get
 
-      val passwordHashing = new PasswordHashing(app.configuration)
+      val portalConfig = new PortalConfig(app.configuration)
+      val passwordHashing = new PasswordHashing(portalConfig)
       val cryptPass = passwordHashing.createHash("testpass123")
 
       val testUser1 = demodata.testUser1(cryptPass)
@@ -421,7 +429,8 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       withTestDatabase { database =>
 
         // TODO SR this should be injected probably
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val cryptPass = passwordHashing.createHash("testpass123")
 
         val testUser1 = demodata.testUser1(cryptPass)
@@ -454,10 +463,11 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       }
     }
 
-    "Regression Test CollectionsService.addMdResourceToUserDefaultCollection(CSW_URL, mdMetadata, authUser)" in {
+    "Regression Test CollectionsService.addMdResourceToUserDefaultCollection(cswInternalApiUrl, mdMetadata, authUser)" in {
       withTestDatabase { database =>
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
         val cryptPass = passwordHashing.createHash("testpass123")
         val testUser1 = demodata.testUser1(cryptPass)
 

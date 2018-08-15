@@ -21,17 +21,16 @@ package controllers
 
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
-import javax.inject._
 
 import controllers.security._
+import javax.inject._
 import models.ErrorResult
 import models.users._
-import play.api.Configuration
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.mvc._
-import services.{EmailService, GoogleServicesDAO, OwcCollectionsService, UserService}
+import services._
 import uk.gov.hmrc.emailaddress.EmailAddress
-import utils.{ClassnameLogger, PasswordHashing}
+import utils.PasswordHashing
 
 import scala.util.{Failure, Success, Try}
 
@@ -77,7 +76,7 @@ final case class RegisterJs(email: EmailAddress,
   * @param userAction
   */
 @Singleton
-class UserController @Inject()(implicit configuration: Configuration,
+class UserController @Inject()(portalConfig: PortalConfig,
                                userService: UserService,
                                passwordHashing: PasswordHashing,
                                emailService: EmailService,
@@ -85,7 +84,7 @@ class UserController @Inject()(implicit configuration: Configuration,
                                googleService: GoogleServicesDAO,
                                authenticationAction: AuthenticationAction,
                                userAction: UserAction)
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   /**
     * default actions composition, much more readable and "composable than original HasToken style implementation
@@ -120,7 +119,7 @@ class UserController @Inject()(implicit configuration: Configuration,
             jsuser.lastname,
             cryptPass,
             s"${StatusToken.REGISTERED}:$regLinkId",
-            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
           userService.createUser(newUser).fold {
             logger.error("User create error.")
@@ -170,7 +169,7 @@ class UserController @Inject()(implicit configuration: Configuration,
             user.lastname,
             "***",
             s"${StatusToken.ACTIVE}:REGCONFIRMED",
-            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+            ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
           userService.updateNoPass(updateUser).fold {
             logger.error("User update error.")
@@ -278,7 +277,7 @@ class UserController @Inject()(implicit configuration: Configuration,
               firstname = incomingProfileJs.firstname,
               lastname = incomingProfileJs.lastname,
               laststatustoken = s"${StatusToken.ACTIVE}:PROFILEUPDATE",
-              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
             userService.updateNoPass(updateUser).fold {
               logger.error("Could not update User.")
@@ -299,7 +298,7 @@ class UserController @Inject()(implicit configuration: Configuration,
                 firstname = incomingProfileJs.firstname,
                 lastname = incomingProfileJs.lastname,
                 laststatustoken = s"${StatusToken.EMAILVALIDATION}:$regLinkId",
-                laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+                laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
               userService.updateNoPass(updateUser).fold {
                 logger.error("Could not update User.")
@@ -342,7 +341,7 @@ class UserController @Inject()(implicit configuration: Configuration,
             val updateUser = dbuser.copy(
               password = newCryptPass,
               laststatustoken = s"${StatusToken.ACTIVE}:PASSWORDUPDATE",
-              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+              laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
             userService.updatePassword(updateUser).fold {
               logger.error("Password update error.")
@@ -388,7 +387,7 @@ class UserController @Inject()(implicit configuration: Configuration,
           val resetLink = java.util.UUID.randomUUID().toString
           // good, update regstatus and send confirmation email
           val updateUser = user.copy(laststatustoken = s"${StatusToken.PASSWORDRESET}:$resetLink",
-            laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+            laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
           userService.updateNoPass(updateUser).fold {
             logger.error("User reset password request update error.")
@@ -436,7 +435,7 @@ class UserController @Inject()(implicit configuration: Configuration,
                 user.lastname,
                 cryptPass,
                 s"${StatusToken.ACTIVE}:PASSWORDUPDATED",
-                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+                ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
               userService.updatePassword(updateUser).fold {
                 logger.error("User update error.")
@@ -524,7 +523,7 @@ class UserController @Inject()(implicit configuration: Configuration,
                   familyName.getOrElse(""),
                   cryptPass,
                   s"${StatusToken.ACTIVE}:REGCONFIRMED",
-                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+                  ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
                 val createUserCall = userService.createUser(newUser)
 

@@ -22,14 +22,13 @@ package services
 import java.net.{URL, URLEncoder}
 import java.time._
 import java.util.UUID
-import javax.inject._
 
 import info.smart.models.owc100._
+import javax.inject._
 import models.db.DatabaseSessionHolder
 import models.gmd.MdMetadata
 import models.owc._
 import models.users._
-import play.api.Configuration
 import play.api.libs.json.Json
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.StringUtils._
@@ -39,11 +38,10 @@ import scala.util.{Success, Try}
 
 @Singleton
 class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
-                                      config: Configuration,
+                                      portalConfig: PortalConfig,
                                       userGroupService: UserGroupService) extends ClassnameLogger {
 
-  val configuration: play.api.Configuration = config
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val appTimeZone: String = portalConfig.appTimeZone
 
   /**
     * get user's default collection
@@ -182,7 +180,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 
     val defaultOwcDoc = OwcContext(
-      id = new URL(s"https://portal.smart-project.info/context/user/${propsUuid.toString}"),
+      id = new URL(s"${portalConfig.portalExternalBaseLink}/context/user/${propsUuid.toString}"),
       areaOfInterest = None,
       specReference = List(profileLink), // aka links.profiles[] & rel=profile
       contextMetadata = List(), // aka links.via[] & rel=via
@@ -227,7 +225,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     val author1 = OwcAuthor(Some(s"${user.firstname} ${user.lastname}"), Some(EmailAddress(user.email)), None, UUID.randomUUID())
 
     val defaultOwcDoc = OwcContext(
-      id = new URL(s"https://portal.smart-project.info/context/document/${propsUuid.toString}"),
+      id = new URL(s"${portalConfig.portalExternalBaseLink}/context/document/${propsUuid.toString}"),
       areaOfInterest = None,
       specReference = List(profileLink), // aka links.profiles[] & rel=profile
       contextMetadata = List(), // aka links.via[] & rel=via
@@ -263,31 +261,31 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
   /**
     * generate the plain MdMetadataa resource for a CSW entry reference
     *
-    * @param catalogUrl
+    * @param externalCatalogUrl
     * @param mdMetadata
     * @param userMetaEntry
     * @return
     */
-  def generateMdResource(catalogUrl: String, mdMetadata: MdMetadata, userMetaEntry: UserMetaRecord): OwcResource = {
+  def generateMdResource(externalCatalogUrl: String, mdMetadata: MdMetadata, userMetaEntry: UserMetaRecord): OwcResource = {
 
     lazy val bboxFormat = new BboxArrayFormat
 
     val updatedTime = Try(OffsetDateTime.of(mdMetadata.citation.ciDate, LocalTime.of(12, 0), ZoneOffset.UTC))
       .getOrElse(OffsetDateTime.now(ZoneId.systemDefault()))
-    // val baseLink = new URL(s"http://portal.smart-project.info/context/resource/${URLEncoder.encode(mdMetadata.fileIdentifier, "UTF-8")}_copy_${UUID.randomUUID().toString}")
-    val baseLink = new URL(s"https://portal.smart-project.info/context/resource/${userMetaEntry.uuid.toString}")
+
+    val baseLink = new URL(s"${portalConfig.portalExternalBaseLink}/context/resource/${userMetaEntry.uuid.toString}")
 
     val cswGetCapaOps = OwcOperation(
       code = "GetCapabilities",
       method = "GET",
       mimeType = Some("application/xml"),
-      requestUrl = new URL("https://portal.smart-project.info/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities"))
+      requestUrl = new URL(s"${portalConfig.portalExternalBaseLink}/pycsw/csw?SERVICE=CSW&VERSION=2.0.2&REQUEST=GetCapabilities"))
 
     val cswGetRecordOps = OwcOperation(
       code = "GetRecordById",
       method = "GET",
       mimeType = Some("application/xml"),
-      requestUrl = new URL(s"https://portal.smart-project.info/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}"))
+      requestUrl = new URL(s"${portalConfig.portalExternalBaseLink}/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=${mdMetadata.fileIdentifier}"))
 
     val cswOffering = OwcOffering(
       code = OwcOfferingType.CSW.code,
@@ -343,12 +341,12 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
   /**
     * add the MdResource OWC to colelction, becoming redundant?
     *
-    * @param catalogUrl
+    * @param externalCatalogUrl
     * @param owcResource
     * @param userMetaEntry
     * @return
     */
-  def addMdResourceToUserDefaultCollection(catalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
+  def addMdResourceToUserDefaultCollection(externalCatalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
 
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findByAccountSubject(userMetaEntry.users_accountsubject)
@@ -390,7 +388,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     }
   }
 
-  def updateMdResourceInUserDefaultCollection(catalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
+  def updateMdResourceInUserDefaultCollection(externalCatalogUrl: String, owcResource: OwcResource, userMetaEntry: UserMetaRecord): Boolean = {
 
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findByAccountSubject(userMetaEntry.users_accountsubject)
@@ -447,9 +445,9 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
       val user = UserDAO.findByAccountSubject(userFile.users_accountsubject)
       val email = user.map(u => EmailAddress(u.email))
       val owcAuthor = user.map(u => OwcAuthor(name = s"${u.firstname} ${u.lastname}".toOption(), email = email, uri = None))
-      val owcBaseLink = new URL(s"https://portal.smart-project.info/context/resource/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}")
+      val owcBaseLink = new URL(s"${portalConfig.portalExternalBaseLink}/context/resource/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}")
 
-      val consentableFilelink = s"https://portal.smart-project.info/context/file/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}"
+      val consentableFilelink = s"${portalConfig.portalExternalBaseLink}/context/file/${URLEncoder.encode(userFile.uuid.toString, "UTF-8")}"
 
       val viaLink = OwcLink(href = owcBaseLink,
         mimeType = Some("application/json"),

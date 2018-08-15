@@ -21,21 +21,20 @@ package services
 
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
-import javax.inject._
 
+import javax.inject._
 import models.ErrorResult
 import models.db.DatabaseSessionHolder
 import models.users._
-import play.api.Configuration
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.{ClassnameLogger, PasswordHashing}
 
 @Singleton
 class UserService @Inject()(dbSession: DatabaseSessionHolder,
                             val passwordHashing: PasswordHashing,
-                            configuration: Configuration) extends ClassnameLogger {
+                            portalConfig: PortalConfig) extends ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val appTimeZone: String = portalConfig.appTimeZone
 
   /**
     * basic auth compare
@@ -372,7 +371,7 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
     * @param authUser
     * @return
     */
-  def insertUserMetaRecordEntry(CSW_URL: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
+  def insertUserMetaRecordEntry(portalExternalBaseUrl: String, mdMetadataUuid: String, authUser: String): Option[UserMetaRecord] = {
     val userLookup = dbSession.viaConnection { implicit connection =>
       UserDAO.findUserByEmailAsString(authUser)
     }
@@ -388,7 +387,7 @@ class UserService @Inject()(dbSession: DatabaseSessionHolder,
           uuid = UUID.randomUUID(),
           users_accountsubject = user.accountSubject,
           originaluuid = mdMetadataUuid,
-          cswreference = s"https://portal.smart-project.info/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=$mdMetadataUuid",
+          cswreference = s"${portalExternalBaseUrl}/pycsw/csw?request=GetRecordById&service=CSW&version=2.0.2&elementSetName=full&outputSchema=http://www.isotc211.org/2005/gmd&id=$mdMetadataUuid",
           laststatustoken = "UPLOAD",
           laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
 

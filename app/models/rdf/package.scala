@@ -30,11 +30,9 @@ package object rdf {
   val papawai = "papawai_3.rdf"
   val researchpg = "research-pg.rdf"
 
-  val ADMIN_JENA_UPDATE_URL = "https://admin.smart-project.info/kubectl/jena/reload"
-
-  val rdfHeader =
-    """<?xml version="1.0" encoding="UTF-8"?>
-<rdf:RDF xmlns:categories="http://vocab.smart-project.info/categories#"
+  def rdfHeader(vocabUrl: String) =
+    s"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:categories="${vocabUrl}/categories#"
          xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
          xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
          xmlns:dc="http://purl.org/dc/elements/1.1/"
@@ -53,86 +51,86 @@ package object rdf {
       |         xmlns:xs="http://www.w3.org/2001/XMLSchema">
       |""".stripMargin
 
-  val rdfClassdef =
-    """    <rdf:Description rdf:ID="SacCategory">
+  def rdfClassdef(vocabUrl: String) =
+    s"""    <rdf:Description rdf:ID="SacCategory">
         <rdf:type rdf:resource="http://www.w3.org/2000/01/rdf-schema#Class"/>
         <rdfs:label xml:lang="en">category</rdfs:label>
         <rdfs:comment xml:lang="en">the basic category template</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
     </rdf:Description>
 
     <rdfs:Class rdf:ID="MainCategory">
         <rdfs:subClassOf rdf:resource="#SacCategory"/>
         <rdfs:label xml:lang="en">main category</rdfs:label>
         <rdfs:comment xml:lang="en">a main category</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
     </rdfs:Class>
 
     <rdfs:Class rdf:ID="ChildCategory">
         <rdfs:subClassOf rdf:resource="#MainCategory"/>
         <rdfs:label xml:lang="en">child category</rdfs:label>
         <rdfs:comment xml:lang="en">a child category</rdfs:comment>
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
     </rdfs:Class>
 
     <rdf:Property rdf:about="id" rdfs:label="id" rdfs:comment="id">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="hierarchy_number" rdfs:label="hierarchy_number" rdfs:comment="hierarchy_number">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="parent" rdfs:label="parent" rdfs:comment="parent">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="item_name" rdfs:label="item_name" rdfs:comment="item_name">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="description" rdfs:label="description" rdfs:comment="description">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="query_string" rdfs:label="query_string" rdfs:comment="query_string">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="query_string" rdfs:label="query_string" rdfs:comment="keyword_content">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="icon" rdfs:label="icon" rdfs:comment="icon">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <rdf:Property rdf:about="bg_icon" rdfs:label="bg_icon" rdfs:comment="bg_icon">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
 
     <!-- need to be a listable property, so that a class has several  -->
     <rdf:Property rdf:about="keyword_content" rdfs:label="keyword_content" rdfs:comment="keyword_content">
-        <rdfs:isDefinedBy rdf:resource="http://vocab.smart-project.info/categories#"/>
-        <rdfs:domain rdf:resource="http://vocab.smart-project.info/categories#SacCategory"/>
+        <rdfs:isDefinedBy rdf:resource="${vocabUrl}/categories#"/>
+        <rdfs:domain rdf:resource="${vocabUrl}/categories#SacCategory"/>
         <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
     </rdf:Property>
     """

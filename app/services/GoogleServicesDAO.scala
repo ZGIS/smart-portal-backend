@@ -22,16 +22,15 @@ package services
 import java.io.{File, FileReader}
 import java.nio.ByteBuffer
 import java.time.{LocalDateTime, ZoneOffset}
-import javax.inject.{Inject, Singleton}
 
 import com.google.api.client.googleapis.auth.oauth2.{GoogleAuthorizationCodeTokenRequest, GoogleClientSecrets, GoogleTokenResponse}
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.cloud.storage._
 import com.google.common.io.{Files => GoogleFiles}
+import javax.inject.{Inject, Singleton}
 import models.ErrorResult
 import models.users.GAuthCredentials
-import play.api.Configuration
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Writes._
 import play.api.libs.json._
@@ -80,7 +79,7 @@ object LocalBlobInfo {
 
 trait AbstractCloudServiceDAO {
 
-  val configuration: Configuration
+  val portalConfig: PortalConfig
 
   // def withProviderClientSecret[T](block: ProviderClientSecret => T): T
 
@@ -95,14 +94,11 @@ trait AbstractCloudServiceDAO {
   * @param configuration
   */
 @Singleton
-class GoogleServicesDAO @Inject()(val configuration: Configuration) extends AbstractCloudServiceDAO with ClassnameLogger {
+class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends AbstractCloudServiceDAO with ClassnameLogger {
 
-  val googleClientSecretFile: String = configuration.getString("google.client.secret")
-    .getOrElse("client_secret.json")
-  val googleStorageBucket: String = configuration.getString("google.storage.bucket")
-    .getOrElse("smart-backup")
-  val googleProjectId: String = configuration.getString("google.project.id")
-    .getOrElse("dynamic-cove-129211")
+  val googleClientSecretFile: String = portalConfig.googleClientSecretFile
+  val googleStorageBucket: String = portalConfig.googleStorageBucket
+  val googleProjectId: String = portalConfig.googleProjectId
 
   val gAuthRedirectUrl = "postmessage"
 
@@ -236,7 +232,7 @@ class GoogleServicesDAO @Inject()(val configuration: Configuration) extends Abst
       case Success(blob) if blob != null => Right(LocalBlobInfo.newFrom(blob))
       case Success(blob) if blob == null =>
         logger.error(s"Blob for $fileName retrieve from cloud storage returns file not found.")
-        Left(ErrorResult("Blob for $fileName retrieve from cloud storage returns file not found.", Some("Blob is NULL")))
+        Left(ErrorResult(s"Blob for $fileName retrieve from cloud storage returns file not found.", Some("Blob is NULL")))
       case Failure(ex) =>
         logger.error(s"Blob retrieve from cloud storage failed. ${ex.getLocalizedMessage}")
         Left(ErrorResult("Blob retrieve from cloud storage failed.", Some(ex.getLocalizedMessage)))

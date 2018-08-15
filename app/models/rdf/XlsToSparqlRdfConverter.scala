@@ -24,6 +24,7 @@ import java.time.ZonedDateTime
 
 import org.apache.poi.ss.usermodel.Row.MissingCellPolicy
 import org.apache.poi.ss.usermodel.{Cell, Sheet}
+import services.PortalConfigHolder
 import utils.ClassnameLogger
 
 import scala.util.Try
@@ -33,10 +34,12 @@ import scala.util.matching.Regex
   * encapsulates functionality to load in Categories definition XLSX
   * in order to produce the SPARQL RDF/XML output for update in Vocab server Jena Fuseki
   */
-class XlsToSparqlRdfConverter extends ClassnameLogger {
+class XlsToSparqlRdfConverter(portalConfigHolder: PortalConfigHolder) extends ClassnameLogger {
 
   // val regMatcher = "item_name\\s\\((?i:[\\d-\\w]+)\\)".r
   val regMatcher: Regex = "(?i:[\\d-\\w]+)".r
+
+  val fixedVocabHost: String = portalConfigHolder.vocabApiUrl
 
   /**
     * Maori macrons
@@ -229,7 +232,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
               bgIcon = bg_icon,
               categoryClass = categoryClass)
             logger.trace(s"after cat number $i")
-            logger.debug(cat.toRdf)
+            logger.debug(cat.toRdf(fixedVocabHost))
             buf += cat
 
           } catch {
@@ -276,7 +279,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
             contactPersonName,
             leadOrganisationName,
             linkTo)
-          logger.debug(pg.toRdf)
+          logger.debug(pg.toRdf(fixedVocabHost))
           buf += pg
 
         } catch {
@@ -344,7 +347,7 @@ class XlsToSparqlRdfConverter extends ClassnameLogger {
           }.toList
           val ssrh = SimplifiedSkosRdfHolder(id = corrected_id, values = tup_list)
           logger.debug(tup_list.mkString("::"))
-          logger.debug(ssrh.toRdf("gen", "term", "terms"))
+          logger.debug(ssrh.toRdf("gen", "term", "terms", fixedVocabHost))
           buf += ssrh
       }
     }

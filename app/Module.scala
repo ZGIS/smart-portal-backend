@@ -41,6 +41,7 @@ class Module extends AbstractModule {
     bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
 
     // utils and services
+    bind(classOf[PortalConfig]).asEagerSingleton()
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[UserService]).asEagerSingleton()

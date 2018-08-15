@@ -32,20 +32,18 @@ import models.rdf._
 import models.users._
 import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.poi.ss.usermodel.WorkbookFactory
-import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json._
 import play.api.libs.ws.WSClient
 import play.api.mvc._
 import services._
-import utils.ClassnameLogger
 
 import scala.concurrent.{ExecutionContext, Future}
 
 @Singleton
 class AdminController @Inject()(wsClient: WSClient,
                                 implicit val context: ExecutionContext,
-                                implicit val configuration: Configuration,
+                                portalConfig: PortalConfig,
                                 userService: UserService,
                                 emailService: EmailService,
                                 adminService: AdminService,
@@ -54,16 +52,16 @@ class AdminController @Inject()(wsClient: WSClient,
                                 authenticationAction: AuthenticationAction,
                                 userAction: UserAction,
                                 adminPermissionCheckAction: AdminPermissionCheckAction)
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   /**
     * the eawesome action composition, be aware that some perform DB queries
     */
   private val defaultAdminAction = authenticationAction andThen userAction andThen adminPermissionCheckAction
 
+  val ADMIN_JENA_UPDATE_URL: String = portalConfig.adminApiUrl + "/kubectl/jena/reload"
 
-
-  private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
+  private lazy val appSecret = portalConfig.appSecret
 
   /**
     * Am I Admin? conf value compared with logged-in user based on security token, as Angular guard
@@ -166,7 +164,7 @@ class AdminController @Inject()(wsClient: WSClient,
 
         val filename = theFile.filename
         val contentType = theFile.contentType
-        val pathOfUploadTmp = Paths.get(uploadDataPath)
+        val pathOfUploadTmp = Paths.get(portalConfig.uploadDataPath)
         val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sac-upload-")
         val tmpFile = new File(intermTempDir.resolve(filename).toAbsolutePath.toString)
         val handle = theFile.ref.moveTo(tmpFile)
@@ -178,8 +176,8 @@ class AdminController @Inject()(wsClient: WSClient,
           logger.info(s"${tuple1._1} + ${tuple1._2.mkString("; ")}")
         )
 
-        val converter = new XlsToSparqlRdfConverter
-        val now = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone))
+        val converter = new XlsToSparqlRdfConverter(portalConfig)
+        val now = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone))
         val date = now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
 
         val updateProcess = filename match {
@@ -188,13 +186,13 @@ class AdminController @Inject()(wsClient: WSClient,
             val worksheet = workbook.getSheet("science domain categories")
             val synonyms_sheets = workbook.getSheet("synonyms")
             val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
-            val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
+            val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories, portalConfig.vocabApiUrl, date)
             updateVocabBucketWith(fullRdfString, "categories_test.rdf", vocabBucketFolder)
           case "ResearchPrgrm.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
             val worksheet = workbook.getSheet("Research programmes")
             val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
-            val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs, date)
+            val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs, portalConfig.vocabApiUrl, date)
             updateVocabBucketWith(fullRdfString, "research-pg.rdf", vocabBucketFolder)
           case "AwahouGlossary.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
@@ -203,7 +201,7 @@ class AdminController @Inject()(wsClient: WSClient,
             val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
               .buildGenericSkosCollectionHolderFromSheets(
                 collectionInfoWorksheet, termsWorksheet)
-            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(portalConfig.vocabApiUrl)
             updateVocabBucketWith(fullRdfString, "awahou.rdf", vocabBucketFolder)
           case "FreshwaterGlossary.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
@@ -212,7 +210,7 @@ class AdminController @Inject()(wsClient: WSClient,
             val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
               .buildGenericSkosCollectionHolderFromSheets(
                 collectionInfoWorksheet, termsWorksheet)
-            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(portalConfig.vocabApiUrl)
             updateVocabBucketWith(fullRdfString, "glossary.rdf", vocabBucketFolder)
           case "NgmpParams.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
@@ -221,7 +219,7 @@ class AdminController @Inject()(wsClient: WSClient,
             val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
               .buildGenericSkosCollectionHolderFromSheets(
                 collectionInfoWorksheet, termsWorksheet)
-            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(portalConfig.vocabApiUrl)
             updateVocabBucketWith(fullRdfString, "ngmp.rdf", vocabBucketFolder)
           case "MaoriPapawaiLexicon.xlsx" =>
             val workbook = WorkbookFactory.create(tmpFile)
@@ -230,7 +228,7 @@ class AdminController @Inject()(wsClient: WSClient,
             val skosCollectionHolder: SimplifiedSkosRdfCollectionHolder = converter
               .buildGenericSkosCollectionHolderFromSheets(
                 collectionInfoWorksheet, termsWorksheet)
-            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
+            val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(portalConfig.vocabApiUrl)
             updateVocabBucketWith(fullRdfString, "papawai_3.rdf", vocabBucketFolder)
           case _ => logger.error("no file name retrieved unable to proceed")
             Left(ErrorResult("no file name retrieved unable to proceed.", None))

@@ -26,6 +26,7 @@ import models.users._
 import play.api.db.Database
 import play.api.db.evolutions.{ClassLoaderEvolutionsReader, Evolutions}
 import play.api.libs.json._
+import services.PortalConfig
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.PasswordHashing
 
@@ -50,7 +51,8 @@ class UserDAOSpec extends WithDefaultTestFullAppAndDatabase {
       // val sessionHolder = new SessionHolder(database)
       sessionHolder.viaConnection { implicit connection =>
 
-        val passwordHashing = new PasswordHashing(app.configuration)
+        val portalConfig = new PortalConfig(app.configuration)
+        val passwordHashing = new PasswordHashing(portalConfig)
 
         val regLinkId = java.util.UUID.randomUUID().toString
         val testPass = "testpass123"
@@ -154,7 +156,8 @@ class UserDAOSpec extends WithDefaultTestFullAppAndDatabase {
 
     "encode Users required Json" in {
 
-      val passwordHashing = new PasswordHashing(app.configuration)
+      val portalConfig = new PortalConfig(app.configuration)
+      val passwordHashing = new PasswordHashing(portalConfig)
       val testPass = "testpass123"
       val testPassUpd = "testpass123upd"
       val cryptPass = passwordHashing.createHash(testPass)

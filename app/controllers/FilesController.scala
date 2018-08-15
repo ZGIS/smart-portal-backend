@@ -23,17 +23,15 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
-import javax.inject.Inject
 
 import controllers.security._
+import javax.inject.Inject
 import models.ErrorResult
 import models.users.UserLinkLogging
-import play.api.Configuration
 import play.api.libs.Files.TemporaryFile
 import play.api.libs.json.{JsArray, Json}
 import play.api.mvc._
-import services.{GoogleServicesDAO, LocalBlobInfo, OwcCollectionsService, UserService}
-import utils.ClassnameLogger
+import services._
 
 import scala.util.Try
 
@@ -47,14 +45,14 @@ import scala.util.Try
   * @param authenticationAction
   * @param userAction
   */
-class FilesController @Inject()(implicit configuration: Configuration,
+class FilesController @Inject()(portalConfig: PortalConfig,
                                 userService: UserService,
                                 googleService: GoogleServicesDAO,
                                 collectionsService: OwcCollectionsService,
                                 optionalAuthenticationAction: OptionalAuthenticationAction,
                                 authenticationAction: AuthenticationAction,
                                 userAction: UserAction
-                               ) extends Controller with ClassnameLogger {
+                               ) extends ConfiguredController(portalConfig) {
   /**
     * upload a file to the portal, then it'll be forwarded to Google Cloud bucket and reference stored
     *
@@ -66,7 +64,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
 
         val filename = theFile.filename
         val contentType = theFile.contentType
-        val pathOfUploadTmp = Paths.get(uploadDataPath)
+        val pathOfUploadTmp = Paths.get(portalConfig.uploadDataPath)
         val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sac-upload-")
         val tmpFile = new File(intermTempDir.resolve(filename).toAbsolutePath.toString)
         val handle = theFile.ref.moveTo(tmpFile)
@@ -129,7 +127,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
       } {
         userFile =>
           val logRequest = UserLinkLogging(id = None,
-            timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+            timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)),
             ipaddress = Some(request.remoteAddress),
             useragent = request.headers.get(UserAgentHeader),
             email = request.optionalSession.map(_.email),
@@ -227,7 +225,7 @@ class FilesController @Inject()(implicit configuration: Configuration,
   def logLinkInfo(link: String): Action[Unit] = optionalAuthenticationAction(parse.empty) {
     request =>
       val logRequest = UserLinkLogging(id = None,
-        timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+        timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)),
         ipaddress = Some(request.remoteAddress),
         useragent = request.headers.get(UserAgentHeader),
         email = request.optionalSession.map(_.email),

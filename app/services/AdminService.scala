@@ -22,13 +22,10 @@ package services
 
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.UUID
-import javax.inject._
 
-import com.google.cloud.storage.Blob
-import controllers.ProfileJs
+import javax.inject._
 import models.db.DatabaseSessionHolder
 import models.users._
-import play.api.Configuration
 import play.api.cache.CacheApi
 import utils.{ClassnameLogger, PasswordHashing}
 
@@ -36,9 +33,9 @@ import utils.{ClassnameLogger, PasswordHashing}
 class AdminService @Inject()(dbSession: DatabaseSessionHolder,
                              val passwordHashing: PasswordHashing,
                              cache: CacheApi,
-                             configuration: Configuration) extends ClassnameLogger {
+                             portalConfig: PortalConfig) extends ClassnameLogger {
 
-  lazy private val appTimeZone: String = configuration.getString("datetime.timezone").getOrElse("Pacific/Auckland")
+  lazy private val appTimeZone: String = portalConfig.appTimeZone
 
   /**
     * check if email is allowed in configured admin list
@@ -47,7 +44,7 @@ class AdminService @Inject()(dbSession: DatabaseSessionHolder,
     * @return
     */
   def isAdmin(email: String): Boolean = {
-    configuration.getStringList("smart.admin.emails").fold(false)(
+    portalConfig.adminEmails.fold(false)(
       adminList => if (adminList.contains(email)) true else false)
   }
 

@@ -38,7 +38,7 @@ import play.api.mvc.{Action, Results}
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import play.api.{Application, Configuration}
-import services.{EmailService, OwcCollectionsService}
+import services.{EmailService, OwcCollectionsService, PortalConfig}
 import uk.gov.hmrc.emailaddress.{EmailAddress, PlayJsonFormats}
 import utils.PasswordHashing
 
@@ -55,6 +55,7 @@ class HomeControllerSpec extends WithDefaultTestFullAppAndDatabase with Results 
   // creating "fake" Guice Module to inject mock service instances into test application, with the required dependencies
   class FakeModule extends AbstractModule {
     def configure(): Unit = {
+      bind(classOf[PortalConfig]).asEagerSingleton()
       bind(classOf[PasswordHashing]).asEagerSingleton()
       bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
       bind(classOf[WSClient]).toInstance(mockws)

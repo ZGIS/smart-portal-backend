@@ -33,15 +33,17 @@ case class SimplifiedSkosRdfHolder(id: String,
 
   val languageTagReg: Regex = """(\w+):(\w+)\@(\D\D)""".r
 
-  def toRdf(ssrch: SimplifiedSkosRdfCollectionHolder): String = {
+  def toRdf(ssrch: SimplifiedSkosRdfCollectionHolder, vocabUrl: String): String = {
     toRdf(ssrch.collectionIdentifier,
       ssrch.hierarchy,
-      ssrch.hierarchyPlural)
+      ssrch.hierarchyPlural,
+      vocabUrl)
   }
 
   def toRdf(collectionIdentifier: String,
             hierarchy: String,
-            hierarchyPlural: String): String = {
+            hierarchyPlural: String,
+            vocabUrl: String): String = {
 
     val coreElemsText = values.map { tup =>
       tup._1 match {
@@ -54,7 +56,7 @@ case class SimplifiedSkosRdfHolder(id: String,
       }
     }
 
-    s"""<skos:Concept rdf:about="http://vocab.smart-project.info/$collectionIdentifier/$hierarchy/$id">
+    s"""<skos:Concept rdf:about="${vocabUrl}/$collectionIdentifier/$hierarchy/$id">
         ${coreElemsText.mkString("")}
         <skos:inCollection rdf:resource="http://vocab.smart-project.info/collection/$collectionIdentifier/$hierarchyPlural"/>
     </skos:Concept>
@@ -74,17 +76,17 @@ case class SimplifiedSkosRdfCollectionHolder(
                                               skosCollection: List[SimplifiedSkosRdfHolder]
                                             ) extends ClassnameLogger {
 
-  def toCompleteCollectionRdf: String = {
+  def toCompleteCollectionRdf(vocabUrl: String): String = {
 
     rdfSkosDcHeader +
-      toRdfCollectionHeader +
-      skosCollection.map(sc => sc.toRdf(collectionIdentifier, hierarchy, hierarchyPlural)).mkString("\n") +
+      toRdfCollectionHeader(vocabUrl) +
+      skosCollection.map(sc => sc.toRdf(collectionIdentifier, hierarchy, hierarchyPlural, vocabUrl)).mkString("\n") +
       rdfFooter
   }
 
-  def toRdfCollectionHeader: String = {
+  def toRdfCollectionHeader(vocabUrl: String): String = {
 
-    s"""<skos:Collection rdf:about="http://vocab.smart-project.info/collection/${collectionIdentifier}/${hierarchyPlural}">
+    s"""<skos:Collection rdf:about="${vocabUrl}/collection/${collectionIdentifier}/${hierarchyPlural}">
         <rdfs:label>${collectionLabel}</rdfs:label>
         <dc:title>${collectionTitle}</dc:title>
         <dc:description>${collectionDescription}</dc:description>

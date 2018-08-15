@@ -21,6 +21,9 @@ import java.io.{File, FileInputStream}
 
 import models.rdf._
 import org.apache.poi.ss.usermodel.WorkbookFactory
+import play.api.Configuration
+import services.PortalConfigHolder
+import java.util.{List => JList, ArrayList => JArrayList}
 
 import scala.xml.NodeSeq
 
@@ -35,12 +38,33 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
   private lazy val skosAwahouResource1 = this.getClass().getResource("sparql/AwahouGlossary.xlsx")
   private lazy val skosPapawaiResource1 = this.getClass().getResource("sparql/MaoriPapawaiLexicon.xlsx")
 
+  object TestDataPortalConfig extends PortalConfigHolder {
+    val appTimeZone: String = "Pacific/Auckland"
+    val sendgridApikey: String = ""
+    val emailFrom: String = ""
+    val uploadDataPath: String = ""
+    val appSecret: String = ""
+    val cswInternalApiUrl: String = ""
+    val portalExternalBaseLink: String = ""
+    val portalApiHost: String = ""
+    val portalWebguiHost: String = ""
+    val cswIngesterInternalApiUrl: String = ""
+    val vocabApiUrl: String = "http://vocab.smart-project.info"
+    val adminApiUrl: String = ""
+    val adminEmails: Option[JList[String]] = Some(new JArrayList[String]())
+    val reCaptchaSecret: String = ""
+    val recaptcaVerifyUrl: String = ""
+    val googleClientSecretFile: String = ""
+    val googleStorageBucket: String = ""
+    val googleProjectId: String = ""
+    val metadataValidValues: Option[JList[Configuration]] = Some(new JArrayList[Configuration]())
+  }
 
   "Categories XLSX to RDFS Writers" should {
 
     "succeed on building" in {
 
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       // val inp = new FileInputStream("workbook.xlsx");
       val inp = new FileInputStream(categoriesResource1.getPath)
@@ -50,7 +74,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
       val synonyms_sheets = workbook.getSheet("synonyms")
 
       val rdfCategories = converter.buildCategoriesFromSheet(worksheet, synonyms_sheets)
-      val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories)
+      val fullRdfString: String = CategoryHolder.toCompleteRdf(rdfCategories, TestDataPortalConfig.vocabApiUrl)
 
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
@@ -59,7 +83,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
       val categoriesRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
       categoriesRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
-      logger.warn(rdfCategories(3).toRdf)
+      logger.warn(rdfCategories(3).toRdf(TestDataPortalConfig.vocabApiUrl))
     }
   }
 
@@ -67,21 +91,21 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
     "succeed on building" in {
 
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       val workbook = WorkbookFactory.create(new File(researchPgResource1.getPath))
       val worksheet = workbook.getSheet("Research programmes")
 
       val rdfResearchPGs = converter.buildResearchPgFromSheet(worksheet)
 
-      val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs)
+      val fullRdfString: String = ResearchPGHolder.toCompleteCollectionRdf(rdfResearchPGs, TestDataPortalConfig.vocabApiUrl)
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
 //
 //      Files.write(Paths.get("researchpg.xml"), fullRdfString.getBytes(StandardCharsets.UTF_8))
 
       val researchPgRdfXmlGen = scala.xml.XML.loadString(fullRdfString)
-      logger.warn(rdfResearchPGs.last.toRdf)
+      logger.warn(rdfResearchPGs.last.toRdf(TestDataPortalConfig.vocabApiUrl))
       researchPgRdfXmlGen.isInstanceOf[NodeSeq] mustBe true
 
     }
@@ -92,7 +116,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     "succeed on building" in {
 
       logger.warn("Generic SKOS DC XLSX to RDF/SKOS Writer for NGMP")
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       val workbook = WorkbookFactory.create(new File(skosNgmpResource1.getPath))
       val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
@@ -102,8 +126,8 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
         .buildGenericSkosCollectionHolderFromSheets(
           collectionInfoWorksheet, termsWorksheet)
 
-      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
-      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(TestDataPortalConfig.vocabApiUrl)
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder, TestDataPortalConfig.vocabApiUrl))
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
 //
@@ -118,7 +142,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
     "succeed on building" in {
 
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       val workbook = WorkbookFactory.create(new File(skosGlossaryResource1.getPath))
       val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
@@ -128,8 +152,8 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
         .buildGenericSkosCollectionHolderFromSheets(
           collectionInfoWorksheet, termsWorksheet)
 
-      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
-      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(TestDataPortalConfig.vocabApiUrl)
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder, TestDataPortalConfig.vocabApiUrl))
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
 //
@@ -143,7 +167,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
   "Generic SKOS DC XLSX to RDF/SKOS Writer for Awahou" should {
 
     "succeed on building" in {
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       val workbook = WorkbookFactory.create(new File(skosAwahouResource1.getPath))
       val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
@@ -153,8 +177,8 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
         .buildGenericSkosCollectionHolderFromSheets(
           collectionInfoWorksheet, termsWorksheet)
 
-      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
-      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(TestDataPortalConfig.vocabApiUrl)
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder, TestDataPortalConfig.vocabApiUrl))
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
 //
@@ -169,7 +193,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
 
     "succeed on building" in {
 
-      val converter = new XlsToSparqlRdfConverter
+      val converter = new XlsToSparqlRdfConverter(TestDataPortalConfig)
 
       val workbook = WorkbookFactory.create(new File(skosPapawaiResource1.getPath))
       val collectionInfoWorksheet = workbook.getSheet("CollectionInfo")
@@ -179,8 +203,8 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
         .buildGenericSkosCollectionHolderFromSheets(
           collectionInfoWorksheet, termsWorksheet)
 
-      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf
-      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder))
+      val fullRdfString: String = skosCollectionHolder.toCompleteCollectionRdf(TestDataPortalConfig.vocabApiUrl)
+      logger.warn(skosCollectionHolder.skosCollection.last.toRdf(skosCollectionHolder, TestDataPortalConfig.vocabApiUrl))
 //      import java.nio.file.{Paths, Files}
 //      import java.nio.charset.StandardCharsets
 //

@@ -21,11 +21,12 @@
 package utils
 
 import java.security.{MessageDigest, SecureRandom}
+
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
 import javax.inject.{Inject, Singleton}
-
-import play.api.{Configuration, Logger}
+import play.api.Logger
+import services.PortalConfig
 
 /**
   * provides reasonably current  and secure measures of password hashing as of 2015/2016
@@ -37,7 +38,7 @@ import play.api.{Configuration, Logger}
   * @param configuration
   */
 @Singleton
-class PasswordHashing @Inject()(configuration: Configuration) {
+class PasswordHashing @Inject()(portalConfig: PortalConfig) {
 
   val PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA1"
 
@@ -51,7 +52,7 @@ class PasswordHashing @Inject()(configuration: Configuration) {
 
   val DEFAULT_SECRET = "insecure"
 
-  private lazy val appSecret = configuration.getString("play.crypto.secret").getOrElse("insecure")
+  private lazy val appSecret = portalConfig.appSecret
 
   Logger.debug("Reading configuration application.secret")
 

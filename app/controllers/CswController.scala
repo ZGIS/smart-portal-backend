@@ -27,12 +27,11 @@ import controllers.security.{AuthenticationAction, UserAction}
 import javax.inject.{Inject, Provider}
 import models.ErrorResult
 import models.gmd.MdMetadata
+import play.api.Application
 import play.api.libs.json._
 import play.api.libs.ws.{WSClient, WSResponse}
-import play.api.mvc.{Action, AnyContent, Controller, Result}
-import play.api.{Application, Configuration}
-import services.{MetadataService, OwcCollectionsService, UserService}
-import utils.ClassnameLogger
+import play.api.mvc.{Action, AnyContent, Result}
+import services.{MetadataService, OwcCollectionsService, PortalConfig, UserService}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.xml.Elem
@@ -51,7 +50,7 @@ import scala.xml.Elem
   * @param authenticationAction
   * @param userAction
   */
-class CswController @Inject()(implicit configuration: Configuration,
+class CswController @Inject()(portalConfig: PortalConfig,
                               userService: UserService,
                               wsClient: WSClient,
                               implicit val context: ExecutionContext,
@@ -61,7 +60,7 @@ class CswController @Inject()(implicit configuration: Configuration,
                               authenticationAction: AuthenticationAction,
                               userAction: UserAction
                              )
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   lazy val app = appProvider.get()
   lazy val cswtInsertResource = app.resource("csw/transaction.insert.xml").get
@@ -72,11 +71,13 @@ class CswController @Inject()(implicit configuration: Configuration,
   lazy val cswtUpdateXml = scala.xml.XML.load(cswtUpdateResource)
   lazy val cswtDeleteXml = scala.xml.XML.load(cswtDeleteResource)
 
-  val CSW_URL: String = configuration.getString("smart.csw.url").getOrElse("http://localhost:8000")
-  val CSW_OPERATIONS_METADATA_URL: String = s"${CSW_URL}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
+  val cswInternalApiUrl: String = portalConfig.cswInternalApiUrl
+  val portalExternalBaseUrl: String = portalConfig.portalExternalBaseLink
+
+  val CSW_OPERATIONS_METADATA_URL: String = s"${cswInternalApiUrl}/?service=CSW&version=2.0.2&request=GetCapabilities&sections=OperationsMetadata"
 
   //TODO SR maybe we should configure these URLs somewhere else? Or even better generate some access lib from the ingester?
-  val INGESTER_URL: String = configuration.getString("smart.csw-ingester.url").getOrElse("http://localhost:9001")
+  val INGESTER_URL: String = portalConfig.cswIngesterInternalApiUrl
   val INGESTER_UPDATE_INDEX_URL: String = s"$INGESTER_URL/cswi-api/v1/buildIndex/smart"
   val INGESTER_DELETE_FROM_INDEX_URL: String = s"$INGESTER_URL/cswi-api/v1/deleteFromIndex"
 
@@ -135,7 +136,7 @@ class CswController @Inject()(implicit configuration: Configuration,
         val finalXML = transaction.transform
 
         logger.debug(s"finalXml: ${finalXML.toString()}")
-        wsClient.url(CSW_URL).post(finalXML.toString())
+        wsClient.url(cswInternalApiUrl).post(finalXML.toString())
       }
 
       updateIngesterIndexResponse <- {
@@ -236,15 +237,15 @@ class CswController @Inject()(implicit configuration: Configuration,
               },
               uuid => {
                 logger.debug(s"Adding ${mdMetadata.fileIdentifier} to default collection of ${request.user.email}.")
-                val userMetaEntryOk = userService.insertUserMetaRecordEntry(CSW_URL, mdMetadata.fileIdentifier, request.user.email)
+                val userMetaEntryOk = userService.insertUserMetaRecordEntry(portalExternalBaseUrl, mdMetadata.fileIdentifier, request.user.email)
                 userMetaEntryOk.fold {
                   val error = ErrorResult(s"Could not add ${mdMetadata.fileIdentifier} to your collection of ${request.user.email}.", None)
                   logger.warn(error.message)
                   BadRequest(Json.toJson(error)).as(JSON)
                 } {
                   userMetaEntry =>
-                    val owcresource = collectionsService.generateMdResource(CSW_URL, mdMetadata, userMetaEntry)
-                    val added = collectionsService.addMdResourceToUserDefaultCollection(CSW_URL, owcresource, userMetaEntry)
+                    val owcresource = collectionsService.generateMdResource(portalExternalBaseUrl, mdMetadata, userMetaEntry)
+                    val added = collectionsService.addMdResourceToUserDefaultCollection(portalExternalBaseUrl, owcresource, userMetaEntry)
                     if (added) {
                       Ok(Json.obj("type" -> "success", "fileIdentifier" -> userMetaEntry.originaluuid.toString, "userMetaRecord" -> Json.toJson(userMetaEntry),
                         "message" -> s"Inserted as ${uuid.toString} and reference entry with with refUuid ${userMetaEntry.uuid} added to your data collection."))
@@ -316,7 +317,7 @@ class CswController @Inject()(implicit configuration: Configuration,
                   val userMetaEntryUpdateOk = userService.findUserMetaRecordByXmlMetaOriginalUuid(uuid)
                     .flatMap { mt =>
                       val newMeta = mt.copy(laststatustoken = "UPDATE",
-                        laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)))
+                        laststatuschange = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
                       userService.updateUserMetaRecord(newMeta)
                     }
 
@@ -326,8 +327,8 @@ class CswController @Inject()(implicit configuration: Configuration,
                     BadRequest(Json.toJson(error)).as(JSON)
                   } {
                     userMetaEntry =>
-                      val owcresource = collectionsService.generateMdResource(CSW_URL, mdMetadata, userMetaEntry)
-                      val updated = collectionsService.updateMdResourceInUserDefaultCollection(CSW_URL, owcresource, userMetaEntry)
+                      val owcresource = collectionsService.generateMdResource(portalExternalBaseUrl, mdMetadata, userMetaEntry)
+                      val updated = collectionsService.updateMdResourceInUserDefaultCollection(portalExternalBaseUrl, owcresource, userMetaEntry)
                       if (updated) {
                         Ok(Json.obj("type" -> "success", "fileIdentifier" -> userMetaEntry.originaluuid.toString, "userMetaRecord" -> Json.toJson(userMetaEntry),
                           "message" -> s"Updated ${uuid.toString} and reference entry with refUuid ${userMetaEntry.uuid} in your data collection."))

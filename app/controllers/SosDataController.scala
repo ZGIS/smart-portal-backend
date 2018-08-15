@@ -24,22 +24,20 @@ import java.net.URLEncoder
 import java.nio.file.{Files, Paths}
 import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId, ZonedDateTime}
-import javax.inject.Inject
 
 import com.norbitltd.spoiwo.model.Sheet
 import com.norbitltd.spoiwo.natures.csv.CsvProperties
 import controllers.security.{OptionalAuthenticationAction, RefererHeader, UserAgentHeader}
+import javax.inject.Inject
 import models.ErrorResult
 import models.sosdata.SosDataFormat.{CSV, OM20, WML2, XLS}
 import models.sosdata._
 import models.tvp.XmlTvpParser
 import models.users.UserLinkLogging
-import play.api.Configuration
 import play.api.libs.json.{JsError, JsValue, Json}
 import play.api.libs.ws.{WSClient, WSResponse}
-import play.api.mvc.{Action, AnyContent, Controller}
-import services.UserService
-import utils.ClassnameLogger
+import play.api.mvc.{Action, AnyContent}
+import services.{PortalConfig, UserService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -49,16 +47,16 @@ import scala.util.Try
 /**
   * Controller to access SOS server and return parsed time series to frontend.
   */
-class SosDataController @Inject()(implicit configuration: Configuration,
+class SosDataController @Inject()(portalConfig: PortalConfig,
                                   val userService: UserService,
                                   optionalAuthenticationAction: OptionalAuthenticationAction,
                                   wsClient: WSClient)
-  extends Controller with ClassnameLogger {
+  extends ConfiguredController(portalConfig) {
 
   lazy val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-  private lazy val wml2Exporter = new Wml2Export(appTimeZone)
-  private lazy val xlsExporter = new SpreadsheetExport(appTimeZone)
+  private lazy val wml2Exporter = new Wml2Export(portalConfig.appTimeZone)
+  private lazy val xlsExporter = new SpreadsheetExport(portalConfig.appTimeZone)
 
   val GET_CAPABILITIES_XML =
     """<?xml version="1.0" encoding="UTF-8"?>
@@ -159,7 +157,7 @@ class SosDataController @Inject()(implicit configuration: Configuration,
               val result = timeseries.copy(data = Some(tsdata), uom = Some(uom))
 
               val logRequest = UserLinkLogging(id = None,
-                timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+                timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)),
                 ipaddress = Some(request.remoteAddress),
                 useragent = request.headers.get(UserAgentHeader),
                 email = request.optionalSession.map(_.email),
@@ -269,7 +267,7 @@ class SosDataController @Inject()(implicit configuration: Configuration,
                   }
 
                   val logRequest = UserLinkLogging(id = None,
-                    timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(appTimeZone)),
+                    timestamp = ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)),
                     ipaddress = Some(request.remoteAddress),
                     useragent = request.headers.get(UserAgentHeader),
                     email = request.optionalSession.map(_.email),
@@ -318,10 +316,10 @@ class SosDataController @Inject()(implicit configuration: Configuration,
   def exportToFile(responseFormat: Option[String], sosResponseAsText: String,
                    sosCapabilities: SosCapabilities, sosXmlRequest: String): Either[ErrorResult, File] = {
 
-    val updatedTime = OffsetDateTime.now(ZoneId.of(appTimeZone))
+    val updatedTime = OffsetDateTime.now(ZoneId.of(portalConfig.appTimeZone))
     val fileNameTmpl = "export-" + Try(URLEncoder.encode(sosCapabilities.title.replace(" ", "_"), "UTF-8")
       + "-" + updatedTime.format(formatter)).getOrElse("-sosdata")
-    val pathOfUploadTmp = Paths.get(uploadDataPath)
+    val pathOfUploadTmp = Paths.get(portalConfig.uploadDataPath)
     val intermTempDir = Files.createTempDirectory(pathOfUploadTmp, "sos-export-")
 
     responseFormat match {

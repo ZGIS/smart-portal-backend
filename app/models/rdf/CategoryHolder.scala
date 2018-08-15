@@ -51,14 +51,14 @@ final case class CategoryHolder(hierarchyNumber: String = "",
                           icon: String = "",
                           bgIcon: String = "",
                           categoryClass: String = "MainCategory") extends ClassnameLogger {
-  def toRdf: String = {
+  def toRdf(vocabUrl: String): String = {
     val keywordString = if (keywordContent.nonEmpty) {
       keywordContent.mkString(", ")
     } else {
       ""
     }
 
-    s"""<rdf:Description rdf:about="http://vocab.smart-project.info/categories.rdfs#$id"
+    s"""<rdf:Description rdf:about="${vocabUrl}/categories.rdfs#$id"
        |    categories:id="$id"
        |    categories:hierarchy_number="$hierarchyNumber"
        |    categories:parent="$parent"
@@ -68,7 +68,7 @@ final case class CategoryHolder(hierarchyNumber: String = "",
        |    categories:query_string="$queryString"
        |    categories:icon="$icon"
        |    categories:bg_icon="$bgIcon">
-       |  <rdf:type rdf:resource="http://vocab.smart-project.info/categories.rdfs#$categoryClass"/>
+       |  <rdf:type rdf:resource="${vocabUrl}/categories.rdfs#$categoryClass"/>
        |</rdf:Description>""".stripMargin
   }
 }
@@ -79,15 +79,16 @@ final case class CategoryHolder(hierarchyNumber: String = "",
 object CategoryHolder extends ClassnameLogger {
 
   def toCompleteRdf(skosCollection: List[CategoryHolder],
+                    vocabUrl: String,
                     date: String = ZonedDateTime.now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)): String = {
     val comment = s"""<!-- # Generated $date from Excel GW portal list of icons new structure PortalCategories.xlsx / Worksheet: science domain categories -->"""
-    val rdfCategories = skosCollection.map(cat => cat.toRdf)
+    val rdfCategories = skosCollection.map(cat => cat.toRdf(vocabUrl))
 
-    rdfHeader +
+    rdfHeader(vocabUrl) +
       "\n" +
       comment +
       "\n" +
-      rdfClassdef +
+      rdfClassdef(vocabUrl) +
       rdfCategories.mkString("\n") +
       rdfFooter
   }

@@ -1,0 +1,1613 @@
+<html>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <title id="title">
+          services/PortalConfig.scala.html
+        </title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/css/theme.default.min.css" type="text/css"/><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.tablesorter/2.20.1/js/jquery.tablesorter.min.js"></script><link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css" type="text/css"/><script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script><script type="text/javascript">
+        $(document).ready(function() {$(".tablesorter").tablesorter();});
+      </script>
+        <style>
+          table.codegrid { font-family: monospace; font-size: 12px; width: auto!important; }table.statementlist { width: auto!important; font-size: 13px; } table.codegrid td { padding: 0!important; border: 0!important } table td.linenumber { width: 40px!important; } 
+        </style>
+      </head>
+      <body style="font-family: monospace;">
+        <ul class="nav nav-tabs">
+          <li>
+            <a href="#codegrid" data-toggle="tab">Codegrid</a>
+          </li>
+          <li>
+            <a href="#statementlist" data-toggle="tab">Statement List</a>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane active" id="codegrid">
+            <pre style='font-size: 12pt; font-family: courier;'>1 <span style=''>/*
+</span>2 <span style=''> * Copyright (c) 2011-2017 Interfaculty Department of Geoinformatics, University of
+</span>3 <span style=''> * Salzburg (Z_GIS) &amp; Institute of Geological and Nuclear Sciences Limited (GNS Science)
+</span>4 <span style=''> * in the SMART Aquifer Characterisation (SAC) programme funded by the New Zealand
+</span>5 <span style=''> * Ministry of Business, Innovation and Employment (MBIE) and Department of Geography,
+</span>6 <span style=''> * University of Tartu, Estonia (UT) under the ETAG Mobilitas Pluss grant No. MOBJD233.
+</span>7 <span style=''> *
+</span>8 <span style=''> * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+</span>9 <span style=''> * you may not use this file except in compliance with the License.
+</span>10 <span style=''> * You may obtain a copy of the License at
+</span>11 <span style=''> *
+</span>12 <span style=''> *    http://www.apache.org/licenses/LICENSE-2.0
+</span>13 <span style=''> *
+</span>14 <span style=''> * Unless required by applicable law or agreed to in writing, software
+</span>15 <span style=''> * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+</span>16 <span style=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+</span>17 <span style=''> * See the License for the specific language governing permissions and
+</span>18 <span style=''> * limitations under the License.
+</span>19 <span style=''> */
+</span>20 <span style=''>
+</span>21 <span style=''>
+</span>22 <span style=''>package services
+</span>23 <span style=''>
+</span>24 <span style=''>import java.util.{List =&gt; JList}
+</span>25 <span style=''>
+</span>26 <span style=''>import javax.inject.{Inject, Singleton}
+</span>27 <span style=''>import play.api.Configuration
+</span>28 <span style=''>import utils.ClassnameLogger
+</span>29 <span style=''>
+</span>30 <span style=''>import scala.collection.JavaConverters._
+</span>31 <span style=''>
+</span>32 <span style=''>trait PortalConfigHolder {
+</span>33 <span style=''>
+</span>34 <span style=''>  type JListString = JList[String]
+</span>35 <span style=''>  type JListConfiguration = JList[Configuration]
+</span>36 <span style=''>
+</span>37 <span style=''>  val appTimeZone: String
+</span>38 <span style=''>  val sendgridApikey: String
+</span>39 <span style=''>  val emailFrom: String
+</span>40 <span style=''>  val uploadDataPath: String
+</span>41 <span style=''>  val appSecret: String
+</span>42 <span style=''>  val cswInternalApiUrl: String
+</span>43 <span style=''>  val portalExternalBaseLink: String
+</span>44 <span style=''>  val cswIngesterInternalApiUrl: String
+</span>45 <span style=''>  val vocabApiUrl: String
+</span>46 <span style=''>  val adminApiUrl: String
+</span>47 <span style=''>  val adminEmails: Option[JListString]
+</span>48 <span style=''>  val reCaptchaSecret: String
+</span>49 <span style=''>  val recaptcaVerifyUrl: String
+</span>50 <span style=''>  val googleClientSecretFile: String
+</span>51 <span style=''>  val googleStorageBucket: String
+</span>52 <span style=''>  val googleProjectId: String
+</span>53 <span style=''>  val metadataValidValues: Option[JListConfiguration]
+</span>54 <span style=''>}
+</span>55 <span style=''>
+</span>56 <span style=''>/**
+</span>57 <span style=''>  * provides reasonably easy central place for the variable config values from application.conf
+</span>58 <span style=''>  * for emailing and app defaults, if any of these fails, we don't want the program to start
+</span>59 <span style=''>  *
+</span>60 <span style=''>  * @param configuration
+</span>61 <span style=''>  */
+</span>62 <span style=''>@Singleton
+</span>63 <span style=''>class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigHolder with ClassnameLogger {
+</span>64 <span style=''>
+</span>65 <span style=''>  implicit class OptionOps[A](opt: Option[A]) {
+</span>66 <span style=''>    def check(msg: String): Option[A] = {
+</span>67 <span style=''>      if (</span><span style='background: #AEF1AE'>opt.isEmpty</span><span style=''>) {
+</span>68 <span style=''>        </span><span style='background: #F0ADAD'>new NoSuchElementException(&quot;Config not found for &quot; + msg)</span><span style=''>
+</span>69 <span style=''>      }
+</span>70 <span style=''>      </span><span style='background: #AEF1AE'>opt</span><span style=''>
+</span>71 <span style=''>    }
+</span>72 <span style=''>  }
+</span>73 <span style=''>
+</span>74 <span style=''>  /**
+</span>75 <span style=''>    *
+</span>76 <span style=''>    * fail early
+</span>77 <span style=''>    *
+</span>78 <span style=''>    * @param a
+</span>79 <span style=''>    * @param path
+</span>80 <span style=''>    * @return
+</span>81 <span style=''>    */
+</span>82 <span style=''>  private def getOrReportStr(path: String): Option[String] = {
+</span>83 <span style=''>    val a = </span><span style='background: #AEF1AE'>configuration.getString(path)</span><span style=''>
+</span>84 <span style=''>    </span><span style='background: #AEF1AE'>a.check(path)</span><span style=''>
+</span>85 <span style=''>  }
+</span>86 <span style=''>
+</span>87 <span style=''>  private def getOrReportEmpty[A](a: Option[A], path: String): Option[A] = {
+</span>88 <span style=''>    </span><span style='background: #AEF1AE'>a.fold({
+</span>89 <span style=''></span><span style='background: #AEF1AE'>      </span><span style='background: #F0ADAD'>throw new NoSuchElementException(&quot;Config not found for &quot; + path)</span><span style='background: #AEF1AE'>
+</span>90 <span style=''></span><span style='background: #AEF1AE'>    })({
+</span>91 <span style=''></span><span style='background: #AEF1AE'>      lst =&gt;
+</span>92 <span style=''></span><span style='background: #AEF1AE'>        lst match {
+</span>93 <span style=''></span><span style='background: #AEF1AE'>          case x: JListConfiguration =&gt;
+</span>94 <span style=''></span><span style='background: #AEF1AE'>            if (x.size() &lt;= 0) {
+</span>95 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>logger.error(&quot;Config is empty list for &quot; + path)</span><span style='background: #AEF1AE'>
+</span>96 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>97 <span style=''></span><span style='background: #AEF1AE'>            Some(lst)
+</span>98 <span style=''></span><span style='background: #AEF1AE'>          case x: JListString  =&gt;
+</span>99 <span style=''></span><span style='background: #AEF1AE'>            if (</span><span style='background: #F0ADAD'>x.size() &lt;= 0</span><span style='background: #AEF1AE'>) {
+</span>100 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>logger.error(&quot;Config is empty list for &quot; + path)</span><span style='background: #AEF1AE'>
+</span>101 <span style=''></span><span style='background: #AEF1AE'>            } else {
+</span>102 <span style=''></span><span style='background: #AEF1AE'>              </span><span style='background: #F0ADAD'>x.asScala.foreach(s =&gt; logger.info(path + &quot; value: &quot; + s))</span><span style='background: #AEF1AE'>
+</span>103 <span style=''></span><span style='background: #AEF1AE'>            }
+</span>104 <span style=''></span><span style='background: #AEF1AE'>            </span><span style='background: #F0ADAD'>Some(lst)</span><span style='background: #AEF1AE'>
+</span>105 <span style=''></span><span style='background: #AEF1AE'>          case _ =&gt; </span><span style='background: #F0ADAD'>Some(lst)</span><span style='background: #AEF1AE'>
+</span>106 <span style=''></span><span style='background: #AEF1AE'>        }
+</span>107 <span style=''></span><span style='background: #AEF1AE'>    })</span><span style=''>
+</span>108 <span style=''>  }
+</span>109 <span style=''>
+</span>110 <span style=''>  /**
+</span>111 <span style=''>    * datetime.timezone=&quot;Pacific/Auckland&quot;
+</span>112 <span style=''>    *   datetime.timezone=${?APP_TIMEZONE}
+</span>113 <span style=''>    */
+</span>114 <span style=''>  val appTimeZone: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;datetime.timezone&quot;).get</span><span style=''>
+</span>115 <span style=''>
+</span>116 <span style=''>  /**
+</span>117 <span style=''>    * email.sendgrid.apikey=&quot;your api key&quot;
+</span>118 <span style=''>    *   email.sendgrid.apikey=${?SENDGRID_API_KEY}
+</span>119 <span style=''>    *   email.sendgrid.from=&quot;portal@smart-project.info&quot;
+</span>120 <span style=''>    */
+</span>121 <span style=''>  val sendgridApikey: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;email.sendgrid.apikey&quot;).get</span><span style=''>
+</span>122 <span style=''>  val emailFrom: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;email.sendgrid.from&quot;).get</span><span style=''>
+</span>123 <span style=''>
+</span>124 <span style=''>  /**
+</span>125 <span style=''>    * upload.datapath = &quot;/tmp&quot;
+</span>126 <span style=''>    *     upload.datapath = ${?UPLOAD_DATA_DIR}
+</span>127 <span style=''>    */
+</span>128 <span style=''>  val uploadDataPath: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.upload.datapath&quot;).get</span><span style=''>
+</span>129 <span style=''>
+</span>130 <span style=''>  /**
+</span>131 <span style=''>    * the appsecret for hashing purposes
+</span>132 <span style=''>    */
+</span>133 <span style=''>  val appSecret: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;play.crypto.secret&quot;).get</span><span style=''>
+</span>134 <span style=''>
+</span>135 <span style=''>  /**
+</span>136 <span style=''>    * csw.url = &quot;http://localhost:8000&quot;
+</span>137 <span style=''>    *     csw.url = ${?PYCSW_URL}
+</span>138 <span style=''>    */
+</span>139 <span style=''>  val cswInternalApiUrl: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.csw.url&quot;).get</span><span style=''>
+</span>140 <span style=''>
+</span>141 <span style=''>  /**
+</span>142 <span style=''>    * # base link for contexts and resources identifiers, also consentableFilelink: https://portal.smart-project.info
+</span>143 <span style=''>    * # email service lazy private val portalApiHost and portalWebguiHost: Option[String] = &quot;https://dev.smart-project.info&quot;
+</span>144 <span style=''>    * # site map website base url: https://dev.smart-project.info
+</span>145 <span style=''>    * # CSW external URL? eg for requestUrl getCapaRequest for new metadata/cswreference
+</span>146 <span style=''>    *     base.url = &quot;https://nz-groundwater-hub.org&quot;
+</span>147 <span style=''>    *     base.url = ${?BASE_URL}
+</span>148 <span style=''>    *
+</span>149 <span style=''>    * lazy private val portalApiHost: Option[String] = &quot;https://dev.smart-project.info&quot;
+</span>150 <span style=''>    * lazy private val portalWebguiHost: Option[String] = &quot;https://dev.smart-project.info&quot;
+</span>151 <span style=''>    */
+</span>152 <span style=''>  val portalExternalBaseLink: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.base.url&quot;).get</span><span style=''>
+</span>153 <span style=''>
+</span>154 <span style=''>  /**
+</span>155 <span style=''>    * csw-ingester.url = &quot;http://localhost:9001&quot;
+</span>156 <span style=''>    * csw-ingester.url = ${?CSWI_URL}
+</span>157 <span style=''>    */
+</span>158 <span style=''>  val cswIngesterInternalApiUrl: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.csw-ingester.url&quot;).get</span><span style=''>
+</span>159 <span style=''>
+</span>160 <span style=''>  /**
+</span>161 <span style=''>    * # vocab urls for categoeries etc: http://vocab.smart-project.info
+</span>162 <span style=''>    *   vocab.url = &quot;http://vocab.smart-project.info&quot;
+</span>163 <span style=''>    *   vocab.url = ${?VOCAB_URL}
+</span>164 <span style=''>    */
+</span>165 <span style=''>  val vocabApiUrl: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.vocab.url&quot;).get</span><span style=''>
+</span>166 <span style=''>
+</span>167 <span style=''>  /**
+</span>168 <span style=''>    * # vocab control update ADMIN_JENA_UPDATE_URL = &quot;https://admin.smart-project.info/kubectl/jena/reload&quot;
+</span>169 <span style=''>    *   admin.url = &quot;https://admin.smart-project.info&quot;
+</span>170 <span style=''>    *   admin.url = ${?ADMIN_URL}
+</span>171 <span style=''>    */
+</span>172 <span style=''>  val adminApiUrl: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;smart.admin.url&quot;).get</span><span style=''>
+</span>173 <span style=''>
+</span>174 <span style=''>  /**
+</span>175 <span style=''>    * admin.emails = [&quot;allixender@gmail.com&quot; ,&quot;m.moreau@gns.cri.nz&quot;]
+</span>176 <span style=''>    *     admin.emails = ${?ADMIN_EMAILS}
+</span>177 <span style=''>    */
+</span>178 <span style=''>  val adminEmails: Option[JListString] = </span><span style='background: #AEF1AE'>getOrReportEmpty(
+</span>179 <span style=''></span><span style='background: #AEF1AE'>    configuration.getStringList(&quot;smart.admin.emails&quot;), &quot;smart.admin.emails&quot;)</span><span style=''>
+</span>180 <span style=''>
+</span>181 <span style=''>  /**
+</span>182 <span style=''>    *
+</span>183 <span style=''>    */
+</span>184 <span style=''>  val reCaptchaSecret: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;google.recaptcha.secret&quot;).get</span><span style=''>
+</span>185 <span style=''>
+</span>186 <span style=''>  /**
+</span>187 <span style=''>    *
+</span>188 <span style=''>    */
+</span>189 <span style=''>  val recaptcaVerifyUrl = </span><span style='background: #AEF1AE'>&quot;https://www.google.com/recaptcha/api/siteverify&quot;</span><span style=''>
+</span>190 <span style=''>
+</span>191 <span style=''>  /**
+</span>192 <span style=''>    * client.secret = ${?GOOGLE_CLIENT_SECRET}
+</span>193 <span style=''>    */
+</span>194 <span style=''>  val googleClientSecretFile: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;google.client.secret&quot;).get</span><span style=''>
+</span>195 <span style=''>
+</span>196 <span style=''>  /**
+</span>197 <span style=''>    * storage.bucket = ${?GOOGLE_BUCKET_NAME}
+</span>198 <span style=''>    */
+</span>199 <span style=''>  val googleStorageBucket: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;google.storage.bucket&quot;).get</span><span style=''>
+</span>200 <span style=''>
+</span>201 <span style=''>  /**
+</span>202 <span style=''>    * project.id = ${?GOOGLE_PROJECT_ID}
+</span>203 <span style=''>    */
+</span>204 <span style=''>  val googleProjectId: String = </span><span style='background: #AEF1AE'>getOrReportStr(&quot;google.project.id&quot;).get</span><span style=''>
+</span>205 <span style=''>
+</span>206 <span style=''>  /**
+</span>207 <span style=''>    * include &quot;metadata/valid-values.conf&quot;
+</span>208 <span style=''>    */
+</span>209 <span style=''>  val metadataValidValues: Option[JListConfiguration] = </span><span style='background: #AEF1AE'>getOrReportEmpty(
+</span>210 <span style=''></span><span style='background: #AEF1AE'>    configuration.getConfigList(&quot;smart.metadata.validValues&quot;), &quot;smart.metadata.validValues&quot;)</span><span style=''>
+</span>211 <span style=''>
+</span>212 <span style=''>}
+</span></pre>
+          </div>
+          <div class="tab-pane" id="statementlist">
+            <table cellspacing="0" cellpadding="0" class="table statementlist">
+      <tr>
+        <th>Line</th>
+        <th>Stmt Id</th>
+        <th>Pos</th>
+        <th>Tree</th>
+        <th>Symbol</th>
+        <th>Code</th>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          12237
+        </td>
+        <td>
+          2304
+          -
+          2315
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.isEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          OptionOps.this.opt.isEmpty
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          12242
+        </td>
+        <td>
+          2300
+          -
+          2300
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          67
+        </td>
+        <td>
+          12241
+        </td>
+        <td>
+          2300
+          -
+          2300
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          12240
+        </td>
+        <td>
+          2327
+          -
+          2384
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          java.util.NoSuchElementException.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new scala.`package`.NoSuchElementException(&quot;Config not found for &quot;.+(msg))
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          12239
+        </td>
+        <td>
+          2327
+          -
+          2384
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.util.NoSuchElementException.&lt;init&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          new scala.`package`.NoSuchElementException(&quot;Config not found for &quot;.+(msg))
+        </td>
+      </tr><tr>
+        <td>
+          68
+        </td>
+        <td>
+          12238
+        </td>
+        <td>
+          2354
+          -
+          2383
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Config not found for &quot;.+(msg)
+        </td>
+      </tr><tr>
+        <td>
+          70
+        </td>
+        <td>
+          12243
+        </td>
+        <td>
+          2399
+          -
+          2402
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          services.PortalConfig.OptionOps.opt
+        </td>
+        <td style="background: #AEF1AE">
+          OptionOps.this.opt
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          12245
+        </td>
+        <td>
+          2578
+          -
+          2607
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.Configuration.getString
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.configuration.getString(path, PortalConfig.this.configuration.getString$default$2)
+        </td>
+      </tr><tr>
+        <td>
+          83
+        </td>
+        <td>
+          12244
+        </td>
+        <td>
+          2592
+          -
+          2592
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          play.api.Configuration.getString$default$2
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.configuration.getString$default$2
+        </td>
+      </tr><tr>
+        <td>
+          84
+        </td>
+        <td>
+          12246
+        </td>
+        <td>
+          2612
+          -
+          2625
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.PortalConfig.OptionOps.check
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.OptionOps[String](a).check(path)
+        </td>
+      </tr><tr>
+        <td>
+          89
+        </td>
+        <td>
+          12247
+        </td>
+        <td>
+          2727
+          -
+          2791
+        </td>
+        <td>
+          Throw
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #F0ADAD">
+          throw new scala.`package`.NoSuchElementException(&quot;Config not found for &quot;.+(path))
+        </td>
+      </tr><tr>
+        <td>
+          90
+        </td>
+        <td>
+          12265
+        </td>
+        <td>
+          2712
+          -
+          3312
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Option.fold
+        </td>
+        <td style="background: #AEF1AE">
+          a.fold[Option[A]](throw new scala.`package`.NoSuchElementException(&quot;Config not found for &quot;.+(path)))(((lst: A) =&gt; lst match {
+  case (x @ (_: PortalConfig.this.JListConfiguration)) =&gt; {
+    if (x.size().&lt;=(0))
+      PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+    else
+      ();
+    scala.Some.apply[A](lst)
+  }
+  case (x @ (_: PortalConfig.this.JListString)) =&gt; {
+    if (x.size().&lt;=(0))
+      PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+    else
+      scala.collection.JavaConverters.asScalaBufferConverter[String](x).asScala.foreach[Unit](((s: String) =&gt; PortalConfig.this.logger.info(path.+(&quot; value: &quot;).+(s))));
+    scala.Some.apply[A](lst)
+  }
+  case _ =&gt; scala.Some.apply[A](lst)
+}))
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          12252
+        </td>
+        <td>
+          2886
+          -
+          2886
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          12248
+        </td>
+        <td>
+          2890
+          -
+          2903
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&lt;=
+        </td>
+        <td style="background: #AEF1AE">
+          x.size().&lt;=(0)
+        </td>
+      </tr><tr>
+        <td>
+          94
+        </td>
+        <td>
+          12253
+        </td>
+        <td>
+          2886
+          -
+          2886
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          ()
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          12249
+        </td>
+        <td>
+          2934
+          -
+          2968
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Config is empty list for &quot;.+(path)
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          12251
+        </td>
+        <td>
+          2921
+          -
+          2969
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+        </td>
+      </tr><tr>
+        <td>
+          95
+        </td>
+        <td>
+          12250
+        </td>
+        <td>
+          2921
+          -
+          2969
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+        </td>
+      </tr><tr>
+        <td>
+          97
+        </td>
+        <td>
+          12254
+        </td>
+        <td>
+          2996
+          -
+          3005
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #AEF1AE">
+          scala.Some.apply[A](lst)
+        </td>
+      </tr><tr>
+        <td>
+          99
+        </td>
+        <td>
+          12255
+        </td>
+        <td>
+          3056
+          -
+          3069
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Int.&lt;=
+        </td>
+        <td style="background: #F0ADAD">
+          x.size().&lt;=(0)
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          12258
+        </td>
+        <td>
+          3087
+          -
+          3135
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          12257
+        </td>
+        <td>
+          3087
+          -
+          3135
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.error
+        </td>
+        <td style="background: #F0ADAD">
+          PortalConfig.this.logger.error(&quot;Config is empty list for &quot;.+(path))
+        </td>
+      </tr><tr>
+        <td>
+          100
+        </td>
+        <td>
+          12256
+        </td>
+        <td>
+          3100
+          -
+          3134
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          &quot;Config is empty list for &quot;.+(path)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          12261
+        </td>
+        <td>
+          3171
+          -
+          3229
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.collection.IterableLike.foreach
+        </td>
+        <td style="background: #F0ADAD">
+          scala.collection.JavaConverters.asScalaBufferConverter[String](x).asScala.foreach[Unit](((s: String) =&gt; PortalConfig.this.logger.info(path.+(&quot; value: &quot;).+(s))))
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          12260
+        </td>
+        <td>
+          3194
+          -
+          3228
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.LoggerLike.info
+        </td>
+        <td style="background: #F0ADAD">
+          PortalConfig.this.logger.info(path.+(&quot; value: &quot;).+(s))
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          12259
+        </td>
+        <td>
+          3206
+          -
+          3227
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          java.lang.String.+
+        </td>
+        <td style="background: #F0ADAD">
+          path.+(&quot; value: &quot;).+(s)
+        </td>
+      </tr><tr>
+        <td>
+          102
+        </td>
+        <td>
+          12262
+        </td>
+        <td>
+          3171
+          -
+          3229
+        </td>
+        <td>
+          Block
+        </td>
+        <td>
+          scala.collection.IterableLike.foreach
+        </td>
+        <td style="background: #F0ADAD">
+          scala.collection.JavaConverters.asScalaBufferConverter[String](x).asScala.foreach[Unit](((s: String) =&gt; PortalConfig.this.logger.info(path.+(&quot; value: &quot;).+(s))))
+        </td>
+      </tr><tr>
+        <td>
+          104
+        </td>
+        <td>
+          12263
+        </td>
+        <td>
+          3256
+          -
+          3265
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[A](lst)
+        </td>
+      </tr><tr>
+        <td>
+          105
+        </td>
+        <td>
+          12264
+        </td>
+        <td>
+          3286
+          -
+          3295
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          scala.Some.apply
+        </td>
+        <td style="background: #F0ADAD">
+          scala.Some.apply[A](lst)
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          12267
+        </td>
+        <td>
+          3445
+          -
+          3484
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;datetime.timezone&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          114
+        </td>
+        <td>
+          12266
+        </td>
+        <td>
+          3460
+          -
+          3479
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;datetime.timezone&quot;
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          12269
+        </td>
+        <td>
+          3680
+          -
+          3723
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;email.sendgrid.apikey&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          121
+        </td>
+        <td>
+          12268
+        </td>
+        <td>
+          3695
+          -
+          3718
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;email.sendgrid.apikey&quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          12270
+        </td>
+        <td>
+          3765
+          -
+          3786
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;email.sendgrid.from&quot;
+        </td>
+      </tr><tr>
+        <td>
+          122
+        </td>
+        <td>
+          12271
+        </td>
+        <td>
+          3750
+          -
+          3791
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;email.sendgrid.from&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          12272
+        </td>
+        <td>
+          3931
+          -
+          3954
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.upload.datapath&quot;
+        </td>
+      </tr><tr>
+        <td>
+          128
+        </td>
+        <td>
+          12273
+        </td>
+        <td>
+          3916
+          -
+          3959
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.upload.datapath&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          12275
+        </td>
+        <td>
+          4041
+          -
+          4081
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;play.crypto.secret&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          133
+        </td>
+        <td>
+          12274
+        </td>
+        <td>
+          4056
+          -
+          4076
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;play.crypto.secret&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          12276
+        </td>
+        <td>
+          4219
+          -
+          4234
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.csw.url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          139
+        </td>
+        <td>
+          12277
+        </td>
+        <td>
+          4204
+          -
+          4239
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.csw.url&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          12279
+        </td>
+        <td>
+          4964
+          -
+          5000
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.base.url&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          152
+        </td>
+        <td>
+          12278
+        </td>
+        <td>
+          4979
+          -
+          4995
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.base.url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          12281
+        </td>
+        <td>
+          5144
+          -
+          5188
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.csw-ingester.url&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          158
+        </td>
+        <td>
+          12280
+        </td>
+        <td>
+          5159
+          -
+          5183
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.csw-ingester.url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          12283
+        </td>
+        <td>
+          5391
+          -
+          5428
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.vocab.url&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          165
+        </td>
+        <td>
+          12282
+        </td>
+        <td>
+          5406
+          -
+          5423
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.vocab.url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          12285
+        </td>
+        <td>
+          5668
+          -
+          5705
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;smart.admin.url&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          172
+        </td>
+        <td>
+          12284
+        </td>
+        <td>
+          5683
+          -
+          5700
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.admin.url&quot;
+        </td>
+      </tr><tr>
+        <td>
+          178
+        </td>
+        <td>
+          12288
+        </td>
+        <td>
+          5872
+          -
+          5966
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.PortalConfig.getOrReportEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportEmpty[java.util.List[String]](PortalConfig.this.configuration.getStringList(&quot;smart.admin.emails&quot;), &quot;smart.admin.emails&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          12287
+        </td>
+        <td>
+          5945
+          -
+          5965
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.admin.emails&quot;
+        </td>
+      </tr><tr>
+        <td>
+          179
+        </td>
+        <td>
+          12286
+        </td>
+        <td>
+          5894
+          -
+          5943
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.Configuration.getStringList
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.configuration.getStringList(&quot;smart.admin.emails&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          12290
+        </td>
+        <td>
+          6019
+          -
+          6064
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;google.recaptcha.secret&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          184
+        </td>
+        <td>
+          12289
+        </td>
+        <td>
+          6034
+          -
+          6059
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;google.recaptcha.secret&quot;
+        </td>
+      </tr><tr>
+        <td>
+          189
+        </td>
+        <td>
+          12291
+        </td>
+        <td>
+          6111
+          -
+          6160
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;https://www.google.com/recaptcha/api/siteverify&quot;
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          12293
+        </td>
+        <td>
+          6261
+          -
+          6303
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;google.client.secret&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          194
+        </td>
+        <td>
+          12292
+        </td>
+        <td>
+          6276
+          -
+          6298
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;google.client.secret&quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          12294
+        </td>
+        <td>
+          6415
+          -
+          6438
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;google.storage.bucket&quot;
+        </td>
+      </tr><tr>
+        <td>
+          199
+        </td>
+        <td>
+          12295
+        </td>
+        <td>
+          6400
+          -
+          6443
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;google.storage.bucket&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          204
+        </td>
+        <td>
+          12297
+        </td>
+        <td>
+          6531
+          -
+          6570
+        </td>
+        <td>
+          Select
+        </td>
+        <td>
+          scala.Option.get
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportStr(&quot;google.project.id&quot;).get
+        </td>
+      </tr><tr>
+        <td>
+          204
+        </td>
+        <td>
+          12296
+        </td>
+        <td>
+          6546
+          -
+          6565
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;google.project.id&quot;
+        </td>
+      </tr><tr>
+        <td>
+          209
+        </td>
+        <td>
+          12300
+        </td>
+        <td>
+          6684
+          -
+          6794
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          services.PortalConfig.getOrReportEmpty
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.getOrReportEmpty[java.util.List[play.api.Configuration]](PortalConfig.this.configuration.getConfigList(&quot;smart.metadata.validValues&quot;), &quot;smart.metadata.validValues&quot;)
+        </td>
+      </tr><tr>
+        <td>
+          210
+        </td>
+        <td>
+          12299
+        </td>
+        <td>
+          6765
+          -
+          6793
+        </td>
+        <td>
+          Literal
+        </td>
+        <td>
+          &lt;nosymbol&gt;
+        </td>
+        <td style="background: #AEF1AE">
+          &quot;smart.metadata.validValues&quot;
+        </td>
+      </tr><tr>
+        <td>
+          210
+        </td>
+        <td>
+          12298
+        </td>
+        <td>
+          6706
+          -
+          6763
+        </td>
+        <td>
+          Apply
+        </td>
+        <td>
+          play.api.Configuration.getConfigList
+        </td>
+        <td style="background: #AEF1AE">
+          PortalConfig.this.configuration.getConfigList(&quot;smart.metadata.validValues&quot;)
+        </td>
+      </tr>
+    </table>
+          </div>
+        </div>
+      </body>
+    </html>

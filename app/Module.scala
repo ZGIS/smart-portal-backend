@@ -45,7 +45,7 @@ class Module extends AbstractModule {
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
     bind(classOf[UserService]).asEagerSingleton()
-    bind(classOf[MetadataService]).asEagerSingleton()
+
     bind(classOf[OwcCollectionsService]).asEagerSingleton()
     bind(classOf[GoogleServicesDAO]).asEagerSingleton()
 
@@ -54,5 +54,7 @@ class Module extends AbstractModule {
     bind(classOf[MdMetadataExtentTrait]).toInstance(MdMetadataExtent)
     bind(classOf[MdMetadataResponsiblePartyTrait]).toInstance(MdMetadataResponsibleParty)
     bind(classOf[MdMetadataDistributionTrait]).toInstance(MdMetadataDistribution)
+
+    bind(classOf[MetadataService]).asEagerSingleton()
   }
 }

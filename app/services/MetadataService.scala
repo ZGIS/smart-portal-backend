@@ -21,7 +21,7 @@ package services
 
 import java.util
 
-import javax.inject.Inject
+import javax.inject.{Inject, Singleton}
 import models.metadata.ValidValues
 import play.api.Configuration
 import play.api.data.validation.ValidationError
@@ -47,6 +47,7 @@ trait ValidValuesReadsAdditions extends ClassnameLogger {
   * your application configuration.
   * @param configuration
   */
+@Singleton
 class MetadataService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger {
 
   lazy val metadataValidValues: Option[util.List[Configuration]] =

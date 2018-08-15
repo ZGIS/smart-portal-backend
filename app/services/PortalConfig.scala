@@ -21,17 +21,19 @@
 
 package services
 
-import java.util.{List => JList, ArrayList => JArrayList}
+import java.util.{List => JList}
 
 import javax.inject.{Inject, Singleton}
 import play.api.Configuration
 import utils.ClassnameLogger
 
-import scala.util.{Try, Failure, Success}
 import scala.collection.JavaConverters._
 
-
 trait PortalConfigHolder {
+
+  type JListString = JList[String]
+  type JListConfiguration = JList[Configuration]
+
   val appTimeZone: String
   val sendgridApikey: String
   val emailFrom: String
@@ -39,18 +41,16 @@ trait PortalConfigHolder {
   val appSecret: String
   val cswInternalApiUrl: String
   val portalExternalBaseLink: String
-  val portalApiHost: String
-  val portalWebguiHost: String
   val cswIngesterInternalApiUrl: String
   val vocabApiUrl: String
   val adminApiUrl: String
-  val adminEmails: Option[JList[String]]
+  val adminEmails: Option[JListString]
   val reCaptchaSecret: String
   val recaptcaVerifyUrl: String
   val googleClientSecretFile: String
   val googleStorageBucket: String
   val googleProjectId: String
-  val metadataValidValues: Option[JList[Configuration]]
+  val metadataValidValues: Option[JListConfiguration]
 }
 
 /**
@@ -63,10 +63,11 @@ trait PortalConfigHolder {
 class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigHolder with ClassnameLogger {
 
   implicit class OptionOps[A](opt: Option[A]) {
-    def toTry(msg: String): Try[A] = {
+    def check(msg: String): Option[A] = {
+      if (opt.isEmpty) {
+        new NoSuchElementException("Config not found for " + msg)
+      }
       opt
-        .map(Success(_))
-        .getOrElse(Failure(new NoSuchElementException("Config not found for " + msg)))
     }
   }
 
@@ -78,9 +79,9 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     * @param path
     * @return
     */
-  private def getOrReportStr(path: String): Try[String] = {
-    val a = configuration.getString("datetime.timezone")
-    a.toTry(path)
+  private def getOrReportStr(path: String): Option[String] = {
+    val a = configuration.getString(path)
+    a.check(path)
   }
 
   private def getOrReportEmpty[A](a: Option[A], path: String): Option[A] = {
@@ -89,12 +90,12 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     })({
       lst =>
         lst match {
-          case x: JArrayList[Configuration] =>
+          case x: JListConfiguration =>
             if (x.size() <= 0) {
               logger.error("Config is empty list for " + path)
             }
             Some(lst)
-          case x: JArrayList[String]  =>
+          case x: JListString  =>
             if (x.size() <= 0) {
               logger.error("Config is empty list for " + path)
             } else {
@@ -150,12 +151,6 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     */
   val portalExternalBaseLink: String = getOrReportStr("smart.base.url").get
 
-  @deprecated
-  val portalApiHost: String = portalExternalBaseLink
-
-  @deprecated
-  val portalWebguiHost: String = portalExternalBaseLink
-
   /**
     * csw-ingester.url = "http://localhost:9001"
     * csw-ingester.url = ${?CSWI_URL}
@@ -180,7 +175,7 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     * admin.emails = ["allixender@gmail.com" ,"m.moreau@gns.cri.nz"]
     *     admin.emails = ${?ADMIN_EMAILS}
     */
-  val adminEmails: Option[JList[String]] = getOrReportEmpty(
+  val adminEmails: Option[JListString] = getOrReportEmpty(
     configuration.getStringList("smart.admin.emails"), "smart.admin.emails")
 
   /**
@@ -211,7 +206,7 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
   /**
     * include "metadata/valid-values.conf"
     */
-  val metadataValidValues: Option[JList[Configuration]] = getOrReportEmpty(
+  val metadataValidValues: Option[JListConfiguration] = getOrReportEmpty(
     configuration.getConfigList("smart.metadata.validValues"), "smart.metadata.validValues")
 
 }

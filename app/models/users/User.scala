@@ -19,8 +19,7 @@
 
 package models.users
 
-import java.time.{OffsetDateTime, ZonedDateTime}
-import java.util.UUID
+import java.time.ZonedDateTime
 
 import controllers.ProfileJs
 import uk.gov.hmrc.emailaddress.EmailAddress

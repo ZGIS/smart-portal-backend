@@ -379,7 +379,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
                   owcDoc.id.toString,
                   user.accountSubject,
                   user.accountSubject,
-                  Seq(),
+                  Seq.empty,
                   0,
                   2)
                 )).isDefined
@@ -421,7 +421,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
                 owcDoc.id.toString,
                 user.accountSubject,
                 user.accountSubject,
-                Seq(),
+                Seq.empty,
                 0,
                 2)
               )).isDefined
@@ -512,7 +512,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
             owcDoc.id.toString,
             user.accountSubject,
             user.accountSubject,
-            Seq(),
+            Seq.empty,
             0,
             2)
           )).isDefined

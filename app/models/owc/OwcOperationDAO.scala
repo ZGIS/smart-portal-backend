@@ -19,7 +19,6 @@
 
 package models.owc
 
-import java.io.InvalidClassException
 import java.net.URL
 import java.sql.Connection
 import java.util.UUID

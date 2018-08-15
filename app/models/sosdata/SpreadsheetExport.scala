@@ -19,20 +19,17 @@
 
 package models.sosdata
 
-import java.io.File
 import java.time.format.DateTimeFormatter
 import java.time.{OffsetDateTime, ZoneId}
-import java.util.Date
 
-import com.norbitltd.spoiwo.model.enums.CellFill
 import com.norbitltd.spoiwo.model._
+import com.norbitltd.spoiwo.model.enums.CellFill
 import models.tvp.XmlTvpParser
 import org.joda.time.{DateTime, DateTimeZone}
-import utils.{ClassnameLogger, GeoDateParserUtils}
+import utils.ClassnameLogger
 
 import scala.io.Source
 import scala.util.Try
-import scala.xml.NodeSeq
 
 class SpreadsheetExport(timeZone: String) extends ClassnameLogger {
 

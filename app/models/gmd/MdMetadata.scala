@@ -20,7 +20,7 @@
 package models.gmd
 
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneId, ZoneOffset, ZonedDateTime}
+import java.time.{ZoneId, ZoneOffset, ZonedDateTime}
 import java.util.UUID
 
 import play.api.data.validation.ValidationError
@@ -28,8 +28,8 @@ import play.api.libs.functional.syntax.{unlift, _}
 import play.api.libs.json._
 import utils.ClassnameLogger
 
-import scala.xml.{Elem, Node}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
+import scala.xml.{Elem, Node}
 
 /**
   * inserts the CIResponsibleParty into the MDMetadata XML (where needed)

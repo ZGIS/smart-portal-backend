@@ -454,9 +454,10 @@ class CollectionsController @Inject()(portalConfig: PortalConfig,
   }
 
   private def calculateKeywordScore(owcContext: OwcContext, keywords: Seq[String]): Double = {
-    val numQueryKeywords = keywords.length
-    val numContextKeywords = owcContext.keyword.length
-    val numResourcesKeywords = owcContext.resource.map(_.keyword.length).sum
+    val numQueryKeywords = if (keywords.nonEmpty) keywords.length else 1
+    val numContextKeywords = if (owcContext.keyword.nonEmpty) owcContext.keyword.length else 1
+    val kwSum = owcContext.resource.map(_.keyword.length).sum
+    val numResourcesKeywords = if (kwSum > 0) kwSum else 1
     val directContextHits = keywords.map(kw => owcContext.keyword.count(p => p.term.contentEquals(kw))).sum
     val directResourceHits = keywords.map(
       kw => owcContext.resource.map(res => res.keyword.count(p => p.term.contentEquals(kw))).sum).sum

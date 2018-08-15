@@ -58,7 +58,7 @@ case class SimplifiedSkosRdfHolder(id: String,
 
     s"""<skos:Concept rdf:about="${vocabUrl}/$collectionIdentifier/$hierarchy/$id">
         ${coreElemsText.mkString("")}
-        <skos:inCollection rdf:resource="http://vocab.smart-project.info/collection/$collectionIdentifier/$hierarchyPlural"/>
+        <skos:inCollection rdf:resource="${vocabUrl}/collection/$collectionIdentifier/$hierarchyPlural"/>
     </skos:Concept>
       """
   }
@@ -98,7 +98,7 @@ case class SimplifiedSkosRdfCollectionHolder(
         <dc:rights>CC-SA-BY-NC 3.0 NZ</dc:rights>
         <dcterms:issued>${issuedDate.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}</dcterms:issued>
         <dcterms:modified>${modifiedDate.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}</dcterms:modified>
-        ${skosCollection.map(sc => s"<skos:member>http://vocab.smart-project.info/${collectionIdentifier}/${hierarchy}/${sc.id}</skos:member>").mkString("\n")}
+        ${skosCollection.map(sc => s"<skos:member>${vocabUrl}/${collectionIdentifier}/${hierarchy}/${sc.id}</skos:member>").mkString("\n")}
     </skos:Collection>"""
   }
 }

@@ -592,10 +592,5 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       }
     }
 
-    "Regression2 Test delete imported Collection fails spuriosly" in {
-      withTestDatabase { database =>
-
-      }
-
   }
 }

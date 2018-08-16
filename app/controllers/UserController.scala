@@ -417,7 +417,9 @@ class UserController @Inject()(portalConfig: PortalConfig,
       case Success(v) => {
         userService.findUsersByPassResetLink(linkId).headOption.fold {
           logger.error("Unknown password reset link.")
-          Redirect("/#/register")
+          val error = ErrorResult("Unknown password reset link.",
+            Some("Please register at <a href=\"/#/register\">/#/register</a>"))
+          Unauthorized(Json.toJson(error)).as(JSON)
         } { user =>
           // good, update password and status and send confirmation email
           request.body.validate[LoginCredentials].fold(
@@ -438,10 +440,9 @@ class UserController @Inject()(portalConfig: PortalConfig,
                 ZonedDateTime.now.withZoneSameInstant(ZoneId.of(portalConfig.appTimeZone)))
 
               userService.updatePassword(updateUser).fold {
-                logger.error("User update error.")
-                // flash error message?
-                // BadRequest(Json.obj("status" -> "ERR", "message" -> "User update error."))
-                Redirect("/#/login")
+                val error = ErrorResult("Some parts of the user update might not have been successful.",
+                  Some("Please try to login at <a href=\"/#/login\">/#/login</a>"))
+                BadRequest(Json.toJson(error)).as(JSON)
               } { user =>
                 val emailWentOut = emailService.sendPasswordUpdateEmail(user.email, "Password Update on GW HUB", user.firstname)
                 Redirect("/#/login")

@@ -43,7 +43,10 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
   private lazy val owcIngesterResource2 = this.getClass().getResource("owc100/ingester_badgeom.owc.geojson")
   private lazy val owcIngesterResource3 = this.getClass().getResource("owc100/ingester_long.owc.geojson")
   private lazy val owcIngesterResource4 = this.getClass().getResource("owc100/ingester_new_scores.owc.geojson")
+
   private lazy val owcResourceDefaultCollectionWithFiles = this.getClass().getResource("owc100/DefaultCollectionWithFiles100.json")
+
+  private lazy val owcResourceFullAndLongRegression2 = this.getClass().getResource("owc100/regression_2/sac_3_contexts.json")
 
   val jsonTestCollection1 = scala.io.Source.fromURL(owcContextResource1).getLines.mkString
   val jsonTestCollection2 = scala.io.Source.fromURL(owcContextResource2).getLines.mkString
@@ -52,7 +55,10 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
   val jsonIngesterCollection2 = scala.io.Source.fromURL(owcIngesterResource2).getLines.mkString
   val jsonIngesterCollection3 = scala.io.Source.fromURL(owcIngesterResource3).getLines.mkString
   val jsonIngesterCollection4 = scala.io.Source.fromURL(owcIngesterResource4).getLines.mkString
+
   val jsonDefaultFilesCollection = scala.io.Source.fromURL(owcResourceDefaultCollectionWithFiles).getLines.mkString
+
+  val jsonFullAndLongRegression2 = scala.io.Source.fromURL(owcResourceFullAndLongRegression2).getLines.mkString
 
   "OwcContextDAO " can {
 
@@ -586,6 +592,10 @@ class OwcContextDAOSpec extends WithDefaultTestFullAppAndDatabase {
       }
     }
 
+    "Regression2 Test delete imported Collection fails spuriosly" in {
+      withTestDatabase { database =>
+
+      }
 
   }
 }

@@ -835,7 +835,7 @@ owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}""".str
       val resourceRelationsDeleteCount = owcContext.resource.map {
         owcResource =>
           val rowCount = SQL(
-            s"""Delete $tableOwcContextHasOwcResources
+            s"""Delete from $tableOwcContextHasOwcResources
                |where owc_context_id = {owc_context_id} and owc_resource_id = {owc_resource_id}
            """.stripMargin).on(
             'owc_context_id -> owcContext.id.toString,

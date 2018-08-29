@@ -37,6 +37,7 @@ trait PortalConfigHolder {
   val appTimeZone: String
   val sendgridApikey: String
   val emailFrom: String
+  val emailReplyTo: String
   val uploadDataPath: String
   val appSecret: String
   val cswInternalApiUrl: String
@@ -120,6 +121,7 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     */
   val sendgridApikey: String = getOrReportStr("email.sendgrid.apikey").get
   val emailFrom: String = getOrReportStr("email.sendgrid.from").get
+  val emailReplyTo: String = getOrReportStr("email.sendgrid.replyto").get
 
   /**
     * upload.datapath = "/tmp"

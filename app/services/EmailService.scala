@@ -35,6 +35,7 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
 
   lazy private val apikey: String = portalConfig.sendgridApikey
   lazy private val emailFrom: String = portalConfig.emailFrom
+  lazy private val emailReplyTo: String = portalConfig.emailReplyTo
   lazy private val portalApiHost: String = portalConfig.portalExternalBaseLink
   lazy private val portalWebguiHost: String = portalConfig.portalExternalBaseLink
 
@@ -65,6 +66,7 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
 
     val from = new Email(emailFrom)
     val to = new Email(emailTo)
+    val replyTo = new Email(emailReplyTo)
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
 

@@ -42,6 +42,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val appTimeZone: String = "Pacific/Auckland"
     val sendgridApikey: String = ""
     val emailFrom: String = ""
+    val emailReplyTo: String = ""
     val uploadDataPath: String = ""
     val appSecret: String = ""
     val cswInternalApiUrl: String = ""

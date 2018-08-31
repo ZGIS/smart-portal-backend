@@ -66,9 +66,12 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
 
     val from = new Email(emailFrom)
     val to = new Email(emailTo)
-    val replyTo = new Email(emailReplyTo)
+
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
+
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
 
     try {
 
@@ -123,6 +126,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
 
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
+
     try {
       val request = new Request()
       request.method = Method.POST
@@ -174,6 +180,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val to = new Email(emailTo)
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
+
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
 
     try {
 
@@ -227,6 +236,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val to = new Email(emailTo)
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
+
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
 
     try {
       val request = new Request()
@@ -282,6 +294,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
 
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
+
     try {
 
       val request = new Request()
@@ -335,6 +350,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
 
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
+
     try {
       val request = new Request()
       request.method = Method.POST
@@ -386,6 +404,9 @@ class EmailService @Inject()(portalConfig: PortalConfig) extends ClassnameLogger
     val to = new Email(emailTo)
     val content = new Content("text/plain", emailText)
     val mail = new Mail(from, subject, to, content)
+
+    val replyTo = new Email(emailReplyTo)
+    mail.setReplyTo(replyTo)
 
     try {
       val request = new Request()

@@ -472,4 +472,5 @@ class CollectionsController @Inject()(portalConfig: PortalConfig,
       ((closeResourceHits / numResourcesKeywords) * 0.3)) / numQueryKeywords
 
   }
+
 }

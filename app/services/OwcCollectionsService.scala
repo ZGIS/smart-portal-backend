@@ -29,6 +29,9 @@ import models.db.DatabaseSessionHolder
 import models.gmd.MdMetadata
 import models.owc._
 import models.users._
+import org.locationtech.spatial4j.context.jts.JtsSpatialContext
+import org.locationtech.spatial4j.shape.Rectangle
+import org.locationtech.spatial4j.shape.impl.BBoxCalculator
 import play.api.libs.json.Json
 import uk.gov.hmrc.emailaddress.EmailAddress
 import utils.StringUtils._
@@ -42,6 +45,7 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
                                       userGroupService: UserGroupService) extends ClassnameLogger {
 
   lazy private val appTimeZone: String = portalConfig.appTimeZone
+  lazy val jtsCtx = JtsSpatialContext.GEO
 
   /**
     * get user's default collection
@@ -370,11 +374,12 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
 
             val entries = owcDoc.resource ++ Seq(owcResource)
             val newDoc = owcDoc.copy(resource = entries)
+            val updatedGeom = calculateBBoxForCollection(newDoc)
 
             logger.trace(Json.prettyPrint(newDoc.toJson))
 
             dbSession.viaTransaction { implicit connection =>
-              OwcContextDAO.updateOwcContext(newDoc, user,
+              OwcContextDAO.updateOwcContext(newDoc.copy(areaOfInterest = updatedGeom), user,
                 Vector(OwcContextsRightsMatrix(
                   owcDoc.id.toString,
                   user.accountSubject,
@@ -413,11 +418,12 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
             // drop out old resource, add new resource, IDs are same, it's basically a replace
             val entries = owcDoc.resource.filterNot(o => o.id.equals(owcResource.id)) ++ Seq(owcResource)
             val newDoc = owcDoc.copy(resource = entries)
+            val updatedGeom = calculateBBoxForCollection(newDoc)
 
             logger.trace(Json.prettyPrint(newDoc.toJson))
 
             dbSession.viaTransaction { implicit connection =>
-              OwcContextDAO.updateOwcContext(newDoc, user, Vector(OwcContextsRightsMatrix(
+              OwcContextDAO.updateOwcContext(newDoc.copy(areaOfInterest = updatedGeom), user, Vector(OwcContextsRightsMatrix(
                 owcDoc.id.toString,
                 user.accountSubject,
                 user.accountSubject,
@@ -506,15 +512,17 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
       owcDoc =>
         val entries = owcDoc.resource ++ Seq(owcResource)
         val newDoc = owcDoc.copy(resource = entries)
+        val updatedGeom = calculateBBoxForCollection(newDoc)
 
         dbSession.viaTransaction { implicit connection =>
-          OwcContextDAO.updateOwcContext(newDoc, user, Vector(OwcContextsRightsMatrix(
-            owcDoc.id.toString,
-            user.accountSubject,
-            user.accountSubject,
-            Seq.empty,
-            0,
-            2)
+          OwcContextDAO.updateOwcContext(newDoc.copy(areaOfInterest = updatedGeom),
+            user, Vector(OwcContextsRightsMatrix(
+              owcDoc.id.toString,
+              user.accountSubject,
+              user.accountSubject,
+              Seq.empty,
+              0,
+              2)
           )).isDefined
         }
     }
@@ -540,9 +548,10 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
     */
   def updateCollection(owcContext: OwcContext, user: User): Option[OwcContext] = {
     val owcContextsRightsMatrix = userGroupService.getOwcContextsRightsMatrixForUser(user)
+    val updatedGeom = calculateBBoxForCollection(owcContext)
 
     dbSession.viaTransaction(implicit connection =>
-      OwcContextDAO.updateOwcContext(owcContext, user, owcContextsRightsMatrix.toVector))
+      OwcContextDAO.updateOwcContext(owcContext.copy(areaOfInterest = updatedGeom), user, owcContextsRightsMatrix.toVector))
   }
 
   /**
@@ -608,5 +617,25 @@ class OwcCollectionsService @Inject()(dbSession: DatabaseSessionHolder,
         None
       }
     }
+  }
+
+  def calculateBBoxForCollection(owcContext: OwcContext): Option[Rectangle] = {
+
+    def computeJointRect(leftRo: Option[Rectangle], rightRo: Option[Rectangle]): Option[Rectangle] = {
+
+      (leftRo, rightRo) match {
+        case (l, r) if l.isDefined && r.isEmpty => l
+        case (l, r) if l.isEmpty && r.isDefined => r
+        case (l, r) => l.flatMap(rectL => r.map { rectR =>
+          var bboxCalc = new BBoxCalculator(JtsSpatialContext.GEO)
+          bboxCalc.expandRange(rectL)
+          bboxCalc.expandRange(rectR)
+          bboxCalc.getBoundary
+        })
+      }
+    }
+
+    val geoms: List[Option[Rectangle]] = owcContext.resource.map(_.geospatialExtent).filter(_.isDefined)
+    geoms.foldLeft(owcContext.areaOfInterest)((leftRo, rightRo) => computeJointRect(leftRo, rightRo))
   }
 }

@@ -1,3 +1,8 @@
+import models.db.DatabaseSessionHolder
+import org.locationtech.spatial4j.shape.Rectangle
+import org.specs2.mock.Mockito
+import services.{OwcCollectionsService, PortalConfig, UserGroupService}
+
 /*
  * Copyright (C) 2011-2017 Interfaculty Department of Geoinformatics, University of
  * Salzburg (Z_GIS) & Institute of Geological and Nuclear Sciences Limited (GNS Science)
@@ -17,7 +22,7 @@
  * limitations under the License.
  */
 
-class OwcCollectionsServiceSpec extends WithDefaultTest {
+class OwcCollectionsServiceSpec extends WithDefaultTest with Mockito {
 
   /*
 
@@ -28,4 +33,39 @@ class OwcCollectionsServiceSpec extends WithDefaultTest {
   getOwcContextsForUserAndId(authUserOption: Option[String], owcContextIdOption: Option[String]): Seq[OwcContext]
 
    */
+
+  "OwcCollectionsService" can {
+
+    val demodata = new DemoData
+
+    lazy val ctx = demodata.ctx
+    lazy val baseEmpty: Option[Rectangle] = None
+    lazy val baseSome: Rectangle = ctx.getShapeFactory().rect(-150.0, 150.0, -70.0, 70.0)
+    lazy val smaller1: Rectangle = ctx.getShapeFactory().rect(-170.0, 170.0, -90.0, 90.0)
+    lazy val smaller2: Rectangle = ctx.getShapeFactory().rect(-180.0, 180.0, -80.0, 80.0)
+
+    "update areaOfInterest in OwcContext" in {
+
+      val mockDbSession = mock[DatabaseSessionHolder]
+      val portalConfig = mock[PortalConfig]
+      val userGroupService = mock[UserGroupService]
+
+      val collectionsService = new OwcCollectionsService(
+        mockDbSession,
+        portalConfig,
+        userGroupService
+      )
+
+      val res1 = demodata.owcResource1.copy(geospatialExtent = Some(smaller1))
+      val res2 = demodata.owcResource2.copy(geospatialExtent = Some(smaller2))
+      val owc1 = demodata.owcContext1.copy(areaOfInterest = baseEmpty, resource = List(res1, res2))
+      val owc2 = demodata.owcContext1.copy(areaOfInterest = Some(baseSome), resource = List(res1, res2))
+
+      val rect1 = collectionsService.calculateBBoxForCollection(owc1)
+      val rect2 = collectionsService.calculateBBoxForCollection(owc2)
+
+      rect1 mustEqual Some(demodata.world)
+      rect2 mustEqual Some(demodata.world)
+    }
+  }
 }

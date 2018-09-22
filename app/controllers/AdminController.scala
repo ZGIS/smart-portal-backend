@@ -20,6 +20,7 @@
 package controllers
 
 import java.io.File
+import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
@@ -272,7 +273,11 @@ class AdminController @Inject()(wsClient: WSClient,
   def callJenaKubeReload: Future[Option[ErrorResult]] = {
     val digestHash = MessageDigest.getInstance("SHA-512").digest(appSecret.getBytes("UTF-8"))
     val hex = digestHash.map("%02X" format _).mkString
-    wsClient.url(ADMIN_JENA_UPDATE_URL).withHeaders("Authorization" -> s"Bearer $hex").get().map { response =>
+    val baseHost = new URL(portalConfig.portalExternalBaseLink).getHost
+    wsClient.url(ADMIN_JENA_UPDATE_URL)
+      .withHeaders("Authorization" -> s"Bearer $hex")
+      .withQueryString("env" -> baseHost)
+      .get().map { response =>
       if (response.status == 200) {
         logger.info(
           s"Successfully called $ADMIN_JENA_UPDATE_URL (${response.status} - ${response.statusText})")

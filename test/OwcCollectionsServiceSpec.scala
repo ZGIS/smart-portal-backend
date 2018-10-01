@@ -58,14 +58,22 @@ class OwcCollectionsServiceSpec extends WithDefaultTest with Mockito {
 
       val res1 = demodata.owcResource1.copy(geospatialExtent = Some(smaller1))
       val res2 = demodata.owcResource2.copy(geospatialExtent = Some(smaller2))
+      val res3 = demodata.owcResource1.copy(geospatialExtent = None)
+      val res4 = demodata.owcResource2.copy(geospatialExtent = None)
       val owc1 = demodata.owcContext1.copy(areaOfInterest = baseEmpty, resource = List(res1, res2))
       val owc2 = demodata.owcContext1.copy(areaOfInterest = Some(baseSome), resource = List(res1, res2))
+      val owc3 = demodata.owcContext1.copy(areaOfInterest = baseEmpty, resource = List(res3, res4))
+      val owc4 = demodata.owcContext1.copy(areaOfInterest = baseEmpty, resource = List())
 
       val rect1 = collectionsService.calculateBBoxForCollection(owc1)
       val rect2 = collectionsService.calculateBBoxForCollection(owc2)
+      val rect3 = collectionsService.calculateBBoxForCollection(owc3)
+      val rect4 = collectionsService.calculateBBoxForCollection(owc4)
 
       rect1 mustEqual Some(demodata.world)
       rect2 mustEqual Some(demodata.world)
+      rect3 mustBe None
+      rect4 mustBe None
     }
   }
 }

@@ -37,15 +37,15 @@ class Module extends AbstractModule {
 
   override def configure(): Unit = {
 
-    // Database managed Access
-    bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
-
     // utils and services
     bind(classOf[PortalConfig]).asEagerSingleton()
     bind(classOf[PasswordHashing]).asEagerSingleton()
     bind(classOf[EmailService]).asEagerSingleton()
-    bind(classOf[UserService]).asEagerSingleton()
 
+    // Database managed Access
+    bind(classOf[DatabaseSessionHolder]).asEagerSingleton()
+
+    bind(classOf[UserService]).asEagerSingleton()
     bind(classOf[OwcCollectionsService]).asEagerSingleton()
     bind(classOf[GoogleServicesDAO]).asEagerSingleton()
 

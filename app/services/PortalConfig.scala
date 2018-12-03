@@ -49,6 +49,7 @@ trait PortalConfigHolder {
   val reCaptchaSecret: String
   val recaptcaVerifyUrl: String
   val googleClientSecretFile: String
+  val googleServiceAccountSecretFile: String
   val googleStorageBucket: String
   val googleProjectId: String
   val metadataValidValues: Option[JListConfiguration]
@@ -194,6 +195,11 @@ class PortalConfig @Inject()(configuration: Configuration) extends PortalConfigH
     * client.secret = ${?GOOGLE_CLIENT_SECRET}
     */
   val googleClientSecretFile: String = getOrReportStr("google.client.secret").get
+
+  /**
+    * service_account.secret = ${?GOOGLE_SERVICE_ACCOUNT_SECRET}
+    */
+  val googleServiceAccountSecretFile: String = getOrReportStr("google.service_account.secret").get
 
   /**
     * storage.bucket = ${?GOOGLE_BUCKET_NAME}

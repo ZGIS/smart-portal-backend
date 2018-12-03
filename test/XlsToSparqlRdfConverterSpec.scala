@@ -56,6 +56,7 @@ class XlsToSparqlRdfConverterSpec extends WithDefaultTest {
     val reCaptchaSecret: String = ""
     val recaptcaVerifyUrl: String = ""
     val googleClientSecretFile: String = ""
+    val googleServiceAccountSecretFile: String = ""
     val googleStorageBucket: String = ""
     val googleProjectId: String = ""
     val metadataValidValues: Option[JList[Configuration]] = Some(new JArrayList[Configuration]())

@@ -19,13 +19,14 @@
 
 package services
 
-import java.io.{File, FileReader}
+import java.io.{File, FileInputStream, FileReader}
 import java.nio.ByteBuffer
 import java.time.{LocalDateTime, ZoneOffset}
 
 import com.google.api.client.googleapis.auth.oauth2.{GoogleAuthorizationCodeTokenRequest, GoogleClientSecrets, GoogleTokenResponse}
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.auth.oauth2.ServiceAccountCredentials
 import com.google.cloud.storage._
 import com.google.common.io.{Files => GoogleFiles}
 import javax.inject.{Inject, Singleton}
@@ -97,6 +98,7 @@ trait AbstractCloudServiceDAO {
 class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends AbstractCloudServiceDAO with ClassnameLogger {
 
   val googleClientSecretFile: String = portalConfig.googleClientSecretFile
+  val googleServiceAccountSecretFile: String = portalConfig.googleServiceAccountSecretFile
   val googleStorageBucket: String = portalConfig.googleStorageBucket
   val googleProjectId: String = portalConfig.googleProjectId
 
@@ -123,17 +125,44 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
   }
 
   /**
+    * enclosing helper for serviceaccount secret usage if needed
+    *
+    * @param block
+    * @tparam T
+    * @return
+    */
+  def withServiceAccountStorageOptions[T](block: StorageOptions => T): T = {
+
+    if (!new java.io.File(googleServiceAccountSecretFile).exists) {
+      logger.warn("Service Account JSON file not available")
+      val storageOptions: StorageOptions = StorageOptions.getDefaultInstance()
+      block(storageOptions)
+    } else {
+      // basic precondition for Google OAuth2 stuff
+      // val googleClientSecret = GoogleClientSecrets.load(JacksonFactory.getDefaultInstance(), new FileReader(googleClientSecretFile))
+
+      // service account json for GoogleServicesDAO
+      val storageOptions: StorageOptions = StorageOptions.newBuilder()
+        .setCredentials(ServiceAccountCredentials.fromStream(new FileInputStream(googleServiceAccountSecretFile)))
+        .build()
+
+      block(storageOptions)
+    }
+  }
+
+  /**
     * upload a file to a google cloud bucket
     *
     * @param fileHandle
     * @return
     */
   def uploadFileGoogleBucket(fileHandle: File): Either[ErrorResult, LocalBlobInfo] = {
+    withServiceAccountStorageOptions { storageOptions =>
     // Google Java upload stuff
     import scala.collection.JavaConverters._
 
     // val storage: Storage = authenticatedStorageOptions.getService()
-    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    val storage: Storage = storageOptions.getService()
     // val noCredentials = NoCredentials.getInstance()
 
     // Modify access list to allow all users with link to read file
@@ -155,6 +184,7 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     }
 
   }
+  }
 
   /**
     *
@@ -163,11 +193,13 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     * @return
     */
   def updateVocabFileGoogleBucket(vocabString: String, fileName: String, pathPrefix: String): Either[ErrorResult, LocalBlobInfo] = {
+    withServiceAccountStorageOptions { storageOptions =>
+
     // Google Java upload stuff
     import java.nio.charset.StandardCharsets.UTF_8
 
     // val storage: Storage = authenticatedStorageOptions.getService()
-    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    val storage: Storage = storageOptions.getService()
     // val noCredentials = NoCredentials.getInstance()
 
     val blobTry: Try[LocalBlobInfo] = Try {
@@ -191,6 +223,7 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     }
 
   }
+  }
 
   /**
     * humble try of listing the buckets content for admin
@@ -198,7 +231,9 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     * @return
     */
   def listbucket: Either[ErrorResult, Seq[LocalBlobInfo]] = {
-    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    withServiceAccountStorageOptions { storageOptions =>
+
+    val storage: Storage = storageOptions.getService()
     val bucket = storage.get(googleStorageBucket)
 
     import scala.collection.JavaConverters._
@@ -215,6 +250,7 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
         Left(ErrorResult("Blob listing of cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
   }
+  }
 
   /**
     * find a specific blob
@@ -223,7 +259,9 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     * @return
     */
   def getFileBlob(fileName: String): Either[ErrorResult, LocalBlobInfo] = {
-    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    withServiceAccountStorageOptions { storageOptions =>
+
+    val storage: Storage = storageOptions.getService()
     val bucket = storage.get(googleStorageBucket)
     val blobTry = Try {
       bucket.get(fileName)
@@ -238,6 +276,7 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
         Left(ErrorResult("Blob retrieve from cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
   }
+  }
 
   /**
     * delete a file in the bucket
@@ -246,7 +285,9 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
     * @return
     */
   def deleteFileBlob(fileName: String): scala.Option[ErrorResult] = {
-    val storage: Storage = StorageOptions.getDefaultInstance().getService()
+    withServiceAccountStorageOptions { storageOptions =>
+
+    val storage: Storage = storageOptions.getService()
     val bucket = storage.get(googleStorageBucket)
     val blobTry = Try {
       bucket.get(fileName).delete()
@@ -263,6 +304,7 @@ class GoogleServicesDAO @Inject()(val portalConfig: PortalConfig) extends Abstra
         logger.error(s"Blob delete from cloud storage failed. ${ex.getLocalizedMessage}")
         Some(ErrorResult("Blob delete from cloud storage failed.", Some(ex.getLocalizedMessage)))
     }
+  }
   }
 
   /**

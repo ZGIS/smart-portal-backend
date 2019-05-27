@@ -428,7 +428,7 @@ class CollectionsController @Inject()(portalConfig: PortalConfig,
             val resPart =
               s"""<url>
                  |  <loc>${portalConfig.portalExternalBaseLink}/#${res.id.getPath}</loc>
-                 |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_DATE)}</lastmod>
+                 |  <lastmod>${doc.updateDate.format(DateTimeFormatter.ISO_LOCAL_DATE)}</lastmod>
                  |  <priority>1.0</priority>
                  |</url>
           """.stripMargin
